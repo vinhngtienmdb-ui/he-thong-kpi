@@ -2143,6 +2143,486 @@ app.get('/api/reports/export-mau-02/:periodId', async (req, res) => {
   }
 });
 
+// ============================================================================
+// DOCUMENT MANAGEMENT & DISPATCH MODULE (QUẢN LÝ & PHÂN BỔ VĂN BẢN)
+// ============================================================================
+
+// 1. Get Document Statistics
+app.get('/api/documents/stats', (req, res) => {
+  try {
+    const viewer = getViewer(req);
+    const isMgr = checkIsManagerOrAdmin(viewer);
+
+    let scopeWhere = '1=1';
+    const params = [];
+    if (!isMgr && viewer) {
+      scopeWhere = `(
+        d.created_by = ? OR 
+        d.id IN (
+          SELECT document_id FROM document_dispatches 
+          WHERE assigned_to_user_id = ? OR coordinating_user_ids LIKE ?
+        )
+      )`;
+      params.push(viewer.id, viewer.id, `%"${viewer.id}"%`);
+    }
+
+    const total = db.prepare(`SELECT COUNT(*) as count FROM documents d WHERE ${scopeWhere}`).get(...params).count;
+    const pendingDispatch = db.prepare(`SELECT COUNT(*) as count FROM documents d WHERE ${scopeWhere} AND d.status = 'pending_dispatch'`).get(...params).count;
+    const inProgress = db.prepare(`SELECT COUNT(*) as count FROM documents d WHERE ${scopeWhere} AND d.status = 'in_progress'`).get(...params).count;
+    const completed = db.prepare(`SELECT COUNT(*) as count FROM documents d WHERE ${scopeWhere} AND d.status = 'completed'`).get(...params).count;
+    const today = new Date().toISOString().split('T')[0];
+    const overdue = db.prepare(`SELECT COUNT(*) as count FROM documents d WHERE ${scopeWhere} AND d.deadline IS NOT NULL AND d.deadline < ? AND d.status != 'completed'`).get(...params, today).count;
+
+    res.json({
+      total,
+      pending_dispatch: pendingDispatch,
+      in_progress: inProgress,
+      completed,
+      overdue
+    });
+  } catch (err) {
+    console.error('Error fetching document stats:', err);
+    res.status(500).json({ error: 'Lỗi lấy thống kê văn bản: ' + err.message });
+  }
+});
+
+// 2. Get Documents List with Filters & Scoping
+app.get('/api/documents', (req, res) => {
+  try {
+    const viewer = getViewer(req);
+    const isMgr = checkIsManagerOrAdmin(viewer);
+    const { search, doc_type, field, status, urgency, from_date, to_date } = req.query;
+
+    let conditions = ['1=1'];
+    const params = [];
+
+    if (!isMgr && viewer) {
+      conditions.push(`(
+        d.created_by = ? OR 
+        d.id IN (
+          SELECT document_id FROM document_dispatches 
+          WHERE assigned_to_user_id = ? OR coordinating_user_ids LIKE ?
+        )
+      )`);
+      params.push(viewer.id, viewer.id, `%"${viewer.id}"%`);
+    }
+
+    if (search) {
+      conditions.push('(d.doc_number LIKE ? OR d.summary LIKE ? OR d.issuer LIKE ?)');
+      const s = `%${search.trim()}%`;
+      params.push(s, s, s);
+    }
+    if (doc_type && doc_type !== 'all') {
+      conditions.push('d.doc_type = ?');
+      params.push(doc_type);
+    }
+    if (field && field !== 'all') {
+      conditions.push('d.field = ?');
+      params.push(field);
+    }
+    if (status && status !== 'all') {
+      if (status === 'overdue') {
+        const today = new Date().toISOString().split('T')[0];
+        conditions.push('d.deadline IS NOT NULL AND d.deadline < ? AND d.status != "completed"');
+        params.push(today);
+      } else {
+        conditions.push('d.status = ?');
+        params.push(status);
+      }
+    }
+    if (urgency && urgency !== 'all') {
+      conditions.push('d.urgency = ?');
+      params.push(urgency);
+    }
+    if (from_date) {
+      conditions.push('d.doc_date >= ?');
+      params.push(from_date);
+    }
+    if (to_date) {
+      conditions.push('d.doc_date <= ?');
+      params.push(to_date);
+    }
+
+    const whereClause = conditions.join(' AND ');
+    const query = `
+      SELECT d.*, 
+             u.full_name as creator_name,
+             (SELECT COUNT(*) FROM document_dispatches dd WHERE dd.document_id = d.id) as dispatches_count,
+             (SELECT GROUP_CONCAT(u2.full_name, ', ') 
+              FROM document_dispatches dd2 
+              JOIN users u2 ON dd2.assigned_to_user_id = u2.id 
+              WHERE dd2.document_id = d.id) as assigned_officers
+      FROM documents d
+      LEFT JOIN users u ON d.created_by = u.id
+      WHERE ${whereClause}
+      ORDER BY d.created_at DESC
+    `;
+
+    const docs = db.prepare(query).all(...params);
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const enriched = docs.map(doc => {
+      const isOverdue = doc.deadline && doc.deadline < todayStr && doc.status !== 'completed';
+      return {
+        ...doc,
+        is_overdue: isOverdue,
+        display_status: isOverdue ? 'overdue' : doc.status
+      };
+    });
+
+    res.json(enriched);
+  } catch (err) {
+    console.error('Error fetching documents:', err);
+    res.status(500).json({ error: 'Lỗi tải danh sách văn bản: ' + err.message });
+  }
+});
+
+// 3. Get Document Detail with Dispatches
+app.get('/api/documents/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const doc = db.prepare(`
+      SELECT d.*, u.full_name as creator_name
+      FROM documents d
+      LEFT JOIN users u ON d.created_by = u.id
+      WHERE d.id = ?
+    `).get(id);
+
+    if (!doc) {
+      return res.status(404).json({ error: 'Không tìm thấy văn bản' });
+    }
+
+    const dispatches = db.prepare(`
+      SELECT dd.*, 
+             u.full_name as assigned_user_name,
+             u.gov_title as assigned_user_title,
+             dept.name as department_name,
+             disp_u.full_name as dispatched_by_name,
+             t.task_name,
+             t.status as task_status,
+             t.converted_score as task_score
+      FROM document_dispatches dd
+      LEFT JOIN users u ON dd.assigned_to_user_id = u.id
+      LEFT JOIN departments dept ON dd.department_id = dept.id
+      LEFT JOIN users disp_u ON dd.dispatched_by = disp_u.id
+      LEFT JOIN assigned_tasks t ON dd.task_id = t.id
+      WHERE dd.document_id = ?
+      ORDER BY dd.dispatched_at DESC
+    `).all(id);
+
+    for (const d of dispatches) {
+      if (d.coordinating_user_ids) {
+        try {
+          const ids = JSON.parse(d.coordinating_user_ids);
+          if (Array.isArray(ids) && ids.length > 0) {
+            const placeholders = ids.map(() => '?').join(',');
+            const coUsers = db.prepare(`SELECT id, full_name FROM users WHERE id IN (${placeholders})`).all(...ids);
+            d.coordinating_users = coUsers;
+          } else {
+            d.coordinating_users = [];
+          }
+        } catch (e) {
+          d.coordinating_users = [];
+        }
+      } else {
+        d.coordinating_users = [];
+      }
+    }
+
+    res.json({
+      ...doc,
+      dispatches
+    });
+  } catch (err) {
+    console.error('Error fetching document detail:', err);
+    res.status(500).json({ error: 'Lỗi tải chi tiết văn bản: ' + err.message });
+  }
+});
+
+// 4. Create Document (With File Upload)
+app.post('/api/documents', upload.single('file'), (req, res) => {
+  try {
+    const viewer = getViewer(req);
+    const {
+      doc_number,
+      doc_date,
+      arrival_date,
+      arrival_number,
+      issuer,
+      doc_type,
+      field,
+      urgency = 'Thường',
+      security_level = 'Thường',
+      summary,
+      deadline
+    } = req.body;
+
+    if (!doc_number || !summary || !issuer || !doc_type) {
+      return res.status(400).json({ error: 'Vui lòng nhập đầy đủ Số hiệu, Cơ quan ban hành, Phân loại và Trích yếu nội dung văn bản!' });
+    }
+
+    const id = uuidv4();
+    let fileUrl = null;
+    let fileName = null;
+    if (req.file) {
+      fileUrl = `/uploads/${req.file.filename}`;
+      fileName = req.file.originalname;
+    }
+
+    db.prepare(`
+      INSERT INTO documents (
+        id, doc_number, doc_date, arrival_date, arrival_number, issuer,
+        doc_type, field, urgency, security_level, summary,
+        file_url, file_name, deadline, status, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_dispatch', ?)
+    `).run(
+      id, doc_number.trim(), doc_date || null, arrival_date || null, arrival_number || null,
+      issuer.trim(), doc_type.trim(), field ? field.trim() : 'Chuyên môn',
+      urgency, security_level, summary.trim(),
+      fileUrl, fileName, deadline || null, viewer ? viewer.id : null
+    );
+
+    const created = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
+    res.status(201).json({ success: true, document: created, message: 'Đã tiếp nhận và lưu văn bản thành công!' });
+  } catch (err) {
+    console.error('Error creating document:', err);
+    res.status(500).json({ error: 'Lỗi tiếp nhận văn bản: ' + err.message });
+  }
+});
+
+// 5. Update Document (With File Upload)
+app.put('/api/documents/:id', upload.single('file'), (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Không tìm thấy văn bản' });
+    }
+
+    const {
+      doc_number,
+      doc_date,
+      arrival_date,
+      arrival_number,
+      issuer,
+      doc_type,
+      field,
+      urgency,
+      security_level,
+      summary,
+      deadline,
+      status
+    } = req.body;
+
+    let fileUrl = existing.file_url;
+    let fileName = existing.file_name;
+    if (req.file) {
+      fileUrl = `/uploads/${req.file.filename}`;
+      fileName = req.file.originalname;
+    }
+
+    db.prepare(`
+      UPDATE documents SET
+        doc_number = COALESCE(?, doc_number),
+        doc_date = COALESCE(?, doc_date),
+        arrival_date = COALESCE(?, arrival_date),
+        arrival_number = COALESCE(?, arrival_number),
+        issuer = COALESCE(?, issuer),
+        doc_type = COALESCE(?, doc_type),
+        field = COALESCE(?, field),
+        urgency = COALESCE(?, urgency),
+        security_level = COALESCE(?, security_level),
+        summary = COALESCE(?, summary),
+        deadline = COALESCE(?, deadline),
+        status = COALESCE(?, status),
+        file_url = ?,
+        file_name = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      doc_number ? doc_number.trim() : null,
+      doc_date || null,
+      arrival_date || null,
+      arrival_number || null,
+      issuer ? issuer.trim() : null,
+      doc_type ? doc_type.trim() : null,
+      field ? field.trim() : null,
+      urgency || null,
+      security_level || null,
+      summary ? summary.trim() : null,
+      deadline || null,
+      status || null,
+      fileUrl,
+      fileName,
+      id
+    );
+
+    const updated = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
+    res.json({ success: true, document: updated, message: 'Đã cập nhật thông tin văn bản thành công!' });
+  } catch (err) {
+    console.error('Error updating document:', err);
+    res.status(500).json({ error: 'Lỗi cập nhật văn bản: ' + err.message });
+  }
+});
+
+// 6. Delete Document
+app.delete('/api/documents/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Không tìm thấy văn bản' });
+    }
+
+    db.prepare('DELETE FROM documents WHERE id = ?').run(id);
+    res.json({ success: true, message: 'Đã xóa văn bản và lịch sử phân bổ thành công!' });
+  } catch (err) {
+    console.error('Error deleting document:', err);
+    res.status(500).json({ error: 'Lỗi xóa văn bản: ' + err.message });
+  }
+});
+
+// 7. Dispatch Document (Phân bổ văn bản cho cán bộ & tùy chọn tạo KPI task)
+app.post('/api/documents/:id/dispatch', (req, res) => {
+  try {
+    const viewer = getViewer(req);
+    const { id } = req.params;
+    const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
+    if (!doc) {
+      return res.status(404).json({ error: 'Không tìm thấy văn bản' });
+    }
+
+    const {
+      department_id,
+      assigned_to_user_id,
+      coordinating_user_ids = [],
+      instruction,
+      deadline,
+      create_kpi_task,
+      period_id,
+      axis_code = 'CHUYEN_MON',
+      standard_score = 10,
+      difficulty_weight = 1.0,
+      output_result = 'Báo cáo / Kế hoạch'
+    } = req.body;
+
+    if (!assigned_to_user_id || !instruction) {
+      return res.status(400).json({ error: 'Vui lòng chọn cán bộ phụ trách chính và nhập ý kiến chỉ đạo xử lý văn bản!' });
+    }
+
+    const dispatchId = uuidv4();
+    let createdTaskId = null;
+
+    const runTransaction = db.transaction(() => {
+      // 1. If create_kpi_task is true and period_id is provided, create an assigned_task
+      if (create_kpi_task && period_id) {
+        createdTaskId = uuidv4();
+        const stdScore = parseFloat(standard_score) || 10;
+        const diffWeight = parseFloat(difficulty_weight) || 1.0;
+        const maxConv = Number((stdScore * diffWeight).toFixed(2));
+        const taskName = `[VB ${doc.doc_number}] ${instruction.length > 80 ? instruction.slice(0, 80) + '...' : instruction}`;
+
+        db.prepare(`
+          INSERT INTO assigned_tasks (
+            id, period_id, user_id, task_name, output_result,
+            deadline, task_type, standard_score, difficulty_weight, max_converted_score,
+            axis_code, origin, status, assigned_by, document_id
+          ) VALUES (?, ?, ?, ?, ?, ?, 'Đột xuất', ?, ?, ?, ?, 'assigned', 'in_progress', ?, ?)
+        `).run(
+          createdTaskId,
+          period_id,
+          assigned_to_user_id,
+          taskName,
+          output_result,
+          deadline || doc.deadline || new Date().toISOString().split('T')[0],
+          stdScore,
+          diffWeight,
+          maxConv,
+          axis_code,
+          viewer ? viewer.id : null,
+          doc.id
+        );
+      }
+
+      // 2. Insert dispatch record
+      db.prepare(`
+        INSERT INTO document_dispatches (
+          id, document_id, department_id, assigned_to_user_id, coordinating_user_ids,
+          instruction, deadline, task_id, status, dispatched_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_progress', ?)
+      `).run(
+        dispatchId,
+        doc.id,
+        department_id || null,
+        assigned_to_user_id,
+        Array.isArray(coordinating_user_ids) ? JSON.stringify(coordinating_user_ids) : '[]',
+        instruction.trim(),
+        deadline || doc.deadline || null,
+        createdTaskId,
+        viewer ? viewer.id : null
+      );
+
+      // 3. Update document status to in_progress
+      db.prepare(`
+        UPDATE documents 
+        SET status = 'in_progress', updated_at = CURRENT_TIMESTAMP 
+        WHERE id = ? AND status = 'pending_dispatch'
+      `).run(doc.id);
+    });
+
+    runTransaction();
+
+    const dispatch = db.prepare('SELECT * FROM document_dispatches WHERE id = ?').get(dispatchId);
+    res.status(201).json({
+      success: true,
+      dispatch,
+      task_id: createdTaskId,
+      message: createdTaskId 
+        ? 'Đã phân bổ văn bản và tự động tạo Nhiệm vụ KPI thành công!' 
+        : 'Đã phân bổ văn bản cho cán bộ xử lý thành công!'
+    });
+  } catch (err) {
+    console.error('Error dispatching document:', err);
+    res.status(500).json({ error: 'Lỗi phân bổ văn bản: ' + err.message });
+  }
+});
+
+// 8. Complete Document Dispatch
+app.put('/api/documents/dispatches/:dispatchId/complete', (req, res) => {
+  try {
+    const { dispatchId } = req.params;
+    const { completion_note } = req.body;
+
+    const dispatch = db.prepare('SELECT * FROM document_dispatches WHERE id = ?').get(dispatchId);
+    if (!dispatch) {
+      return res.status(404).json({ error: 'Không tìm thấy phân bổ văn bản' });
+    }
+
+    db.prepare(`
+      UPDATE document_dispatches SET
+        status = 'completed',
+        completed_at = CURRENT_TIMESTAMP,
+        completion_note = ?
+      WHERE id = ?
+    `).run(completion_note || 'Đã hoàn thành xử lý theo chỉ đạo.', dispatchId);
+
+    const pendingDispatches = db.prepare(`
+      SELECT COUNT(*) as count 
+      FROM document_dispatches 
+      WHERE document_id = ? AND status != 'completed'
+    `).get(dispatch.document_id).count;
+
+    if (pendingDispatches === 0) {
+      db.prepare(`UPDATE documents SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(dispatch.document_id);
+    }
+
+    res.json({ success: true, message: 'Đã cập nhật hoàn tất xử lý văn bản thành công!' });
+  } catch (err) {
+    console.error('Error completing document dispatch:', err);
+    res.status(500).json({ error: 'Lỗi cập nhật hoàn thành: ' + err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Backend server running on http://localhost:${PORT}`);
 });

@@ -17,7 +17,8 @@ import {
   Search,
   Vote,
   BarChart3,
-  X
+  X,
+  Files
 } from 'lucide-react';
 
 export default function Sidebar({ 
@@ -46,6 +47,7 @@ export default function Sidebar({
 
   const evalModules = [
     { id: 'standard', label: 'Danh mục công việc chuẩn', icon: FileSpreadsheet },
+    { id: 'documents', label: 'Quản lý & Phân bổ văn bản', icon: Files },
     { id: 'assignment', label: 'Quản lý nhiệm vụ', icon: UserCheck },
     { id: 'execution', label: 'Nộp sản phẩm công việc', icon: CheckSquare },
     { id: 'self_eval', label: 'Tự đánh giá cuối quý', icon: Award },

@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import DashboardTab from './components/DashboardTab';
 import StandardTasksTab from './components/StandardTasksTab';
+import DocumentManagementTab from './components/DocumentManagementTab';
 import AssignmentTab from './components/AssignmentTab';
 import ExecutionTab from './components/ExecutionTab';
 import SelfEvaluationTab from './components/SelfEvaluationTab';
@@ -332,6 +333,17 @@ export default function App() {
               users={accessibleUsers.length > 0 ? accessibleUsers : users}
               departments={departments}
               onAssignTask={handleAssignTaskFromCatalog}
+            />
+          )}
+
+          {currentTab === 'documents' && (
+            <DocumentManagementTab
+              currentUser={currentUser}
+              periods={periods}
+              selectedPeriod={selectedPeriod}
+              users={accessibleUsers.length > 0 ? accessibleUsers : users}
+              departments={departments}
+              axes={axes}
             />
           )}
 

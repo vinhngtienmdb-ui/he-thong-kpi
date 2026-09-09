@@ -1564,6 +1564,15 @@ export default function AssignmentTab({
                                 <span className={t.task_type === 'Đột xuất' ? 'text-amber-700 font-bold' : 'text-slate-600'}>
                                   {t.task_type}
                                 </span>
+                                {t.document_id && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="px-2 py-0.2 rounded bg-red-100 text-red-800 font-bold text-[10px] inline-flex items-center gap-1">
+                                      <FileText className="w-3 h-3 text-red-700" />
+                                      <span>Từ Văn bản</span>
+                                    </span>
+                                  </>
+                                )}
                               </div>
                             </td>
 

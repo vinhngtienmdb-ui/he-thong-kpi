@@ -332,4 +332,55 @@ export const api = {
     body: JSON.stringify(data),
   }),
   getChartsStats: (periodId) => fetchApi(`/stats/charts?period_id=${periodId}`),
+
+  // Documents Management & Dispatch
+  getDocumentStats: () => fetchApi('/documents/stats'),
+  getDocuments: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return fetchApi(`/documents${query ? `?${query}` : ''}`);
+  },
+  getDocument: (id) => fetchApi(`/documents/${id}`),
+  createDocument: (formData) => {
+    const headers = {};
+    if (currentViewerId) headers['x-viewer-id'] = currentViewerId;
+    return fetch(`${BASE_URL}/documents`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    }).then(async res => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || err.message || `Lỗi: ${res.status}`);
+      }
+      return res.json();
+    });
+  },
+  updateDocument: (id, formData) => {
+    const headers = {};
+    if (currentViewerId) headers['x-viewer-id'] = currentViewerId;
+    return fetch(`${BASE_URL}/documents/${id}`, {
+      method: 'PUT',
+      headers,
+      body: formData,
+    }).then(async res => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || err.message || `Lỗi: ${res.status}`);
+      }
+      return res.json();
+    });
+  },
+  deleteDocument: (id) => fetchApi(`/documents/${id}`, {
+    method: 'DELETE',
+  }),
+  dispatchDocument: (id, data) => fetchApi(`/documents/${id}/dispatch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
+  completeDocumentDispatch: (dispatchId, data) => fetchApi(`/documents/dispatches/${dispatchId}/complete`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
 };

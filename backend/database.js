@@ -167,9 +167,53 @@ function initDatabase() {
       FOREIGN KEY(user_id) REFERENCES users(id),
       FOREIGN KEY(voter_id) REFERENCES users(id)
     );
+
+    CREATE TABLE IF NOT EXISTS documents (
+      id TEXT PRIMARY KEY,
+      doc_number TEXT NOT NULL,
+      doc_date TEXT,
+      arrival_date TEXT,
+      arrival_number TEXT,
+      issuer TEXT NOT NULL,
+      doc_type TEXT NOT NULL,
+      field TEXT,
+      urgency TEXT DEFAULT 'Thường',
+      security_level TEXT DEFAULT 'Thường',
+      summary TEXT NOT NULL,
+      file_url TEXT,
+      file_name TEXT,
+      deadline TEXT,
+      status TEXT DEFAULT 'pending_dispatch',
+      created_by TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(created_by) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS document_dispatches (
+      id TEXT PRIMARY KEY,
+      document_id TEXT NOT NULL,
+      department_id TEXT,
+      assigned_to_user_id TEXT NOT NULL,
+      coordinating_user_ids TEXT,
+      instruction TEXT NOT NULL,
+      deadline TEXT,
+      task_id TEXT,
+      status TEXT DEFAULT 'in_progress',
+      dispatched_by TEXT,
+      dispatched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      completed_at DATETIME,
+      completion_note TEXT,
+      FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE,
+      FOREIGN KEY(department_id) REFERENCES departments(id),
+      FOREIGN KEY(assigned_to_user_id) REFERENCES users(id),
+      FOREIGN KEY(dispatched_by) REFERENCES users(id),
+      FOREIGN KEY(task_id) REFERENCES assigned_tasks(id) ON DELETE SET NULL
+    );
   `);
 
   const migrations = [
+    "ALTER TABLE assigned_tasks ADD COLUMN document_id TEXT;",
     "ALTER TABLE assigned_tasks ADD COLUMN group_id TEXT;",
     "ALTER TABLE assigned_tasks ADD COLUMN is_bonus_proposed INTEGER DEFAULT 0;",
     "ALTER TABLE assigned_tasks ADD COLUMN bonus_score REAL DEFAULT 0;",
