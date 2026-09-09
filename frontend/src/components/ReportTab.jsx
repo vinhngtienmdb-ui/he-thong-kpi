@@ -337,7 +337,7 @@ export default function ReportTab({
 
       {/* DOCUMENT PREVIEW CONTAINER (MẪU 01-A hoặc MẪU 01-B) */}
       {activeReportView === 'self_eval' && (
-        <div className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-6 sm:p-10 font-times text-[14pt] leading-relaxed w-full space-y-6 text-black">
+        <div className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-3.5 sm:p-6 md:p-10 font-times text-[14pt] leading-relaxed w-full space-y-6 text-black">
           
           {/* Top Header: Mẫu 01-A vs Mẫu 01-B */}
           <div className="text-right text-[14pt] font-bold text-black">
@@ -904,7 +904,7 @@ export default function ReportTab({
           </div>
 
           {/* Official Document Container (Bảng 1 - Phụ lục 5) */}
-          <div className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-6 sm:p-10 font-times text-[14pt] text-black space-y-6">
+          <div className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-3.5 sm:p-6 md:p-10 font-times text-[14pt] text-black space-y-6">
             
             {/* Agency & National Title Header */}
             <div className="grid grid-cols-2 text-center text-[14pt]">
@@ -1216,7 +1216,7 @@ export default function ReportTab({
           )}
 
           {/* Document Container */}
-          <div className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-6 sm:p-10 font-times text-[14pt] space-y-6 text-black">
+          <div className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-3.5 sm:p-6 md:p-10 font-times text-[14pt] space-y-6 text-black">
             {/* Header Mẫu 02 */}
             <div className="text-right text-[14pt] font-bold text-black">
               Mẫu 02

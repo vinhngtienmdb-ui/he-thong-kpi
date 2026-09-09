@@ -176,7 +176,7 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* User selector if manager */}
           {users.length > 1 && (
             <div className="flex items-center gap-1 text-xs">
@@ -184,7 +184,7 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
               <select
                 value={selectedUser}
                 onChange={(e) => setSelectedUser(e.target.value)}
-                className="bg-white border border-slate-300 rounded-lg text-xs font-bold p-1.5 focus:ring-2 focus:ring-red-500"
+                className="bg-white border border-slate-300 rounded-lg text-xs font-bold p-1.5 focus:ring-2 focus:ring-red-500 max-w-[200px] truncate"
               >
                 {users.map(u => (
                   <option key={u.id} value={u.id}>
@@ -212,12 +212,12 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
               <span>Đã nộp tự đánh giá (Đang khóa)</span>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={handleSavePart1}
                 disabled={saving || submitting}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 text-xs font-bold transition shadow-2xs"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 bg-white hover:bg-slate-50 text-xs font-bold transition shadow-2xs cursor-pointer disabled:opacity-50"
               >
                 <Save className="w-3.5 h-3.5" />
                 <span>{saving ? 'Đang lưu...' : 'Lưu tạm'}</span>
@@ -227,10 +227,10 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
                 type="button"
                 onClick={handleSubmitSelfEval}
                 disabled={saving || submitting}
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-red-700 hover:bg-red-800 text-white text-xs font-bold transition shadow-sm"
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-red-700 hover:bg-red-800 text-white text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{submitting ? 'Đang gửi...' : (isReturned ? 'Gửi lại bản tự đánh giá' : 'Nộp tự đánh giá & Chuyển bước')}</span>
+                <span>{submitting ? 'Đang gửi...' : (isReturned ? 'Gửi lại bản tự đánh giá' : 'Nộp tự đánh giá')}</span>
               </button>
             </div>
           )}
@@ -347,7 +347,74 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
           )}
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Mobile View: Cards for each criterion (< md) */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {loading ? (
+            <div className="text-center py-12 text-slate-400 italic text-sm">
+              Đang tải tiêu chí đánh giá...
+            </div>
+          ) : criteriaList.length === 0 ? (
+            <div className="text-center py-12 text-slate-400 italic text-sm">
+              Không có tiêu chí đánh giá cho đối tượng này.
+            </div>
+          ) : (
+            criteriaList.map((c, idx) => {
+              const isSat = c.is_satisfied === 1;
+              return (
+                <div key={c.id} className={`p-4 space-y-2.5 transition-colors ${!isSat ? 'bg-rose-50/50' : 'bg-white'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                      {c.code}
+                    </span>
+                    <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 ${
+                      isSat ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-rose-100 text-rose-800 border border-rose-300'
+                    }`}>
+                      {isSat ? `Đạt: ${c.max_score}đ` : 'Không đạt: 0đ'}
+                    </span>
+                  </div>
+
+                  <div className="font-semibold text-slate-900 text-sm leading-snug">
+                    {c.title}
+                  </div>
+
+                  {/* Touch-Friendly Action Buttons */}
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={isLocked}
+                      onClick={() => handleSetCriteria(idx, 1)}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition-all shadow-2xs ${
+                        isSat
+                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-400/40'
+                          : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
+                      } ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer active:scale-95'}`}
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>Đạt ({c.max_score}đ)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isLocked}
+                      onClick={() => handleSetCriteria(idx, 0)}
+                      className={`flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-bold transition-all shadow-2xs ${
+                        !isSat
+                          ? 'bg-rose-600 text-white ring-2 ring-rose-400/40'
+                          : 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200'
+                      } ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer active:scale-95'}`}
+                    >
+                      <X className="w-4 h-4" />
+                      <span>Không đạt (0đ)</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop View: Full Comparison Table (>= md) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-sm border-collapse">
             <thead className="bg-slate-50/90 text-slate-700 font-bold border-b border-slate-200">
               <tr>
@@ -362,7 +429,7 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
               {loading ? (
                 <tr>
                   <td colSpan="5" className="text-center py-12 text-slate-400 italic text-sm">
-                    Đang tải 17 tiêu chí Quy định 366...
+                    Đang tải tiêu chí đánh giá...
                   </td>
                 </tr>
               ) : criteriaList.length === 0 ? (
@@ -407,7 +474,7 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
                               isSat
                                 ? 'bg-emerald-600 text-white shadow-xs'
                                 : 'text-slate-600 hover:text-emerald-700 hover:bg-white/60'
-                            } ${isLocked ? 'cursor-not-allowed opacity-60' : ''}`}
+                            } ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                             title={isLocked ? 'Bản tự đánh giá đã nộp/khóa' : 'Đánh giá Đạt tiêu chuẩn này'}
                           >
                             <Check className="w-3.5 h-3.5" />
@@ -421,7 +488,7 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
                               !isSat
                                 ? 'bg-rose-600 text-white shadow-xs'
                                 : 'text-slate-600 hover:text-rose-700 hover:bg-white/60'
-                            } ${isLocked ? 'cursor-not-allowed opacity-60' : ''}`}
+                            } ${isLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                             title={isLocked ? 'Bản tự đánh giá đã nộp/khóa' : 'Đánh giá Không đạt tiêu chuẩn này'}
                           >
                             <X className="w-3.5 h-3.5" />
@@ -450,6 +517,36 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
           </table>
         </div>
       </div>
+
+      {/* Floating Action Bar on Mobile for Instant Submit */}
+      {!isLocked && (
+        <div className="md:hidden sticky bottom-3 z-30 bg-white/95 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-slate-200 flex items-center justify-between gap-2 animate-in fade-in slide-in-from-bottom-2">
+          <div className="text-xs">
+            <span className="text-slate-500 block text-[10px]">Tự chấm:</span>
+            <span className="font-bold text-red-700 text-sm">{liveScore} / 30 đ</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSavePart1}
+              disabled={saving || submitting}
+              className="px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-xs font-bold shadow-2xs"
+            >
+              <Save className="w-3.5 h-3.5 inline mr-1" />
+              <span>{saving ? 'Lưu...' : 'Lưu tạm'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmitSelfEval}
+              disabled={saving || submitting}
+              className="px-4 py-2 rounded-xl bg-red-700 text-white text-xs font-bold shadow-xs"
+            >
+              <Send className="w-3.5 h-3.5 inline mr-1" />
+              <span>{submitting ? 'Gửi...' : 'Nộp đánh giá'}</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

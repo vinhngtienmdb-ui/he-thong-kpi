@@ -1657,8 +1657,8 @@ export default function AssignmentTab({
 
       {/* 5. MODAL: GIAO VIỆC / ĐĂNG KÝ VIỆC */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl w-[95%] sm:max-w-2xl shadow-2xl border border-slate-200 overflow-hidden my-4 sm:my-8 animate-in fade-in zoom-in duration-200 max-h-[92vh] flex flex-col">
             {/* Modal Header */}
             <div className="px-6 py-4 bg-gradient-to-r from-red-700 via-red-800 to-red-900 text-white flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -1677,7 +1677,7 @@ export default function AssignmentTab({
             </div>
 
             {/* Modal Body */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+            <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 flex-1 overflow-y-auto">
               
               {/* If assigning: Multi-officer selection */}
               {modalMode === 'assign' && (
@@ -1835,7 +1835,7 @@ export default function AssignmentTab({
                     Theo QĐ 366 & Hướng dẫn 06
                   </span>
                 </label>
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   <div
                     onClick={() => setFormData(prev => ({ 
                       ...prev, 
@@ -2037,8 +2037,8 @@ export default function AssignmentTab({
 
       {/* 6. MODAL: PHÊ DUYỆT CÔNG VIỆC & QUYẾT ĐỊNH GHI VÀO DANH MỤC CHUNG */}
       {approvalModalTask && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl w-[95%] sm:max-w-xl shadow-2xl border border-slate-200 overflow-hidden my-4 sm:my-8 animate-in fade-in zoom-in duration-200 max-h-[92vh] flex flex-col">
             {/* Modal Header */}
             <div className="px-6 py-4 bg-gradient-to-r from-emerald-600 via-emerald-700 to-teal-800 text-white flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -2060,7 +2060,7 @@ export default function AssignmentTab({
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 space-y-4 flex-1 overflow-y-auto">
               {/* Task Summary Card */}
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5">
                 <div className="flex items-center justify-between gap-2">

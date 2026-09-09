@@ -304,8 +304,8 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
 
       {/* SUBMIT EVIDENCE MODAL */}
       {activeTask && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl w-[95%] sm:max-w-lg p-4 sm:p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
             
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div>
@@ -393,7 +393,7 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
               </div>
 
               {/* Self assessment */}
-              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Số lượng sản phẩm</label>
                   <select

@@ -375,38 +375,38 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
       </div>
 
       {/* Summary Score Card */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
-        <div>
-          <span className="text-xs font-medium uppercase text-slate-500">Phần I: Tiêu chí chung</span>
-          <div className="text-2xl font-bold text-slate-900 mt-1">
-            {livePart1Score} <span className="text-xs text-slate-400 font-normal">/ 30 điểm</span>
+      <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-xs grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 items-center">
+        <div className="p-3 bg-slate-50/70 rounded-xl border border-slate-100">
+          <span className="text-[10px] sm:text-xs font-semibold uppercase text-slate-500 block truncate">Phần I: Tiêu chuẩn chung</span>
+          <div className="text-xl sm:text-2xl font-bold text-slate-900 mt-1">
+            {livePart1Score} <span className="text-xs text-slate-400 font-normal">/ 30 đ</span>
           </div>
-          <p className="text-[11px] text-slate-500">17 tiêu chí Quy định 366</p>
+          <p className="text-[11px] text-slate-500 truncate">17 tiêu chí Quy định 366</p>
         </div>
 
-        <div>
-          <span className="text-xs font-medium uppercase text-slate-500">Phần II: 6 Trục Trọng tâm</span>
-          <div className="text-2xl font-bold text-indigo-700 mt-1">
-            {evaluation.part2_score || 0} <span className="text-xs text-slate-400 font-normal">/ 70 điểm</span>
+        <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
+          <span className="text-[10px] sm:text-xs font-semibold uppercase text-indigo-700 block truncate">Phần II: 6 Trục Trọng tâm</span>
+          <div className="text-xl sm:text-2xl font-bold text-indigo-700 mt-1">
+            {evaluation.part2_score || 0} <span className="text-xs text-slate-400 font-normal">/ 70 đ</span>
           </div>
-          <p className="text-[11px] text-slate-500">Tổng điểm quy đổi đạt được</p>
+          <p className="text-[11px] text-slate-500 truncate">Tổng điểm quy đổi</p>
         </div>
 
-        <div>
-          <span className="text-xs font-medium uppercase text-slate-500">Tổng điểm Đánh giá</span>
-          <div className="text-3xl font-bold text-red-700 mt-1">
+        <div className="p-3 bg-red-50/50 rounded-xl border border-red-100">
+          <span className="text-[10px] sm:text-xs font-semibold uppercase text-red-700 block truncate">Tổng điểm Đánh giá</span>
+          <div className="text-2xl sm:text-3xl font-bold text-red-700 mt-1">
             {Number((livePart1Score + (evaluation.part2_score || 0)).toFixed(2))} <span className="text-xs text-slate-400 font-normal">/ 100</span>
           </div>
-          <p className="text-[11px] text-slate-500">Thang điểm 100 chuẩn</p>
+          <p className="text-[11px] text-slate-500 truncate">Thang điểm 100 chuẩn</p>
         </div>
 
-        <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-200">
-          <span className="text-xs font-medium text-slate-600 block">Đề xuất xếp loại:</span>
-          <span className="text-sm font-semibold text-slate-900 block mt-0.5">
+        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+          <span className="text-[10px] sm:text-xs font-semibold uppercase text-slate-600 block truncate">Đề xuất xếp loại</span>
+          <span className="text-xs sm:text-sm font-bold text-slate-900 block mt-1 truncate">
             {evaluation.rank_proposed || 'Chưa xếp loại'}
           </span>
-          <span className="text-[11px] text-slate-500">
-            Nhiệm vụ vượt tiến độ: {evalData?.stats?.aheadSchedulePct || 0}%
+          <span className="text-[11px] text-slate-500 block truncate">
+            Vượt tiến độ: {evalData?.stats?.aheadSchedulePct || 0}%
           </span>
         </div>
       </div>
@@ -425,8 +425,99 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1400px] text-left text-sm text-slate-600">
+        {/* Mobile Task Cards (< md) */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {userTasks.length === 0 ? (
+            <div className="py-8 text-center text-slate-400 italic text-xs">
+              Chưa có nhiệm vụ nào được giao hoặc nộp trong kỳ này.
+            </div>
+          ) : (
+            userTasks.map((t, idx) => {
+              const isApproved = t.status === 'approved';
+              return (
+                <div key={t.id} className="py-3.5 space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-semibold text-slate-900 text-sm leading-snug">
+                      {idx + 1}. {t.task_name}
+                    </span>
+                    <span className={`shrink-0 px-2 py-0.5 rounded text-[11px] font-bold ${
+                      isApproved ? 'bg-emerald-100 text-emerald-800' : (t.is_returned === 1 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600')
+                    }`}>
+                      {isApproved ? 'Đã duyệt' : (t.is_returned === 1 ? 'Bị trả về' : 'Chờ chấm')}
+                    </span>
+                  </div>
+
+                  <div className="text-xs text-slate-500">
+                    Hạn: {formatDate(t.deadline)} {t.actual_finish_date && `• Xong: ${formatDate(t.actual_finish_date)}`}
+                  </div>
+
+                  {t.is_returned === 1 && (
+                    <div className="text-xs text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                      <strong>⚠️ Đã trả về:</strong> {t.return_reason || 'Yêu cầu nộp lại minh chứng'}
+                    </div>
+                  )}
+
+                  {t.evidence_text && (
+                    <div className="text-xs text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                      <span className="font-semibold text-indigo-700">Minh chứng: </span>{t.evidence_text}
+                    </div>
+                  )}
+
+                  {t.evidence_file_url && (
+                    <div className="text-xs text-blue-600 flex items-center gap-1">
+                      <Paperclip className="w-3.5 h-3.5" />
+                      <a href={t.evidence_file_url} target="_blank" rel="noreferrer" className="underline font-medium">
+                        {t.evidence_file_name || 'Xem tệp minh chứng'}
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Metrics pills */}
+                  <div className="grid grid-cols-3 gap-1.5 text-center text-xs">
+                    <div className="p-1.5 bg-slate-50 rounded-lg border border-slate-100">
+                      <span className="text-[10px] text-slate-400 block">Điểm chuẩn</span>
+                      <span className="font-bold text-slate-800">{t.standard_score}</span>
+                    </div>
+                    <div className="p-1.5 bg-slate-50 rounded-lg border border-slate-100">
+                      <span className="text-[10px] text-slate-400 block">HSĐK</span>
+                      <span className="font-bold text-slate-800">{t.difficulty_weight}</span>
+                    </div>
+                    <div className="p-1.5 bg-emerald-50 rounded-lg border border-emerald-100">
+                      <span className="text-[10px] text-emerald-700 block">Điểm quy đổi</span>
+                      <span className="font-bold text-emerald-800">{Number(Number(t.converted_score || 0).toFixed(2))}</span>
+                    </div>
+                  </div>
+
+                  {/* Action buttons */}
+                  {canGrade && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={() => openGradeModal(t)}
+                        className="flex-1 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-2xs text-center cursor-pointer"
+                      >
+                        {isApproved ? 'Chấm lại' : 'Chấm điểm'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReturningTask(t);
+                          setReturnTaskReason('');
+                        }}
+                        className="py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-bold shadow-2xs cursor-pointer"
+                      >
+                        ↩️ Trả về
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Desktop Task Table (>= md) */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full min-w-[1100px] text-left text-sm text-slate-600">
             <thead className="bg-slate-50 font-semibold text-slate-700 border-b border-slate-200">
               <tr>
                 <th className="px-4 py-3.5 w-14 text-center">TT</th>
@@ -575,8 +666,44 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1000px] text-left text-sm text-slate-600">
+        {/* Mobile View: Criteria cards (< md) */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {criteriaList.map((c, i) => {
+            const isSat = c.is_satisfied === 1;
+            return (
+              <div key={c.id} className={`p-4 space-y-2.5 transition-colors ${!isSat ? 'bg-rose-50/50' : 'bg-white'}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                    {c.code}
+                  </span>
+                  <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${isSat ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                    {isSat ? `${c.max_score} đ` : '0 đ'} / {c.max_score} đ
+                  </span>
+                </div>
+
+                <div className="text-sm font-semibold text-slate-900 leading-snug">
+                  {c.title}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleToggleCriteria(i)}
+                  className={`w-full py-2.5 px-4 rounded-xl font-bold text-xs transition-all shadow-2xs cursor-pointer flex items-center justify-center gap-2 ${
+                    isSat
+                      ? 'bg-emerald-600 text-white shadow-emerald-200 ring-2 ring-emerald-400/40'
+                      : 'bg-rose-600 text-white shadow-rose-200 ring-2 ring-rose-400/40'
+                  }`}
+                >
+                  {isSat ? `✓ Đảm bảo tiêu chuẩn (${c.max_score}đ)` : '✕ Không đảm bảo tiêu chuẩn (0đ)'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Desktop View: Criteria table (>= md) */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full min-w-[900px] text-left text-sm text-slate-600">
             <thead className="bg-slate-50 font-bold text-slate-700 border-b border-slate-200">
               <tr>
                 <th className="px-4 py-3.5 w-16 text-center">Mã</th>
@@ -690,21 +817,22 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
 
       {/* GRADING MODAL */}
       {gradingTask && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-[95%] sm:w-full max-h-[92vh] overflow-y-auto p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4 my-auto animate-in fade-in zoom-in-95 duration-150">
             
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
+              <div className="min-w-0 flex-1 pr-2">
+                <h3 className="text-base font-bold text-slate-900 truncate">
                   Thẩm định & Chấm điểm Công việc
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">{gradingTask.task_name}</p>
+                <p className="text-xs text-slate-500 mt-0.5 truncate">{gradingTask.task_name}</p>
               </div>
               <button 
+                type="button"
                 onClick={() => setGradingTask(null)}
-                className="text-slate-400 hover:text-slate-600 font-bold"
+                className="w-8 h-8 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer shrink-0"
               >
-                ✕
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -862,8 +990,8 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
 
       {/* MODAL: TRẢ VỀ TỰ ĐÁNH GIÁ (PHẦN I) */}
       {isReturnEvalModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-md w-[95%] sm:w-full max-h-[92vh] overflow-y-auto p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4 my-auto animate-in fade-in zoom-in-95 duration-150">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
                 <RotateCcw className="w-5 h-5 text-amber-600" />
@@ -872,7 +1000,7 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
               <button
                 type="button"
                 onClick={() => setIsReturnEvalModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="w-8 h-8 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -895,7 +1023,7 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                   value={returnEvalReason}
                   onChange={(e) => setReturnEvalReason(e.target.value)}
                   placeholder="Nhập lý do chi tiết hoặc tiêu chí chưa chuẩn xác..."
-                  className="w-full text-xs p-2.5 border border-slate-300 rounded-md focus:ring-2 focus:ring-amber-500"
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500"
                 />
               </div>
 
@@ -903,14 +1031,14 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                 <button
                   type="button"
                   onClick={() => setIsReturnEvalModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-md"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
                   disabled={submittingReturnEval}
-                  className="px-4 py-2 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-md shadow-xs disabled:opacity-50"
+                  className="px-4 py-2 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-xs disabled:opacity-50 cursor-pointer"
                 >
                   {submittingReturnEval ? 'Đang xử lý...' : 'Xác nhận Trả về'}
                 </button>
@@ -922,8 +1050,8 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
 
       {/* MODAL: TRẢ VỀ CÔNG VIỆC / MINH CHỨNG */}
       {returningTask && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-md w-[95%] sm:w-full max-h-[92vh] overflow-y-auto p-4 sm:p-6 shadow-2xl border border-slate-200 space-y-4 my-auto animate-in fade-in zoom-in-95 duration-150">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
                 <RotateCcw className="w-5 h-5 text-amber-600" />
@@ -932,7 +1060,7 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
               <button
                 type="button"
                 onClick={() => setReturningTask(null)}
-                className="text-slate-400 hover:text-slate-600"
+                className="w-8 h-8 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>

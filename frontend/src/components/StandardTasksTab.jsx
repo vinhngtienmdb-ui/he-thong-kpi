@@ -954,8 +954,8 @@ export default function StandardTasksTab({
 
       {/* IMPORT EXCEL MODAL */}
       {showImportModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl w-[95%] sm:max-w-lg p-4 sm:p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
                 <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
@@ -1078,8 +1078,8 @@ export default function StandardTasksTab({
 
       {/* ADD STANDARD TASK MODAL */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl w-[95%] sm:max-w-lg p-4 sm:p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-base font-bold text-slate-900">
                 Thêm Công việc chuẩn vào Danh mục
@@ -1253,8 +1253,8 @@ export default function StandardTasksTab({
 
       {/* 1. MODAL CHỈNH SỬA CÔNG VIỆC CHUẨN */}
       {editingTask && editForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-[95%] sm:max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200 p-4 sm:p-6 space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-full bg-[#dc2626] text-white flex items-center justify-center shadow-xs">
@@ -1458,8 +1458,8 @@ export default function StandardTasksTab({
 
       {/* 2. MODAL GIAO VIỆC / PHÂN CÔNG CÁN BỘ (Hỗ trợ phân công 1 hoặc nhiều người) */}
       {assigningTask && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-xl w-full max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200 p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-[95%] sm:max-w-xl max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200 p-4 sm:p-6 space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-full bg-[#c62828] text-white flex items-center justify-center shadow-xs">
@@ -1676,8 +1676,8 @@ export default function StandardTasksTab({
 
       {/* 3. MODAL XÁC NHẬN TẠM KHÓA / MỞ KHÓA CÔNG VIỆC */}
       {lockingTask && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-[95%] sm:max-w-md shadow-2xl border border-slate-200 p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-full bg-[#facc15] text-[#b91c1c] flex items-center justify-center shadow-xs border border-amber-300">
@@ -1759,8 +1759,8 @@ export default function StandardTasksTab({
 
       {/* 4. MODAL XÁC NHẬN XÓA CÔNG VIỆC KHỎI DANH MỤC */}
       {deletingTask && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 p-6 space-y-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-[95%] sm:max-w-md shadow-2xl border border-slate-200 p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-full bg-[#dc2626] text-white flex items-center justify-center shadow-xs">
@@ -1828,8 +1828,8 @@ export default function StandardTasksTab({
 
       {/* 5. MODAL XEM CHI TIẾT CÔNG VIỆC CHUẨN */}
       {viewingTask && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 animate-in fade-in duration-150 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-[95%] sm:max-w-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             {/* Header */}
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
@@ -1968,8 +1968,8 @@ export default function StandardTasksTab({
 
       {/* 5. MODAL PHÂN CÔNG HÀNG LOẠT (Nhiều nhiệm vụ cho nhiều người) */}
       {isBulkAssignModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-[95%] sm:max-w-4xl max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
               <div className="flex items-center gap-3">

@@ -381,25 +381,28 @@ export default function Header({
           </button>
 
           {/* Brand Crest & Texts */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {/* Star Crest */}
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white flex items-center justify-center text-xl font-bold shadow-md border-2 border-white/40 shrink-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white flex items-center justify-center text-base sm:text-xl font-bold shadow-md border-2 border-white/40 shrink-0">
               ★
             </div>
 
             <div className="min-w-0">
-              <div className="text-[11px] sm:text-xs font-medium text-amber-200 uppercase tracking-wider drop-shadow-xs truncate">
+              <div className="text-[10px] sm:text-xs font-medium text-amber-200 uppercase tracking-wider drop-shadow-xs truncate max-w-[140px] xs:max-w-[200px] sm:max-w-[340px] md:max-w-none">
                 {unitName}
               </div>
-              <h1 className="text-sm sm:text-base font-semibold text-white drop-shadow-md leading-tight truncate tracking-tight">
+              <h1 className="hidden sm:block text-xs sm:text-base font-semibold text-white drop-shadow-md leading-tight truncate tracking-tight">
                 Hệ thống quản lý công việc và chấm điểm hiệu suất
               </h1>
+              <div className="sm:hidden text-[11px] font-bold text-white truncate drop-shadow-sm">
+                Quản lý KPI Ban Tổ chức
+              </div>
             </div>
           </div>
         </div>
 
         {/* Right Controls & Profile Area */}
-        <div className="flex items-center gap-2 sm:gap-3.5 relative z-10">
+        <div className="flex items-center gap-1.5 sm:gap-3 relative z-10">
           
           {/* Realtime Clock & Vietnamese Date in Frosted Glass Pill */}
           <div className="hidden md:flex flex-col items-end px-3.5 py-1 rounded-xl bg-white/85 backdrop-blur-sm border border-white/90 shadow-2xs">
@@ -412,18 +415,18 @@ export default function Header({
           </div>
 
           {/* Action Icons in Frosted Glass */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 sm:gap-1.5">
             
             {/* 1. DARK MODE TOGGLE BUTTON */}
             <button 
               type="button"
               onClick={toggleDarkMode}
-              className={`w-9 h-9 rounded-full bg-white/85 hover:bg-white border border-white/90 shadow-2xs flex items-center justify-center transition ${
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/85 hover:bg-white border border-white/90 shadow-2xs flex items-center justify-center transition ${
                 isDark ? 'text-amber-500 hover:text-amber-600' : 'text-slate-700 hover:text-slate-900'
               }`}
               title={isDark ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Ban đêm (Dark Mode)'}
             >
-              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              {isDark ? <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
             </button>
 
             {/* 2. NOTIFICATIONS BELL WITH DROPDOWN */}
@@ -431,14 +434,14 @@ export default function Header({
               <button 
                 type="button"
                 onClick={() => setShowNotificationsDropdown(!showNotificationsDropdown)}
-                className={`w-9 h-9 rounded-full bg-white/85 hover:bg-white text-red-900 hover:text-red-950 border border-white/90 shadow-2xs flex items-center justify-center transition relative ${
+                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/85 hover:bg-white text-red-900 hover:text-red-950 border border-white/90 shadow-2xs flex items-center justify-center transition relative ${
                   showNotificationsDropdown ? 'ring-2 ring-red-500 bg-white' : ''
                 }`}
                 title="Thông báo hệ thống"
               >
-                <Bell className="w-4 h-4" />
+                <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 {unreadNotifsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-xs animate-pulse">
+                  <span className="absolute -top-1 -right-1 min-w-[16px] sm:min-w-[18px] h-[16px] sm:h-[18px] px-1 bg-red-600 text-white text-[9px] sm:text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-xs animate-pulse">
                     {unreadNotifsCount}
                   </span>
                 )}
@@ -446,7 +449,7 @@ export default function Header({
 
               {/* Notifications Dropdown Panel */}
               {showNotificationsDropdown && (
-                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden animate-in fade-in zoom-in duration-150 text-slate-800">
+                <div className="fixed sm:absolute left-3 right-3 sm:left-auto sm:right-0 mt-2 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden animate-in fade-in zoom-in duration-150 text-slate-800">
                   {/* Dropdown Header */}
                   <div className="px-4 py-3 bg-gradient-to-r from-red-700 to-red-800 text-white flex items-center justify-between">
                     <div className="flex items-center gap-2">

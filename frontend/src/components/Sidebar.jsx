@@ -16,7 +16,8 @@ import {
   ChevronUp,
   Search,
   Vote,
-  BarChart3
+  BarChart3,
+  X
 } from 'lucide-react';
 
 export default function Sidebar({ 
@@ -94,18 +95,29 @@ export default function Sidebar({
 
         {/* Top Brand Header */}
         {!isCollapsed ? (
-          <div className="px-4 py-3.5 border-b border-red-300/30 shrink-0 relative z-10 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white flex items-center justify-center text-xl font-bold shadow-md border-2 border-white/40 shrink-0">
-              ★
+          <div className="px-4 py-3.5 border-b border-red-300/30 shrink-0 relative z-10 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white flex items-center justify-center text-xl font-bold shadow-md border-2 border-white/40 shrink-0">
+                ★
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[11px] font-semibold uppercase tracking-wider text-amber-200 leading-snug">
+                  Hệ thống Quản lý
+                </h2>
+                <p className="text-[13px] font-medium text-white leading-tight">
+                  Công việc & Chấm điểm hiệu suất
+                </p>
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-amber-200 leading-snug">
-                Hệ thống Quản lý
-              </h2>
-              <p className="text-[13px] font-medium text-white leading-tight">
-                Công việc & Chấm điểm hiệu suất
-              </p>
-            </div>
+            {/* Mobile Close Button */}
+            <button
+              type="button"
+              onClick={() => setMobileOpen && setMobileOpen(false)}
+              className="lg:hidden p-2 rounded-xl text-white/80 hover:text-white hover:bg-white/15 transition cursor-pointer shrink-0"
+              title="Đóng thanh menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
         ) : (
           <div className="p-3 border-b border-red-300/30 shrink-0 relative z-10 flex justify-center">

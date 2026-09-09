@@ -251,23 +251,28 @@ export default function App() {
         />
 
         {/* 6-Step Evaluation Process Stepper (Hidden during print) */}
-        <div className="no-print bg-white border-b border-slate-200 shadow-2xs py-2.5 px-4 sm:px-6 lg:px-8">
+        <div className="no-print bg-white border-b border-slate-200 shadow-2xs py-2 px-3 sm:px-6 lg:px-8">
           <div className="w-full">
             <div className="flex items-center justify-between mb-1.5">
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-700 text-white text-xs font-bold">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-700 text-white text-xs font-bold shrink-0">
                   ✓
                 </span>
-                <span className="text-sm font-bold uppercase tracking-wider text-slate-800">
-                  Quy trình 6 bước Đánh giá KPI Hàng Quý (Theo Hướng dẫn 06-HD/BTCTU)
+                <span className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-800 truncate">
+                  Quy trình 6 bước Đánh giá KPI Hàng Quý
+                </span>
+                <span className="text-slate-400 text-xs hidden sm:inline truncate">
+                  (Theo Hướng dẫn 06-HD/BTCTU)
                 </span>
               </div>
-              <span className="text-xs text-slate-500 hidden xl:inline">
-                Nhấp vào từng bước để chuyển nhanh
-              </span>
+              <div className="shrink-0 flex items-center gap-1 text-[11px] text-slate-500">
+                <span className="hidden xl:inline">Nhấp vào từng bước để chuyển nhanh</span>
+                <span className="xl:hidden italic text-red-600 bg-red-50 px-1.5 py-0.5 rounded font-medium">Vuốt ngang ➔</span>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
+            {/* Mobile & Tablet: Swipeable strip; Desktop (xl): 6-column grid */}
+            <div className="flex xl:grid xl:grid-cols-6 gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin scrollbar-thumb-slate-200 snap-x snap-mandatory">
               {workflowSteps.map((ws) => {
                 const isCurrent = currentTab === ws.tab;
                 return (
@@ -275,26 +280,26 @@ export default function App() {
                     key={ws.step}
                     type="button"
                     onClick={() => setCurrentTab(ws.tab)}
-                    className={`text-left p-2.5 rounded-lg border transition-all ${
+                    className={`min-w-[155px] sm:min-w-[175px] xl:min-w-0 shrink-0 snap-start text-left p-2 sm:p-2.5 rounded-xl border transition-all cursor-pointer select-none ${
                       isCurrent
-                        ? 'bg-red-50/90 border-red-400 ring-1 ring-red-400'
-                        : 'bg-slate-50/70 border-slate-200 hover:bg-slate-100/90'
+                        ? 'bg-red-50/95 border-red-500 ring-2 ring-red-400/40 shadow-xs'
+                        : 'bg-slate-50/80 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                        isCurrent ? 'bg-red-700 text-white' : 'bg-slate-200 text-slate-700'
+                    <div className="flex items-center justify-between gap-1">
+                      <span className={`text-[10px] sm:text-xs font-bold px-1.5 py-0.5 rounded ${
+                        isCurrent ? 'bg-red-700 text-white shadow-2xs' : 'bg-slate-200 text-slate-700'
                       }`}>
                         Bước {ws.step}
                       </span>
-                      <span className="text-[11px] font-semibold text-slate-500 uppercase">
+                      <span className="text-[10px] sm:text-[11px] font-semibold text-slate-500 uppercase truncate">
                         {ws.role}
                       </span>
                     </div>
-                    <div className="text-sm font-bold text-slate-900 mt-1 line-clamp-1">
+                    <div className={`text-xs sm:text-sm font-bold mt-1 truncate ${isCurrent ? 'text-red-900' : 'text-slate-900'}`}>
                       {ws.title}
                     </div>
-                    <div className="text-xs text-slate-600 line-clamp-1 mt-0.5">
+                    <div className="text-[11px] text-slate-600 truncate mt-0.5">
                       {ws.desc}
                     </div>
                   </button>
@@ -305,7 +310,7 @@ export default function App() {
         </div>
 
         {/* Main Tab Content */}
-        <main className="flex-1 w-full px-4 sm:px-6 py-5 print:p-0 print:m-0">
+        <main className="flex-1 w-full px-2 sm:px-4 lg:px-6 py-3 sm:py-5 print:p-0 print:m-0 overflow-x-hidden">
           {currentTab === 'dashboard' && (
             <DashboardTab
               selectedPeriod={selectedPeriod}

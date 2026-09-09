@@ -533,8 +533,8 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
 
       {/* Add / Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 border border-slate-200">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-[95%] sm:max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl p-4 sm:p-6 border border-slate-200">
             <div className="flex items-center justify-between border-b pb-4 mb-4">
               <h3 className="text-xl font-bold text-slate-900">
                 {editingUser ? `Chỉnh sửa Cán bộ: ${editingUser.full_name}` : 'Thêm Cán bộ Mới'}
@@ -790,8 +790,8 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
 
       {/* Import Modal */}
       {isImportModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-xl max-w-xl w-full border border-slate-200 overflow-hidden my-8">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl w-[95%] sm:max-w-xl border border-slate-200 overflow-hidden my-4 sm:my-8 max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-emerald-100 text-emerald-800 rounded-lg">
@@ -986,8 +986,8 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
 
       {/* Reset Password Modal */}
       {isResetModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-[95%] sm:max-w-md shadow-2xl p-4 sm:p-6 border border-slate-200 animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center shadow-2xs">

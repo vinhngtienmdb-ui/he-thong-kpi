@@ -1586,8 +1586,8 @@ export default function DashboardTab({
       {/* QUICK INSPECTION MODAL FOR STAFF MEMBER */}
       {/* ========================================================================= */}
       {selectedStaffModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-[95%] sm:max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200">
             
             {/* Modal Header */}
             <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-gradient-to-r from-red-800 to-rose-900 text-white rounded-t-2xl">
