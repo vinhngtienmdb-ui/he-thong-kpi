@@ -18,7 +18,12 @@ import {
   Lock,
   Unlock,
   Clock,
-  AlertTriangle
+  AlertTriangle,
+  Power,
+  PowerOff,
+  Search,
+  CheckCircle2,
+  XCircle
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate } from '../constants';
@@ -58,9 +63,17 @@ export default function SystemConfigTab({
   const [axes, setAxes] = useState([]);
   const [roles, setRoles] = useState([]);
   const [localDepts, setLocalDepts] = useState(departments);
+  const [deptFilter, setDeptFilter] = useState('all'); // 'all', 'active', 'inactive'
+  const [deptSearch, setDeptSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
+
+  useEffect(() => {
+    if (departments && departments.length > 0) {
+      setLocalDepts(departments);
+    }
+  }, [departments]);
 
   // Period Modal
   const [isPeriodModalOpen, setIsPeriodModalOpen] = useState(false);
@@ -174,7 +187,7 @@ export default function SystemConfigTab({
       start_date: p.start_date || '',
       end_date: p.end_date || '',
       grading_lock_date: p.grading_lock_date || '',
-      is_active: p.is_active !== undefined ? p.is_active : 1
+      is_active: p.is_active !== undefined ? (p.is_active === 1 ? 1 : 0) : 1
     });
     setIsPeriodModalOpen(true);
   };
@@ -191,30 +204,79 @@ export default function SystemConfigTab({
       }
       setIsPeriodModalOpen(false);
       if (onReloadPeriods) onReloadPeriods();
+      loadData();
     } catch (err) {
       alert('Lỗi lưu kỳ đánh giá: ' + err.message);
     }
   };
 
+  // Bật / Tắt hoạt động của Kỳ đánh giá
+  const handleToggleActivePeriod = async (p) => {
+    const newStatus = p.is_active === 1 ? 0 : 1;
+    const actionText = newStatus === 1 ? 'BẬT hoạt động' : 'TẮT hoạt động';
+    const confirmMsg = newStatus === 0 
+      ? `XÁC NHẬN TẮT HOẠT ĐỘNG KỲ ĐÁNH GIÁ:\n\n👉 "${p.name}" (${p.code})\n\nKỳ này sẽ tạm ngừng và không hiển thị trong danh mục kỳ đánh giá đang thực hiện. Bạn có chắc chắn?`
+      : `XÁC NHẬN KÍCH HOẠT LẠI KỲ ĐÁNH GIÁ:\n\n👉 "${p.name}" (${p.code})\n\nKỳ này sẽ hoạt động bình thường trở lại. Bạn có muốn tiếp tục?`;
+    
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await api.updateAdminPeriod(p.id, { is_active: newStatus });
+      setMessage({ text: `Đã ${actionText} cho kỳ "${p.name}" thành công!`, type: 'success' });
+      if (onReloadPeriods) onReloadPeriods();
+      loadData();
+    } catch (err) {
+      alert('Lỗi cập nhật trạng thái kỳ đánh giá: ' + err.message);
+    }
+  };
+
+  // Chốt / Mở khóa KPI toàn cơ quan
   const handleToggleFinalizePeriod = async (p) => {
     if (p.is_locked === 1) {
-      if (!window.confirm(`Bạn có chắc chắn muốn MỞ KHÓA KPI kỳ "${p.name}"? Cán bộ sẽ có thể tiếp tục cập nhật và chấm điểm.`)) return;
+      if (!window.confirm(
+        `XÁC NHẬN MỞ KHÓA KPI CHO KỲ:\n\n👉 "${p.name}" (${p.code})\n\nSau khi mở khóa, các Cán bộ Quản lý và Lãnh đạo có thể tiếp tục cập nhật điểm số và nhận xét đánh giá. Bạn có chắc chắn muốn thực hiện?`
+      )) return;
       try {
         await api.unfinalizePeriod(p.id);
-        setMessage({ text: `Đã mở khóa KPI kỳ "${p.name}" thành công!`, type: 'success' });
+        setMessage({ text: `Đã mở khóa KPI thành công cho kỳ "${p.name}"!`, type: 'success' });
         if (onReloadPeriods) onReloadPeriods();
+        loadData();
       } catch (err) {
         alert('Lỗi mở khóa: ' + err.message);
       }
     } else {
-      if (!window.confirm(`XÁC NHẬN CHỐT KPI TOÀN ĐƠN VỊ / CƠ QUAN cho kỳ "${p.name}"?\n\nSau khi chốt, toàn bộ điểm số và kết quả sẽ được khóa sổ chính thức. Bạn có chắc chắn muốn thực hiện?`)) return;
+      if (!window.confirm(
+        `XÁC NHẬN CHỐT KPI TOÀN ĐƠN VỊ / CƠ QUAN CHO KỲ:\n\n👉 "${p.name}" (${p.code})\n\nThời hạn đánh giá: ${formatDate(p.start_date)} đến ${formatDate(p.end_date)}\n\nSau khi chốt, toàn bộ điểm số, tự đánh giá, thẩm định và xếp loại của tất cả cán bộ trong kỳ "${p.name}" sẽ được khóa sổ chính thức theo Quy định số 366-QĐ/TW.\n\nBạn có chắc chắn muốn chốt KPI cho kỳ "${p.name}"?`
+      )) return;
       try {
-        await api.finalizePeriod(p.id, { finalized_by: 'Lãnh đạo cơ quan' });
+        await api.finalizePeriod(p.id, { finalized_by: currentUser?.full_name || 'Lãnh đạo cơ quan' });
         setMessage({ text: `Đã Chốt & Khóa Sổ KPI toàn đơn vị cho kỳ "${p.name}" thành công!`, type: 'success' });
         if (onReloadPeriods) onReloadPeriods();
+        loadData();
       } catch (err) {
         alert('Lỗi chốt KPI: ' + err.message);
       }
+    }
+  };
+
+  // Bật / Tắt hoạt động của Đơn vị / Phòng ban
+  const handleToggleActiveDept = async (dept) => {
+    const newStatus = dept.is_active !== 0 ? 0 : 1;
+    const actionText = newStatus === 1 ? 'BẬT hoạt động' : 'TẮT hoạt động (Tạm ngừng)';
+    const confirmMsg = newStatus === 0 
+      ? `XÁC NHẬN TẮT HOẠT ĐỘNG ĐƠN VỊ / PHÒNG BAN:\n\n👉 "${dept.name}" (${dept.code})\n\nĐơn vị sẽ chuyển sang trạng thái TẠM NGỪNG HOẠT ĐỘNG và không xuất hiện trong các bộ chọn phân công nhiệm vụ mới. Bạn có chắc chắn muốn tắt?`
+      : `XÁC NHẬN KÍCH HOẠT LẠI HOẠT ĐỘNG ĐƠN VỊ:\n\n👉 "${dept.name}" (${dept.code})\n\nĐơn vị sẽ trở lại hoạt động bình thường. Bạn có muốn kích hoạt lại?`;
+    
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await api.updateDepartment(dept.id, { is_active: newStatus });
+      setMessage({ text: `Đã ${actionText} cho đơn vị "${dept.name}" thành công!`, type: 'success' });
+      const updatedDepts = await api.getDepartments();
+      setLocalDepts(updatedDepts);
+      if (onReloadDepartments) onReloadDepartments();
+    } catch (err) {
+      alert('Lỗi cập nhật trạng thái đơn vị: ' + err.message);
     }
   };
 
@@ -460,127 +522,240 @@ export default function SystemConfigTab({
       )}
 
       {/* SUB-TAB 1: DEPARTMENTS & HIERARCHY */}
-      {activeSubTab === 'departments' && (
-        <div className="bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden">
-          <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">
-                Danh sách Đơn vị / Phòng ban theo Cây phân cấp
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Mỗi đơn vị có thể có đơn vị cha (Cơ quan → Phòng ban → Tổ/Bộ phận trực thuộc) giúp phân quyền quản lý trực tiếp và gián tiếp
-              </p>
-            </div>
-            <div className="text-xs font-semibold text-slate-600 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-              Tổng số: <strong className="text-red-700">{localDepts.length}</strong> đơn vị
-            </div>
-          </div>
+      {activeSubTab === 'departments' && (() => {
+        const filteredDepts = localDepts.filter(d => {
+          const matchesFilter = deptFilter === 'all' 
+            ? true 
+            : deptFilter === 'active' 
+              ? d.is_active !== 0 
+              : d.is_active === 0;
+          const q = deptSearch.trim().toLowerCase();
+          const matchesSearch = !q || 
+            (d.name && d.name.toLowerCase().includes(q)) || 
+            (d.code && d.code.toLowerCase().includes(q)) ||
+            (d.parent_agency && d.parent_agency.toLowerCase().includes(q)) ||
+            (d.leader_name && d.leader_name.toLowerCase().includes(q));
+          return matchesFilter && matchesSearch;
+        });
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1250px] text-left text-sm border-collapse">
-              <thead>
-                <tr className="bg-slate-100/75 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-xs">
-                  <th className="py-3.5 px-4 w-32">Mã đơn vị</th>
-                  <th className="py-3.5 px-4 min-w-[260px]">Tên đơn vị / Phòng ban</th>
-                  <th className="py-3.5 px-4 min-w-[220px]">Cơ quan cấp trên (In BC) & Địa phương</th>
-                  <th className="py-3.5 px-4 min-w-[180px]">Đơn vị cấp trên (Cha)</th>
-                  <th className="py-3.5 px-4 min-w-[180px]">Trưởng đơn vị / Phụ trách</th>
-                  <th className="py-3.5 px-4 w-24 text-center">Đơn vị con</th>
-                  <th className="py-3.5 px-4 w-24 text-center">Số CBNV</th>
-                  <th className="py-3.5 px-4 w-28 text-center">Trạng thái</th>
-                  <th className="py-3.5 px-4 w-28 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {localDepts.map((d) => (
-                  <tr key={d.id} className="hover:bg-slate-50/80 transition">
-                    <td className="py-3 px-4 font-mono font-bold text-slate-800">
-                      {d.code}
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        {d.parent_id ? (
-                          <div className="flex items-center text-slate-400 pl-3">
-                            <span className="text-slate-300 mr-1">└─</span>
-                            <span className="font-semibold text-slate-900">{d.name}</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 font-bold text-slate-900">
-                            <span className="w-2 h-2 rounded-full bg-red-600"></span>
-                            <span>{d.name}</span>
-                          </div>
-                        )}
-                      </div>
-                      {d.description && (
-                        <div className="text-[11px] text-slate-400 mt-0.5 ml-4 truncate max-w-xs">
-                          {d.description}
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="font-semibold text-slate-800 text-xs">{d.parent_agency || <span className="text-slate-400 italic">Mặc định</span>}</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">📍 {d.location_name || 'TP. Hồ Chí Minh'}</div>
-                    </td>
-                    <td className="py-3 px-4 text-slate-600">
-                      {d.parent_name ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-medium">
-                          {d.parent_name}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 italic">Cấp cao nhất</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4">
-                      {d.leader_name ? (
-                        <span className="font-bold text-slate-800 flex items-center gap-1">
-                          👤 {d.leader_name}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 italic">Chưa chỉ định</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                        {d.sub_dept_count || 0}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        {d.user_count || 0}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        d.is_active !== 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
-                      }`}>
-                        {d.is_active !== 0 ? 'Hoạt động' : 'Tạm ngừng'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => openEditDeptModal(d)}
-                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition"
-                          title="Sửa thông tin đơn vị"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteDept(d)}
-                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md transition"
-                          title="Xóa đơn vị"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
+        const activeCount = localDepts.filter(d => d.is_active !== 0).length;
+        const inactiveCount = localDepts.filter(d => d.is_active === 0).length;
+
+        return (
+          <div className="bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden space-y-0">
+            <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-red-600" />
+                  Danh sách Đơn vị / Phòng ban theo Cây phân cấp
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Quản lý đơn vị, thiết lập cơ quan cấp trên in báo cáo và bật/tắt trạng thái hoạt động của từng đơn vị
+                </p>
+              </div>
+
+              {/* Filters & Search */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Search */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={deptSearch}
+                    onChange={(e) => setDeptSearch(e.target.value)}
+                    placeholder="Tìm theo tên, mã, người phụ trách..."
+                    className="pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-red-500 w-52 sm:w-64"
+                  />
+                  {deptSearch && (
+                    <button
+                      onClick={() => setDeptSearch('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Status Filter Tabs */}
+                <div className="inline-flex bg-slate-200/70 p-1 rounded-lg text-xs font-semibold text-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setDeptFilter('all')}
+                    className={`px-2.5 py-1 rounded-md transition ${
+                      deptFilter === 'all'
+                        ? 'bg-white text-slate-900 shadow-2xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Tất cả ({localDepts.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeptFilter('active')}
+                    className={`px-2.5 py-1 rounded-md transition flex items-center gap-1 ${
+                      deptFilter === 'active'
+                        ? 'bg-emerald-600 text-white shadow-2xs font-bold'
+                        : 'text-emerald-800 hover:text-emerald-950'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                    Hoạt động ({activeCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeptFilter('inactive')}
+                    className={`px-2.5 py-1 rounded-md transition flex items-center gap-1 ${
+                      deptFilter === 'inactive'
+                        ? 'bg-slate-700 text-white shadow-2xs font-bold'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                    Tạm ngừng ({inactiveCount})
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1250px] text-left text-sm border-collapse">
+                <thead>
+                  <tr className="bg-slate-100/75 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-xs">
+                    <th className="py-3.5 px-4 w-32">Mã đơn vị</th>
+                    <th className="py-3.5 px-4 min-w-[260px]">Tên đơn vị / Phòng ban</th>
+                    <th className="py-3.5 px-4 min-w-[220px]">Cơ quan cấp trên (In BC) & Địa phương</th>
+                    <th className="py-3.5 px-4 min-w-[180px]">Đơn vị cấp trên (Cha)</th>
+                    <th className="py-3.5 px-4 min-w-[180px]">Trưởng đơn vị / Phụ trách</th>
+                    <th className="py-3.5 px-4 w-24 text-center">Đơn vị con</th>
+                    <th className="py-3.5 px-4 w-24 text-center">Số CBNV</th>
+                    <th className="py-3.5 px-4 w-36 text-center">Chế độ hoạt động</th>
+                    <th className="py-3.5 px-4 w-32 text-right">Thao tác</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredDepts.length === 0 ? (
+                    <tr>
+                      <td colSpan="9" className="py-10 text-center text-slate-400 text-xs italic">
+                        Không tìm thấy đơn vị / phòng ban nào phù hợp với bộ lọc
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredDepts.map((d) => {
+                      const isActive = d.is_active !== 0;
+                      return (
+                        <tr key={d.id} className={`transition ${isActive ? 'hover:bg-slate-50/80' : 'bg-slate-50/40 hover:bg-slate-100/60 opacity-80'}`}>
+                          <td className="py-3 px-4 font-mono font-bold text-slate-800">
+                            {d.code}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              {d.parent_id ? (
+                                <div className="flex items-center text-slate-400 pl-3">
+                                  <span className="text-slate-300 mr-1">└─</span>
+                                  <span className={`font-semibold ${isActive ? 'text-slate-900' : 'text-slate-600 line-through'}`}>{d.name}</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 font-bold text-slate-900">
+                                  <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-red-600' : 'bg-slate-400'}`}></span>
+                                  <span className={isActive ? '' : 'text-slate-600 line-through'}>{d.name}</span>
+                                </div>
+                              )}
+                            </div>
+                            {d.description && (
+                              <div className="text-[11px] text-slate-400 mt-0.5 ml-4 truncate max-w-xs">
+                                {d.description}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-slate-800 text-xs">{d.parent_agency || <span className="text-slate-400 italic">Mặc định</span>}</div>
+                            <div className="text-[11px] text-slate-500 mt-0.5">📍 {d.location_name || 'TP. Hồ Chí Minh'}</div>
+                          </td>
+                          <td className="py-3 px-4 text-slate-600">
+                            {d.parent_name ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-medium">
+                                {d.parent_name}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 italic">Cấp cao nhất</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4">
+                            {d.leader_name ? (
+                              <span className="font-bold text-slate-800 flex items-center gap-1">
+                                👤 {d.leader_name}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 italic">Chưa chỉ định</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                              {d.sub_dept_count || 0}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              {d.user_count || 0}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-center whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleActiveDept(d)}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition border cursor-pointer ${
+                                isActive 
+                                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300' 
+                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-300'
+                              }`}
+                              title={isActive ? `Nhấp để TẮT hoạt động đơn vị "${d.name}"` : `Nhấp để BẬT hoạt động đơn vị "${d.name}"`}
+                            >
+                              <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                              <span>{isActive ? 'Đang hoạt động' : 'Tạm ngừng'}</span>
+                            </button>
+                          </td>
+                          <td className="py-3 px-4 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* Quick Toggle On/Off */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleActiveDept(d)}
+                                className={`p-1.5 rounded-md transition ${
+                                  isActive
+                                    ? 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
+                                    : 'text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50'
+                                }`}
+                                title={isActive ? `Tắt hoạt động đơn vị "${d.name}"` : `Bật hoạt động đơn vị "${d.name}"`}
+                              >
+                                {isActive ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4 text-emerald-600" />}
+                              </button>
+
+                              <button
+                                onClick={() => openEditDeptModal(d)}
+                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition"
+                                title="Sửa thông tin đơn vị"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteDept(d)}
+                                className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-md transition"
+                                title="Xóa đơn vị"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* SUB-TAB 2: ROLES & DATA SCOPES */}
       {activeSubTab === 'roles' && (
@@ -960,9 +1135,15 @@ export default function SystemConfigTab({
                         <span className="font-bold text-xs text-slate-900">{p.name}</span>
                         <span className="font-mono text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-semibold">{p.code}</span>
                         
-                        {p.is_active === 1 && (
-                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        {p.is_active === 1 ? (
+                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                             Đang hoạt động
+                          </span>
+                        ) : (
+                          <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 border border-slate-300">
+                            <XCircle className="w-3 h-3 text-slate-500" />
+                            Tạm ngừng hoạt động
                           </span>
                         )}
 
@@ -999,8 +1180,33 @@ export default function SystemConfigTab({
                       )}
                     </div>
 
-                    {/* Action Buttons: Chỉnh sửa & Chốt/Mở khóa KPI */}
+                    {/* Action Buttons: Chỉnh sửa, Bật/Tắt hoạt động & Chốt/Mở khóa KPI */}
                     <div className="flex items-center gap-1.5 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                      {/* Bật / Tắt hoạt động kỳ */}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleActivePeriod(p)}
+                        className={`p-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1 transition shadow-2xs ${
+                          p.is_active === 1
+                            ? 'border-slate-300 bg-white hover:bg-slate-50 text-slate-700'
+                            : 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold'
+                        }`}
+                        title={p.is_active === 1 ? `Tắt hoạt động kỳ "${p.name}"` : `Bật hoạt động kỳ "${p.name}"`}
+                      >
+                        {p.is_active === 1 ? (
+                          <>
+                            <PowerOff className="w-3.5 h-3.5 text-slate-500" />
+                            <span className="hidden md:inline">Tắt HĐ</span>
+                          </>
+                        ) : (
+                          <>
+                            <Power className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="hidden md:inline">Bật HĐ</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Chỉnh sửa kỳ */}
                       <button
                         type="button"
                         onClick={() => openEditPeriodModal(p)}
@@ -1011,6 +1217,7 @@ export default function SystemConfigTab({
                         <span className="hidden md:inline">Sửa</span>
                       </button>
 
+                      {/* Chốt / Mở khóa KPI toàn đơn vị cho kỳ cụ thể này */}
                       <button
                         type="button"
                         onClick={() => handleToggleFinalizePeriod(p)}
@@ -1019,17 +1226,17 @@ export default function SystemConfigTab({
                             ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300'
                             : 'bg-red-700 hover:bg-red-800 text-white shadow-xs'
                         }`}
-                        title={isLocked ? 'Mở khóa KPI để tiếp tục đánh giá' : 'Chốt sổ KPI toàn cơ quan cho kỳ này'}
+                        title={isLocked ? `Mở khóa KPI kỳ "${p.name}" để tiếp tục đánh giá` : `Chốt sổ KPI toàn cơ quan cho kỳ "${p.name}"`}
                       >
                         {isLocked ? (
                           <>
                             <Unlock className="w-3.5 h-3.5" />
-                            <span>Mở khóa</span>
+                            <span>Mở khóa ({p.name})</span>
                           </>
                         ) : (
                           <>
                             <Lock className="w-3.5 h-3.5" />
-                            <span>Chốt KPI</span>
+                            <span>Chốt KPI ({p.name})</span>
                           </>
                         )}
                       </button>
@@ -1154,15 +1361,37 @@ export default function SystemConfigTab({
                 />
               </div>
 
-              <div className="flex items-center gap-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="deptActive"
-                  checked={deptForm.is_active === 1}
-                  onChange={(e) => setDeptForm({ ...deptForm, is_active: e.target.checked ? 1 : 0 })}
-                  className="rounded text-red-600 focus:ring-red-500"
-                />
-                <label htmlFor="deptActive" className="text-slate-700 font-semibold">Đơn vị đang hoạt động</label>
+              {/* Chế độ Bật / Tắt hoạt động đơn vị */}
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div>
+                  <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                    {deptForm.is_active === 1 ? (
+                      <Power className="w-4 h-4 text-emerald-600" />
+                    ) : (
+                      <PowerOff className="w-4 h-4 text-slate-400" />
+                    )}
+                    <span>Chế độ hoạt động của Đơn vị</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {deptForm.is_active === 1
+                      ? 'Đơn vị đang hoạt động bình thường trong cơ cấu tổ chức'
+                      : 'Đơn vị tạm ngừng hoạt động (không giao việc mới)'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDeptForm(prev => ({ ...prev, is_active: prev.is_active === 1 ? 0 : 1 }))}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    deptForm.is_active === 1 ? 'bg-emerald-600' : 'bg-slate-300'
+                  }`}
+                  title={deptForm.is_active === 1 ? 'Tắt hoạt động' : 'Bật hoạt động'}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      deptForm.is_active === 1 ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
               </div>
 
               <div className="pt-3 border-t flex justify-end gap-2">
@@ -1435,6 +1664,39 @@ export default function SystemConfigTab({
                 <p className="text-[11px] text-amber-800 leading-tight">
                   * Sau thời điểm này, hệ thống sẽ tự động khóa chức năng chấm điểm & thẩm định của Cán bộ Quản lý và Lãnh đạo đối với kỳ này.
                 </p>
+              </div>
+
+              {/* BẬT / TẮT HOẠT ĐỘNG KỲ ĐÁNH GIÁ */}
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div>
+                  <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                    {periodForm.is_active === 1 ? (
+                      <Power className="w-4 h-4 text-emerald-600" />
+                    ) : (
+                      <PowerOff className="w-4 h-4 text-slate-400" />
+                    )}
+                    <span>Chế độ hoạt động của kỳ đánh giá</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {periodForm.is_active === 1
+                      ? 'Kỳ đang hoạt động: Cho phép hiển thị và thao tác đánh giá trên toàn hệ thống'
+                      : 'Kỳ tạm ngừng: Tạm ẩn và ngừng các thao tác đánh giá của kỳ này'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPeriodForm(prev => ({ ...prev, is_active: prev.is_active === 1 ? 0 : 1 }))}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    periodForm.is_active === 1 ? 'bg-emerald-600' : 'bg-slate-300'
+                  }`}
+                  title={periodForm.is_active === 1 ? 'Tắt hoạt động kỳ này' : 'Bật hoạt động kỳ này'}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                      periodForm.is_active === 1 ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
               </div>
 
               <div className="pt-3 border-t flex justify-end gap-2">

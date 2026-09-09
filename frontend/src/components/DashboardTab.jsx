@@ -135,20 +135,24 @@ export default function DashboardTab({
   async function handleToggleFinalizePeriod() {
     if (!currentPeriodObj) return;
     if (isPeriodLocked) {
-      if (!window.confirm(`XÁC NHẬN MỞ KHÓA KPI cho kỳ "${currentPeriodObj.name}"?\n\nSau khi mở khóa, các Cán bộ Quản lý có thể tiếp tục chấm điểm và cập nhật kết quả.`)) return;
+      if (!window.confirm(
+        `XÁC NHẬN MỞ KHÓA KPI CHO KỲ:\n\n👉 "${currentPeriodObj.name}" (${currentPeriodObj.code})\n\nSau khi mở khóa, Cán bộ Quản lý và Lãnh đạo có thể tiếp tục chấm điểm và cập nhật kết quả. Bạn có chắc chắn muốn mở khóa?`
+      )) return;
       try {
         await api.unfinalizePeriod(currentPeriodObj.id);
-        alert('Đã mở khóa KPI thành công!');
+        alert(`Đã mở khóa KPI thành công cho kỳ "${currentPeriodObj.name}"!`);
         if (onReloadPeriods) onReloadPeriods();
         loadData();
       } catch (err) {
         alert('Lỗi mở khóa: ' + err.message);
       }
     } else {
-      if (!window.confirm(`XÁC NHẬN CHỐT KPI TOÀN ĐƠN VỊ / CƠ QUAN cho kỳ "${currentPeriodObj.name}"?\n\nToàn bộ kết quả đánh giá sẽ được khóa sổ chính thức theo Quy định 366. Bạn có chắc chắn muốn chốt?`)) return;
+      if (!window.confirm(
+        `XÁC NHẬN CHỐT KPI TOÀN ĐƠN VỊ / CƠ QUAN CHO KỲ:\n\n👉 "${currentPeriodObj.name}" (${currentPeriodObj.code})\n\nThời hạn đánh giá: ${formatDate(currentPeriodObj.start_date)} đến ${formatDate(currentPeriodObj.end_date)}\n\nToàn bộ kết quả đánh giá, xếp loại và thẩm định của tất cả cán bộ trong kỳ "${currentPeriodObj.name}" sẽ được khóa sổ chính thức theo Quy định 366-QĐ/TW.\n\nBạn có chắc chắn muốn chốt KPI cho kỳ "${currentPeriodObj.name}"?`
+      )) return;
       try {
         await api.finalizePeriod(currentPeriodObj.id, { finalized_by: currentUser?.full_name || 'Lãnh đạo cơ quan' });
-        alert('Đã Chốt & Khóa Sổ KPI toàn cơ quan thành công!');
+        alert(`Đã Chốt & Khóa Sổ KPI toàn cơ quan thành công cho kỳ "${currentPeriodObj.name}"!`);
         if (onReloadPeriods) onReloadPeriods();
         loadData();
       } catch (err) {
@@ -287,7 +291,7 @@ export default function DashboardTab({
             {isPeriodLocked && (
               <span className="inline-flex items-center space-x-1 bg-emerald-100 text-emerald-800 text-[11px] font-semibold px-2 py-0.5 rounded-md border border-emerald-300">
                 <Lock className="w-3 h-3" />
-                <span>Đã Chốt KPI</span>
+                <span>Đã Chốt KPI Kỳ {currentPeriodObj?.name}</span>
               </span>
             )}
           </div>
@@ -310,17 +314,17 @@ export default function DashboardTab({
                   ? 'bg-amber-600 hover:bg-amber-700 text-white'
                   : 'bg-emerald-700 hover:bg-emerald-800 text-white'
               }`}
-              title={isPeriodLocked ? 'Mở khóa KPI để Cán bộ quản lý có thể cập nhật đánh giá' : 'Chốt toàn bộ kết quả KPI cho toàn cơ quan'}
+              title={isPeriodLocked ? `Mở khóa KPI kỳ "${currentPeriodObj.name}" để tiếp tục đánh giá` : `Chốt toàn bộ kết quả KPI cho toàn cơ quan trong kỳ "${currentPeriodObj.name}"`}
             >
               {isPeriodLocked ? (
                 <>
                   <Unlock className="w-4 h-4 text-white" />
-                  <span>Mở khóa KPI</span>
+                  <span>Mở khóa KPI ({currentPeriodObj.name})</span>
                 </>
               ) : (
                 <>
                   <Lock className="w-4 h-4 text-white" />
-                  <span>Chốt KPI Toàn Đơn Vị</span>
+                  <span>Chốt KPI ({currentPeriodObj.name})</span>
                 </>
               )}
             </button>

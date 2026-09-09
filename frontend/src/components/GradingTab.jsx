@@ -228,20 +228,24 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
   async function handleToggleFinalizePeriod() {
     if (!currentPeriodObj) return;
     if (isPeriodLocked) {
-      if (!window.confirm(`XÁC NHẬN MỞ KHÓA KPI cho kỳ "${currentPeriodObj.name}"?\n\nSau khi mở khóa, các Cán bộ Quản lý có thể tiếp tục chấm điểm và cập nhật kết luận.`)) return;
+      if (!window.confirm(
+        `XÁC NHẬN MỞ KHÓA KPI CHO KỲ:\n\n👉 "${currentPeriodObj.name}" (${currentPeriodObj.code})\n\nSau khi mở khóa, Cán bộ Quản lý và Hội đồng có thể tiếp tục chấm điểm và cập nhật kết luận đánh giá. Bạn có chắc chắn muốn mở khóa?`
+      )) return;
       try {
         await api.unfinalizePeriod(currentPeriodObj.id);
-        alert('Đã mở khóa KPI thành công!');
+        alert(`Đã mở khóa KPI thành công cho kỳ "${currentPeriodObj.name}"!`);
         if (onReloadPeriods) onReloadPeriods();
         loadEvaluationData();
       } catch (err) {
         alert('Lỗi mở khóa: ' + err.message);
       }
     } else {
-      if (!window.confirm(`XÁC NHẬN CHỐT KPI TOÀN ĐƠN VỊ / CƠ QUAN cho kỳ "${currentPeriodObj.name}"?\n\nToàn bộ kết quả đánh giá sẽ được khóa sổ chính thức theo Quy định 366. Bạn có chắc chắn muốn chốt?`)) return;
+      if (!window.confirm(
+        `XÁC NHẬN CHỐT KPI TOÀN ĐƠN VỊ / CƠ QUAN CHO KỲ:\n\n👉 "${currentPeriodObj.name}" (${currentPeriodObj.code})\n\nThời hạn đánh giá: ${formatDate(currentPeriodObj.start_date)} đến ${formatDate(currentPeriodObj.end_date)}\n\nToàn bộ kết quả đánh giá của kỳ "${currentPeriodObj.name}" sẽ được khóa sổ chính thức theo Quy định số 366-QĐ/TW.\n\nBạn có chắc chắn muốn chốt KPI cho kỳ "${currentPeriodObj.name}"?`
+      )) return;
       try {
         await api.finalizePeriod(currentPeriodObj.id, { finalized_by: currentUser?.full_name || 'Lãnh đạo cơ quan' });
-        alert('Đã Chốt & Khóa Sổ KPI toàn cơ quan thành công!');
+        alert(`Đã Chốt & Khóa Sổ KPI toàn cơ quan thành công cho kỳ "${currentPeriodObj.name}"!`);
         if (onReloadPeriods) onReloadPeriods();
         loadEvaluationData();
       } catch (err) {
@@ -277,7 +281,7 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
           <div className="flex items-center space-x-3">
             <Lock className="w-5 h-5 text-emerald-700 shrink-0" />
             <div>
-              <div className="text-sm font-bold">Kỳ đánh giá đã được Chốt KPI Toàn Đơn Vị / Cơ Quan</div>
+              <div className="text-sm font-bold">Kỳ đánh giá "{currentPeriodObj?.name}" ({currentPeriodObj?.code}) đã được Chốt KPI Toàn Đơn Vị / Cơ Quan</div>
               <div className="text-xs text-emerald-700">
                 Toàn bộ dữ liệu điểm và xếp loại đã được khóa chính thức theo Quy định 366. Chế độ chấm điểm đang khóa đối với CBQL.
               </div>
@@ -286,10 +290,10 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
           {(currentUser?.role === 'admin' || currentUser?.role === 'cbql') && (
             <button
               onClick={handleToggleFinalizePeriod}
-              className="flex items-center space-x-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xs transition-colors shrink-0"
+              className="flex items-center space-x-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xs transition-colors shrink-0 cursor-pointer"
             >
               <Unlock className="w-3.5 h-3.5" />
-              <span>Mở khóa KPI</span>
+              <span>Mở khóa KPI ({currentPeriodObj?.name})</span>
             </button>
           )}
         </div>
@@ -332,22 +336,22 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
           {(currentUser?.role === 'admin' || currentUser?.role === 'cbql') && currentPeriodObj && (
             <button
               onClick={handleToggleFinalizePeriod}
-              className={`flex items-center space-x-1.5 text-xs font-semibold px-3.5 py-2 rounded-lg shadow-xs transition-colors ${
+              className={`flex items-center space-x-1.5 text-xs font-semibold px-3.5 py-2 rounded-lg shadow-xs transition-colors cursor-pointer ${
                 isPeriodLocked
                   ? 'bg-amber-600 hover:bg-amber-700 text-white'
                   : 'bg-emerald-700 hover:bg-emerald-800 text-white'
               }`}
-              title={isPeriodLocked ? 'Mở khóa để tiếp tục chấm điểm' : 'Chốt toàn bộ kết quả KPI cho toàn cơ quan'}
+              title={isPeriodLocked ? `Mở khóa KPI kỳ "${currentPeriodObj.name}" để tiếp tục chấm điểm` : `Chốt toàn bộ kết quả KPI cho toàn cơ quan trong kỳ "${currentPeriodObj.name}"`}
             >
               {isPeriodLocked ? (
                 <>
                   <Unlock className="w-4 h-4" />
-                  <span>Mở khóa KPI kỳ</span>
+                  <span>Mở khóa KPI ({currentPeriodObj.name})</span>
                 </>
               ) : (
                 <>
                   <Lock className="w-4 h-4" />
-                  <span>Chốt KPI Toàn Đơn Vị</span>
+                  <span>Chốt KPI ({currentPeriodObj.name})</span>
                 </>
               )}
             </button>

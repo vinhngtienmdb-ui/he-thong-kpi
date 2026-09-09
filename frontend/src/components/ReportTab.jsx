@@ -230,7 +230,7 @@ export default function ReportTab({
               >
                 {periods.map(p => (
                   <option key={p.id} value={p.id}>
-                    {p.name} {p.is_locked ? '(Đã chốt)' : ''}
+                    {p.name} {p.is_locked ? '(Đã chốt)' : ''} {p.is_active === 0 ? '(Tạm ngừng)' : ''}
                   </option>
                 ))}
               </select>

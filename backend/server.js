@@ -339,25 +339,30 @@ app.put('/api/departments/:id', requireAdmin, (req, res) => {
   const dept = db.prepare('SELECT * FROM departments WHERE id = ?').get(id);
   if (!dept) return res.status(404).json({ success: false, message: 'Không tìm thấy phòng ban' });
 
-  if (parent_id === id) {
+  if (parent_id !== undefined && parent_id === id) {
     return res.status(400).json({ success: false, message: 'Đơn vị cha không thể là chính đơn vị này' });
   }
 
   db.prepare(`
     UPDATE departments
-    SET code = COALESCE(?, code),
-        name = COALESCE(?, name),
+    SET code = ?,
+        name = ?,
         parent_id = ?,
         leader_id = ?,
-        description = COALESCE(?, description),
-        is_active = COALESCE(?, is_active),
-        parent_agency = COALESCE(?, parent_agency),
-        location_name = COALESCE(?, location_name)
+        description = ?,
+        is_active = ?,
+        parent_agency = ?,
+        location_name = ?
     WHERE id = ?
   `).run(
-    code, name, parent_id || null, leader_id || null, description,
-    is_active !== undefined ? is_active : dept.is_active,
-    parent_agency, location_name,
+    code !== undefined ? code : dept.code,
+    name !== undefined ? name : dept.name,
+    parent_id !== undefined ? (parent_id || null) : dept.parent_id,
+    leader_id !== undefined ? (leader_id || null) : dept.leader_id,
+    description !== undefined ? description : dept.description,
+    is_active !== undefined ? (is_active ? 1 : 0) : dept.is_active,
+    parent_agency !== undefined ? parent_agency : dept.parent_agency,
+    location_name !== undefined ? location_name : dept.location_name,
     id
   );
 
@@ -667,11 +672,12 @@ app.put('/api/admin/configs', requireAdmin, (req, res) => {
 
 // Admin: Create evaluation period
 app.post('/api/admin/periods', requireAdmin, (req, res) => {
-  const { code, name, start_date, end_date, grading_lock_date } = req.body;
+  const { code, name, start_date, end_date, grading_lock_date, is_active } = req.body;
   if (!code || !name) return res.status(400).json({ success: false, message: 'Thiếu mã hoặc tên kỳ' });
   const id = uuidv4();
-  db.prepare('INSERT INTO periods (id, code, name, start_date, end_date, grading_lock_date, is_active) VALUES (?, ?, ?, ?, ?, ?, 1)')
-    .run(id, code, name, start_date, end_date, grading_lock_date || null);
+  const activeVal = is_active !== undefined ? (is_active ? 1 : 0) : 1;
+  db.prepare('INSERT INTO periods (id, code, name, start_date, end_date, grading_lock_date, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(id, code, name, start_date, end_date, grading_lock_date || null, activeVal);
   res.json({ success: true, id, message: 'Đã tạo kỳ đánh giá thành công' });
 });
 
@@ -684,20 +690,20 @@ app.put('/api/admin/periods/:id', requireAdmin, (req, res) => {
 
   db.prepare(`
     UPDATE periods 
-    SET code = COALESCE(?, code),
-        name = COALESCE(?, name),
-        start_date = COALESCE(?, start_date),
-        end_date = COALESCE(?, end_date),
+    SET code = ?,
+        name = ?,
+        start_date = ?,
+        end_date = ?,
         grading_lock_date = ?,
-        is_active = COALESCE(?, is_active)
+        is_active = ?
     WHERE id = ?
   `).run(
-    code || null,
-    name || null,
-    start_date || null,
-    end_date || null,
+    code !== undefined ? code : period.code,
+    name !== undefined ? name : period.name,
+    start_date !== undefined ? start_date : period.start_date,
+    end_date !== undefined ? end_date : period.end_date,
     grading_lock_date !== undefined ? grading_lock_date : period.grading_lock_date,
-    is_active !== undefined ? is_active : period.is_active,
+    is_active !== undefined ? (is_active ? 1 : 0) : period.is_active,
     id
   );
 
