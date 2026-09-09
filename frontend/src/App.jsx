@@ -12,6 +12,7 @@ import ChartsTab from './components/ChartsTab';
 import ReportTab from './components/ReportTab';
 import UsersManagementTab from './components/UsersManagementTab';
 import SystemConfigTab from './components/SystemConfigTab';
+import LoginScreen from './components/LoginScreen';
 import { api, setViewerId } from './api';
 import { Calendar, CheckCircle2 } from 'lucide-react';
 
@@ -21,7 +22,14 @@ export default function App() {
   const [selectedPeriod, setSelectedPeriod] = useState('');
   const [users, setUsers] = useState([]);
   const [accessibleUsers, setAccessibleUsers] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('kpi_user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
   const [departments, setDepartments] = useState([]);
   const [axes, setAxes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,13 +56,6 @@ export default function App() {
       }
 
       setUsers(usersData);
-      if (usersData.length > 0 && !currentUser) {
-        // Default to CBQL for rich initial preview
-        const cbql = usersData.find(u => u.role === 'cbql') || usersData[0];
-        setCurrentUser(cbql);
-        setViewerId(cbql.id);
-      }
-
       setAxes(axesData);
       setDepartments(deptsData);
     } catch (err) {
@@ -62,6 +63,20 @@ export default function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('kpi_user');
+    setCurrentUser(null);
+    setViewerId(null);
+    setCurrentTab('dashboard');
+    api.logout().catch(() => {});
+  };
+
+  const handleLoginSuccess = (user) => {
+    setCurrentUser(user);
+    setViewerId(user.id);
+    loadInitialData();
   };
 
   useEffect(() => {
@@ -189,6 +204,11 @@ export default function App() {
     );
   }
 
+  // If not logged in, display the Login Screen
+  if (!currentUser) {
+    return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans">
       {/* Sidebar Navigation */}
@@ -218,6 +238,7 @@ export default function App() {
           departments={departments} 
           onOpenMobileMenu={() => setMobileOpen(true)} 
           setCurrentTab={setCurrentTab}
+          onLogout={handleLogout}
         />
 
         {/* 6-Step Evaluation Process Stepper (Hidden during print) */}

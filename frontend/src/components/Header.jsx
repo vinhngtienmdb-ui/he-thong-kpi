@@ -48,7 +48,8 @@ export default function Header({
   setCurrentUser, 
   departments = [], 
   onOpenMobileMenu,
-  setCurrentTab 
+  setCurrentTab,
+  onLogout
 }) {
   const [timeStr, setTimeStr] = useState('');
   const [dateStr, setDateStr] = useState('');
@@ -66,54 +67,8 @@ export default function Header({
   const notifRef = useRef(null);
   const userMenuRef = useRef(null);
 
-  // Notifications State
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      type: 'task_assigned',
-      title: 'Nhiệm vụ mới được phân công',
-      message: 'Đ/c nhận nhiệm vụ "Báo cáo kết quả công tác tháng 3 của phòng" từ Lãnh đạo.',
-      time: '15 phút trước',
-      read: false,
-      tab: 'assignment'
-    },
-    {
-      id: 2,
-      type: 'task_approved',
-      title: 'Công việc tự đăng ký đã duyệt',
-      message: 'Nhiệm vụ "Dự thảo kế hoạch thanh tra chuyên đề" đã được CBQL phê duyệt.',
-      time: '1 giờ trước',
-      read: false,
-      tab: 'assignment'
-    },
-    {
-      id: 3,
-      type: 'deadline_warning',
-      title: 'Nhắc nhở: Sắp đến hạn nộp minh chứng',
-      message: 'Công việc "Báo cáo sơ kết quý" còn 2 ngày nữa là đến hạn chót (30/09/2026).',
-      time: '3 giờ trước',
-      read: false,
-      tab: 'execution'
-    },
-    {
-      id: 4,
-      type: 'voting_result',
-      title: 'Biểu quyết xếp loại Quý III/2026',
-      message: 'Tập thể đã mở cổng bỏ phiếu biểu quyết đánh giá cán bộ. Bấm để tham gia.',
-      time: '1 ngày trước',
-      read: false,
-      tab: 'voting'
-    },
-    {
-      id: 5,
-      type: 'system',
-      title: 'Ban hành quy chế đánh giá mới',
-      message: 'Hệ thống cập nhật bộ tiêu chí theo Hướng dẫn số 06-HD/BTCTU Ban Tổ chức Thành ủy.',
-      time: '2 ngày trước',
-      read: true,
-      tab: 'reports'
-    }
-  ]);
+  // Notifications State (Clean empty state for production)
+  const [notifications, setNotifications] = useState([]);
 
   // Realtime Clock & Date
   useEffect(() => {
@@ -584,63 +539,7 @@ export default function Header({
                   </div>
                 </div>
 
-                {/* 2. SWITCH USER SECTION (Dễ dàng chuyển đổi cán bộ, không bao giờ bị che khuất) */}
-                <div className="p-2.5 bg-slate-50/80">
-                  <div className="flex items-center justify-between px-1 mb-1.5">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                      <Users className="w-3 h-3 text-slate-400" />
-                      Chuyển tài khoản ({users.length}):
-                    </span>
-                    <span className="text-[9px] text-red-700 font-medium">Bấm đổi ngay</span>
-                  </div>
-
-                  <div className="max-h-36 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
-                    {users.map(u => {
-                      const isSelected = u.id === currentUser?.id;
-                      const uInit = u.full_name ? u.full_name.split(' ').pop().charAt(0).toUpperCase() : 'N';
-                      return (
-                        <button
-                          key={u.id}
-                          type="button"
-                          onClick={() => {
-                            if (setCurrentUser) setCurrentUser(u);
-                            setShowUserDropdown(false);
-                          }}
-                          className={`w-full text-left px-2 py-1.5 rounded-lg flex items-center justify-between text-xs transition cursor-pointer ${
-                            isSelected 
-                              ? 'bg-red-600 text-white font-bold shadow-2xs' 
-                              : 'hover:bg-white text-slate-700 hover:text-slate-900 border border-transparent hover:border-slate-200'
-                          }`}
-                        >
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                              isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
-                            }`}>
-                              {uInit}
-                            </div>
-                            <div className="truncate">
-                              <span className="truncate block leading-tight">{u.full_name}</span>
-                              <span className={`text-[9px] block leading-tight ${isSelected ? 'text-red-100' : 'text-slate-400'}`}>
-                                {u.gov_title || u.role}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0 ml-1">
-                            <span className={`text-[8px] px-1 py-0.2 rounded font-semibold ${
-                              isSelected ? 'bg-white/20 text-white' :
-                              u.role === 'admin' ? 'bg-rose-100 text-rose-700' :
-                              u.role === 'cbql' ? 'bg-blue-100 text-blue-700' :
-                              'bg-emerald-100 text-emerald-700'
-                            }`}>
-                              {u.role === 'admin' ? 'Admin' : u.role === 'cbql' ? 'CBQL' : 'CBNV'}
-                            </span>
-                            {isSelected && <Check className="w-3 h-3 text-white stroke-[3]" />}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                {/* 2. MENU ITEMS */}
 
                 {/* 3. MENU ITEMS - Khớp chính xác thiết kế trong hình ảnh */}
                 <div className="py-1">
@@ -1405,12 +1304,11 @@ export default function Header({
                 type="button"
                 onClick={() => {
                   setShowLogoutModal(false);
-                  if (users && users.length > 0 && setCurrentUser) {
-                    setCurrentUser(users[0]);
+                  if (onLogout) {
+                    onLogout();
                   }
-                  alert('Đồng chí đã đăng xuất phiên làm việc an toàn!');
                 }}
-                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
+                className="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
               >
                 Đăng xuất
               </button>

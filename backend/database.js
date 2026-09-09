@@ -330,8 +330,8 @@ function initDatabase() {
     const adminExists = db.prepare("SELECT id FROM users WHERE username = 'admin'").get();
     if (!adminExists) {
       db.prepare(`
-        INSERT INTO users (id, username, password, full_name, role, target_role, party_title, gov_title, dept_id, is_active)
-        VALUES ('usr-admin', 'admin', '123456', 'Quản trị viên Hệ thống', 'admin', 'cbql', 'Cấp ủy viên', 'Quản trị viên', 'dept-2', 1)
+        INSERT INTO users (id, username, password, full_name, role, role_id, target_role, party_title, gov_title, dept_id, is_active)
+        VALUES ('usr-admin', 'admin', 'Hoangyen@123456', 'Quản trị viên Hệ thống', 'admin', 'role-admin', 'cbql', 'Cấp ủy viên', 'Quản trị viên', 'dept-1', 1)
       `).run();
     }
     db.prepare("UPDATE users SET target_role = 'cbql' WHERE role = 'cbql' AND (target_role IS NULL OR target_role = 'cbnv')").run();
@@ -387,46 +387,7 @@ function seedData() {
   insertDept.run('dept-1', 'A29.123.22', 'Chi bộ Trường Mầm non Hoàng Yến');
   insertDept.run('dept-2', 'BTC.TU', 'Ban Tổ chức Thành ủy');
 
-  // 2. Users
-  const insertUser = db.prepare(`
-    INSERT INTO users (id, username, password, full_name, role, party_title, gov_title, dept_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-  // CBQL
-  insertUser.run(
-    'usr-ql1',
-    'cbql',
-    '123456',
-    'Thái Thị Bích Liên',
-    'cbql',
-    'Thành ủy viên',
-    'Phó Trưởng ban Thường trực',
-    'dept-2'
-  );
-  // CBNV 1
-  insertUser.run(
-    'usr-nv1',
-    'cbnv1',
-    '123456',
-    'Nguyễn Văn A',
-    'cbnv',
-    'Đảng viên',
-    'Chuyên viên Tổng hợp',
-    'dept-2'
-  );
-  // CBNV 2
-  insertUser.run(
-    'usr-nv2',
-    'cbnv2',
-    '123456',
-    'Trần Thị B',
-    'cbnv',
-    'Đảng viên',
-    'Giáo viên kiêm Tổ trưởng',
-    'dept-1'
-  );
-
-  // 3. Periods
+  // 2. Default Periods
   const insertPeriod = db.prepare(`
     INSERT INTO periods (id, code, name, start_date, end_date, is_active)
     VALUES (?, ?, ?, ?, ?, ?)
@@ -511,9 +472,9 @@ function seedData() {
   const adminExists = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
   if (!adminExists) {
     db.prepare(`
-      INSERT INTO users (id, username, password, full_name, role, party_title, gov_title, dept_id, birth_date, gender, phone, email, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-    `).run('usr-admin', 'admin', '123456', 'Quản trị viên Hệ thống', 'admin', 'Đảng viên', 'Quản trị viên', 'dept-2', '1980-01-01', 'Nam', '0909999888', 'admin@kpi.gov.vn');
+      INSERT INTO users (id, username, password, full_name, role, role_id, party_title, gov_title, dept_id, birth_date, gender, phone, email, is_active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `).run('usr-admin', 'admin', 'Hoangyen@123456', 'Quản trị viên Hệ thống', 'admin', 'role-admin', 'Cấp ủy viên', 'Quản trị viên', 'dept-1', '1980-01-01', 'Nam', '0909999888', 'admin@hoangyen.edu.vn');
   }
 
   // Update CBQL Group 2 target_role

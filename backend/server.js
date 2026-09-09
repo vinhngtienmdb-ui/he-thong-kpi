@@ -235,6 +235,58 @@ function calculateScores(standardScore, difficultyWeight, progressPct, qualityPc
 }
 
 // -------------------------------------------------------------
+// Authentication Endpoints
+// -------------------------------------------------------------
+app.post('/api/auth/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ success: false, message: 'Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu' });
+  }
+
+  const user = db.prepare(`
+    SELECT u.*, r.code as role_code, r.name as role_name, r.permissions, r.data_scope
+    FROM users u
+    LEFT JOIN roles r ON u.role_id = r.id
+    WHERE LOWER(TRIM(u.username)) = LOWER(TRIM(?))
+  `).get(username);
+
+  if (!user) {
+    return res.status(401).json({ success: false, message: 'Tên đăng nhập hoặc mật khẩu không chính xác' });
+  }
+
+  if (user.password !== password) {
+    return res.status(401).json({ success: false, message: 'Tên đăng nhập hoặc mật khẩu không chính xác' });
+  }
+
+  if (user.is_active === 0) {
+    return res.status(403).json({ success: false, message: 'Tài khoản này đã bị khóa hoặc ngưng hoạt động. Vui lòng liên hệ Quản trị viên.' });
+  }
+
+  const { password: _, ...safeUser } = user;
+  res.json({ success: true, user: safeUser, message: 'Đăng nhập thành công' });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.json({ success: true, message: 'Đã đăng xuất phiên làm việc an toàn' });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const viewerId = getViewerId(req);
+  if (!viewerId) return res.status(401).json({ success: false, message: 'Chưa đăng nhập' });
+
+  const user = db.prepare(`
+    SELECT u.*, r.code as role_code, r.name as role_name, r.permissions, r.data_scope
+    FROM users u
+    LEFT JOIN roles r ON u.role_id = r.id
+    WHERE u.id = ?
+  `).get(viewerId);
+
+  if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy thông tin tài khoản' });
+  const { password: _, ...safeUser } = user;
+  res.json({ success: true, user: safeUser });
+});
+
+// -------------------------------------------------------------
 // 1. Periods, Departments, Users, Axes & Admin Management
 // -------------------------------------------------------------
 app.get('/api/periods', (req, res) => {

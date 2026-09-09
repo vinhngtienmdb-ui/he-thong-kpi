@@ -28,6 +28,15 @@ export async function fetchApi(endpoint, options = {}) {
 }
 
 export const api = {
+  // Auth
+  login: (credentials) => fetchApi('/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(credentials),
+  }),
+  logout: () => fetchApi('/auth/logout', { method: 'POST' }),
+  getMe: () => fetchApi('/auth/me'),
+
   // Periods, Users, Depts, Roles, Axes
   getPeriods: () => fetchApi('/periods'),
   getDepartments: () => fetchApi('/departments'),
