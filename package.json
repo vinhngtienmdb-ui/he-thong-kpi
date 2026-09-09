@@ -1,0 +1,14 @@
+{
+  "name": "kpi-crm-system",
+  "version": "1.0.0",
+  "description": "Hệ thống Quản lý Công việc & Chấm điểm KPI theo 6 trục trọng tâm và biểu mẫu CBQL",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "backend": "node backend/server.js",
+    "frontend": "npm --prefix frontend run dev"
+  },
+  "keywords": ["kpi", "quan-ly-cong-viec", "cbql"],
+  "author": "",
+  "license": "ISC"
+}
