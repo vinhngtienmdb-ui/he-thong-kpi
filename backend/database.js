@@ -333,6 +333,15 @@ function initDatabase() {
         INSERT INTO users (id, username, password, full_name, role, role_id, target_role, party_title, gov_title, dept_id, is_active)
         VALUES ('usr-admin', 'admin', 'Hoangyen@123456', 'Quản trị viên Hệ thống', 'admin', 'role-admin', 'cbql', 'Cấp ủy viên', 'Quản trị viên', 'dept-1', 1)
       `).run();
+    } else {
+      // Tự động sửa lỗi font nếu có ký tự hỏi chấm '?' do lỗi encoding trước đây
+      db.prepare(`
+        UPDATE users 
+        SET full_name = 'Quản trị viên Hệ thống',
+            gov_title = 'Quản trị viên',
+            party_title = 'Cấp ủy viên'
+        WHERE username = 'admin' AND (full_name LIKE '%?%' OR gov_title LIKE '%?%')
+      `).run();
     }
     db.prepare("UPDATE users SET target_role = 'cbql' WHERE role = 'cbql' AND (target_role IS NULL OR target_role = 'cbnv')").run();
     db.prepare("UPDATE users SET target_role = 'cbnv' WHERE role = 'cbnv' AND target_role IS NULL").run();

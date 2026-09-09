@@ -58,6 +58,15 @@ export default function App() {
       setUsers(usersData);
       setAxes(axesData);
       setDepartments(deptsData);
+
+      // Đồng bộ thông tin currentUser từ server để loại bỏ triệt để cache lỗi font cũ trong localStorage
+      if (currentUser?.id) {
+        const freshUser = usersData.find(u => u.id === currentUser.id);
+        if (freshUser) {
+          setCurrentUser(freshUser);
+          localStorage.setItem('kpi_user', JSON.stringify(freshUser));
+        }
+      }
     } catch (err) {
       console.error('Error initializing app:', err);
     } finally {
