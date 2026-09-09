@@ -38,9 +38,14 @@ import {
   Briefcase,
   Award,
   ArrowRight,
-  Calendar
+  Calendar,
+  KeyRound,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { formatDate } from '../constants';
+import { api } from '../api';
 
 export default function Header({ 
   currentUser, 
@@ -62,6 +67,16 @@ export default function Header({
   const [showChangelogModal, setShowChangelogModal] = useState(false);
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [currentPasswordInput, setCurrentPasswordInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
+  const [passwordChangeLoading, setPasswordChangeLoading] = useState(false);
+  const [passwordChangeError, setPasswordChangeError] = useState('');
+  const [passwordChangeSuccess, setPasswordChangeSuccess] = useState('');
   const [userSearchTerm, setUserSearchTerm] = useState('');
 
   const notifRef = useRef(null);
@@ -149,6 +164,64 @@ export default function Header({
     setShowNotificationsDropdown(false);
     if (notif.tab && setCurrentTab) {
       setCurrentTab(notif.tab);
+    }
+  };
+
+  const closeChangePasswordModal = () => {
+    setShowChangePasswordModal(false);
+    setCurrentPasswordInput('');
+    setNewPasswordInput('');
+    setConfirmPasswordInput('');
+    setShowCurrentPass(false);
+    setShowNewPass(false);
+    setShowConfirmPass(false);
+    setPasswordChangeError('');
+    setPasswordChangeSuccess('');
+  };
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    setPasswordChangeError('');
+    setPasswordChangeSuccess('');
+
+    if (!currentPasswordInput || !newPasswordInput || !confirmPasswordInput) {
+      setPasswordChangeError('Vui lòng điền đầy đủ các trường mật khẩu');
+      return;
+    }
+
+    if (newPasswordInput.length < 6) {
+      setPasswordChangeError('Mật khẩu mới phải có tối thiểu 6 ký tự');
+      return;
+    }
+
+    if (newPasswordInput !== confirmPasswordInput) {
+      setPasswordChangeError('Mật khẩu xác nhận không trùng khớp với mật khẩu mới');
+      return;
+    }
+
+    if (currentPasswordInput === newPasswordInput) {
+      setPasswordChangeError('Mật khẩu mới không được trùng với mật khẩu hiện tại');
+      return;
+    }
+
+    setPasswordChangeLoading(true);
+    try {
+      const res = await api.changePassword({
+        current_password: currentPasswordInput,
+        new_password: newPasswordInput,
+        confirm_password: confirmPasswordInput
+      });
+      setPasswordChangeSuccess(res.message || 'Đổi mật khẩu thành công!');
+      setCurrentPasswordInput('');
+      setNewPasswordInput('');
+      setConfirmPasswordInput('');
+      setTimeout(() => {
+        closeChangePasswordModal();
+      }, 2000);
+    } catch (err) {
+      setPasswordChangeError(err.message || 'Đã có lỗi xảy ra khi đổi mật khẩu');
+    } finally {
+      setPasswordChangeLoading(false);
     }
   };
 
@@ -554,6 +627,19 @@ export default function Header({
                   >
                     <User className="w-4 h-4 text-slate-500 shrink-0" />
                     <span>Thông tin cá nhân</span>
+                  </button>
+
+                  {/* Đổi mật khẩu */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUserDropdown(false);
+                      setShowChangePasswordModal(true);
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs font-normal text-slate-700 hover:bg-slate-50 hover:text-slate-900 flex items-center gap-3 transition cursor-pointer"
+                  >
+                    <KeyRound className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span>Đổi mật khẩu</span>
                   </button>
 
                   {/* Hướng dẫn sử dụng */}
@@ -1033,7 +1119,17 @@ export default function Header({
 
             {/* Footer */}
             <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-              <span className="text-xs text-slate-500 italic">Định dạng hiển thị: dd/mm/yyyy • Chuẩn hóa theo Quy định 366-QĐ/TW</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowProfileModal(false);
+                  setShowChangePasswordModal(true);
+                }}
+                className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-semibold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-2xs"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                <span>Đổi mật khẩu tài khoản</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setShowProfileModal(false)}
@@ -1269,6 +1365,161 @@ export default function Header({
                 Đóng
               </button>
             </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* 8. MODAL ĐỔI MẬT KHẨU TÀI KHOẢN (CHANGE PASSWORD)               */}
+      {/* ============================================================== */}
+      {showChangePasswordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in duration-200 text-slate-800 my-8">
+            
+            {/* Header */}
+            <div className="px-6 py-5 bg-gradient-to-r from-red-700 via-red-800 to-red-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center text-white shadow-xs">
+                  <KeyRound className="w-5 h-5 text-amber-300" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold tracking-tight">Đổi Mật Khẩu Tài Khoản</h3>
+                  <p className="text-xs text-red-200 mt-0.5">
+                    {currentUser?.username} • {currentUser?.full_name}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeChangePasswordModal}
+                className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form Body */}
+            <form onSubmit={handlePasswordSubmit} className="p-6 space-y-4">
+              {passwordChangeError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-700 animate-in fade-in duration-200">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <span>{passwordChangeError}</span>
+                </div>
+              )}
+
+              {passwordChangeSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2.5 text-xs text-emerald-700 animate-in fade-in duration-200">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="font-semibold">{passwordChangeSuccess}</p>
+                    <p className="text-[11px] text-emerald-600">Đang đóng cửa sổ...</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Mật khẩu hiện tại */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Mật khẩu hiện tại <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showCurrentPass ? 'text' : 'password'}
+                    required
+                    value={currentPasswordInput}
+                    onChange={(e) => setCurrentPasswordInput(e.target.value)}
+                    placeholder="Nhập mật khẩu đang sử dụng"
+                    className="w-full px-3.5 py-2.5 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-slate-50/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPass(!showCurrentPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-1"
+                  >
+                    {showCurrentPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Mật khẩu mới */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Mật khẩu mới <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showNewPass ? 'text' : 'password'}
+                    required
+                    value={newPasswordInput}
+                    onChange={(e) => setNewPasswordInput(e.target.value)}
+                    placeholder="Tối thiểu 6 ký tự"
+                    className="w-full px-3.5 py-2.5 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-slate-50/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPass(!showNewPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-1"
+                  >
+                    {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500">Mật khẩu nên chứa cả chữ và số để tăng tính bảo mật.</p>
+              </div>
+
+              {/* Xác nhận mật khẩu mới */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Xác nhận mật khẩu mới <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPass ? 'text' : 'password'}
+                    required
+                    value={confirmPasswordInput}
+                    onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                    placeholder="Nhập lại mật khẩu mới"
+                    className="w-full px-3.5 py-2.5 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-slate-50/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPass(!showConfirmPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-1"
+                  >
+                    {showConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Buttons */}
+              <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={closeChangePasswordModal}
+                  disabled={passwordChangeLoading}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition cursor-pointer disabled:opacity-50"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={passwordChangeLoading || !!passwordChangeSuccess}
+                  className="px-5 py-2.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {passwordChangeLoading ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>Đang lưu...</span>
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="w-4 h-4 text-amber-300" />
+                      <span>Cập nhật mật khẩu</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
 
           </div>
         </div>

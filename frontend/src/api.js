@@ -36,6 +36,11 @@ export const api = {
   }),
   logout: () => fetchApi('/auth/logout', { method: 'POST' }),
   getMe: () => fetchApi('/auth/me'),
+  changePassword: (data) => fetchApi('/auth/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
 
   // Periods, Users, Depts, Roles, Axes
   getPeriods: () => fetchApi('/periods'),
@@ -250,6 +255,13 @@ export const api = {
   deleteAdminUser: (id) => {
     return fetchApi(`/admin/users/${id}`, {
       method: 'DELETE',
+    });
+  },
+  resetAdminUserPassword: (id, data = {}) => {
+    return fetchApi(`/admin/users/${id}/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     });
   },
 

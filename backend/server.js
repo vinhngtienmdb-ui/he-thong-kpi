@@ -286,6 +286,43 @@ app.get('/api/auth/me', (req, res) => {
   res.json({ success: true, user: safeUser });
 });
 
+// Self-change password for current authenticated user
+app.post('/api/auth/change-password', (req, res) => {
+  const viewerId = getViewerId(req);
+  if (!viewerId) {
+    return res.status(401).json({ success: false, message: 'Chưa đăng nhập hoặc phiên làm việc đã hết hạn' });
+  }
+
+  const { current_password, new_password, confirm_password } = req.body;
+  if (!current_password || !new_password) {
+    return res.status(400).json({ success: false, message: 'Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới' });
+  }
+
+  if (confirm_password !== undefined && new_password !== confirm_password) {
+    return res.status(400).json({ success: false, message: 'Mật khẩu xác nhận không trùng khớp với mật khẩu mới' });
+  }
+
+  if (new_password.length < 6) {
+    return res.status(400).json({ success: false, message: 'Mật khẩu mới phải có tối thiểu 6 ký tự' });
+  }
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId);
+  if (!user) {
+    return res.status(404).json({ success: false, message: 'Không tìm thấy thông tin cán bộ' });
+  }
+
+  if (user.password !== current_password) {
+    return res.status(400).json({ success: false, message: 'Mật khẩu hiện tại không chính xác' });
+  }
+
+  if (current_password === new_password) {
+    return res.status(400).json({ success: false, message: 'Mật khẩu mới không được trùng với mật khẩu hiện tại' });
+  }
+
+  db.prepare('UPDATE users SET password = ? WHERE id = ?').run(new_password, viewerId);
+  res.json({ success: true, message: 'Đổi mật khẩu thành công! Hãy sử dụng mật khẩu mới trong các lần đăng nhập tiếp theo.' });
+});
+
 // -------------------------------------------------------------
 // 1. Periods, Departments, Users, Axes & Admin Management
 // -------------------------------------------------------------
@@ -590,6 +627,29 @@ app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   db.prepare('UPDATE users SET is_active = 0 WHERE id = ?').run(id);
   res.json({ success: true, message: 'Đã ngừng kích hoạt tài khoản cán bộ' });
+});
+
+// Admin: Reset / Re-issue user password
+app.post('/api/admin/users/:id/reset-password', requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { new_password } = req.body || {};
+  const passwordToSet = new_password && new_password.trim() ? new_password.trim() : '123456';
+
+  if (passwordToSet.length < 6) {
+    return res.status(400).json({ success: false, message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
+  }
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (!user) {
+    return res.status(404).json({ success: false, message: 'Không tìm thấy cán bộ' });
+  }
+
+  db.prepare('UPDATE users SET password = ? WHERE id = ?').run(passwordToSet, id);
+  res.json({ 
+    success: true, 
+    message: `Đã cấp lại mật khẩu cho cán bộ "${user.full_name}" thành công!`, 
+    new_password: passwordToSet 
+  });
 });
 
 // Admin: Download Excel template for user import

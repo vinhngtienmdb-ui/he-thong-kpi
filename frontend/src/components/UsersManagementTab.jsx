@@ -9,7 +9,11 @@ import {
   X, 
   FileText,
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  KeyRound,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { api } from '../api';
 
@@ -77,6 +81,52 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
     setImportResult(null);
     setImportError('');
     setIsImportModalOpen(true);
+  };
+
+  // Reset Password Modal state
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resettingUser, setResettingUser] = useState(null);
+  const [resetPasswordInput, setResetPasswordInput] = useState('123456');
+  const [showResetPass, setShowResetPass] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetSuccessMessage, setResetSuccessMessage] = useState('');
+  const [resetErrorMessage, setResetErrorMessage] = useState('');
+
+  const openResetPasswordModal = (user) => {
+    setResettingUser(user);
+    setResetPasswordInput('123456');
+    setShowResetPass(false);
+    setResetSuccessMessage('');
+    setResetErrorMessage('');
+    setIsResetModalOpen(true);
+  };
+
+  const handleResetPasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!resettingUser) return;
+    if (!resetPasswordInput || resetPasswordInput.trim().length < 6) {
+      setResetErrorMessage('Mật khẩu cấp mới phải có tối thiểu 6 ký tự');
+      return;
+    }
+
+    setResetLoading(true);
+    setResetErrorMessage('');
+    setResetSuccessMessage('');
+    try {
+      const res = await api.resetAdminUserPassword(resettingUser.id, {
+        new_password: resetPasswordInput.trim()
+      });
+      setResetSuccessMessage(res.message || `Đã cấp lại mật khẩu cho cán bộ "${resettingUser.full_name}" thành công!`);
+      setTimeout(() => {
+        setIsResetModalOpen(false);
+        setResettingUser(null);
+        setResetSuccessMessage('');
+      }, 2000);
+    } catch (err) {
+      setResetErrorMessage(err.message || 'Có lỗi xảy ra khi cấp lại mật khẩu');
+    } finally {
+      setResetLoading(false);
+    }
   };
 
   const handleImportSubmit = async (e) => {
@@ -452,6 +502,13 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
+                        </button>
+                        <button
+                          onClick={() => openResetPasswordModal(u)}
+                          className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded transition"
+                          title="Cấp lại mật khẩu"
+                        >
+                          <KeyRound className="w-4 h-4" />
                         </button>
                         {u.id !== currentUser?.id && (
                           <button
@@ -923,6 +980,142 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset Password Modal */}
+      {isResetModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl p-6 border border-slate-200 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center shadow-2xs">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Cấp lại Mật khẩu Cán bộ</h3>
+                  <p className="text-xs text-slate-500">Phân quyền Quản trị viên (Admin)</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsResetModalOpen(false);
+                  setResettingUser(null);
+                }}
+                className="w-8 h-8 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleResetPasswordSubmit} className="pt-4 space-y-4">
+              {resetErrorMessage && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-700">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <span>{resetErrorMessage}</span>
+                </div>
+              )}
+
+              {resetSuccessMessage && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2.5 text-xs text-emerald-700">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="font-semibold">{resetSuccessMessage}</p>
+                    <p className="text-[11px] text-emerald-600">Đang đóng cửa sổ...</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Thông tin cán bộ nhận cấp lại */}
+              <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 text-xs space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Họ và tên:</span>
+                  <span className="font-bold text-slate-900">{resettingUser?.full_name}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Tên đăng nhập:</span>
+                  <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">{resettingUser?.username}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Đơn vị / Phòng ban:</span>
+                  <span className="font-medium text-slate-800">{resettingUser?.dept_name || 'Chưa phân bổ'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Chức vụ:</span>
+                  <span className="text-slate-700">{resettingUser?.gov_title || resettingUser?.role || 'Cán bộ'}</span>
+                </div>
+              </div>
+
+              {/* Nhập mật khẩu mới */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Mật khẩu cấp mới <span className="text-rose-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setResetPasswordInput('123456')}
+                    className="text-[11px] text-indigo-600 hover:text-indigo-800 hover:underline font-semibold cursor-pointer"
+                  >
+                    Dùng mặc định: 123456
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showResetPass ? 'text' : 'password'}
+                    required
+                    value={resetPasswordInput}
+                    onChange={(e) => setResetPasswordInput(e.target.value)}
+                    placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
+                    className="w-full px-3.5 py-2.5 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-slate-50/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowResetPass(!showResetPass)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                  >
+                    {showResetPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Sau khi cấp lại, cán bộ sử dụng mật khẩu này để đăng nhập và có thể chủ động tự đổi mật khẩu cá nhân.
+                </p>
+              </div>
+
+              {/* Action buttons */}
+              <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsResetModalOpen(false);
+                    setResettingUser(null);
+                  }}
+                  disabled={resetLoading}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer disabled:opacity-50"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetLoading || !!resetSuccessMessage}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-xs transition cursor-pointer disabled:opacity-50"
+                >
+                  {resetLoading ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>Đang cập nhật...</span>
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="w-4 h-4" />
+                      <span>Xác nhận cấp lại</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
