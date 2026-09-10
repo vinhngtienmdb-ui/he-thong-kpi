@@ -326,6 +326,7 @@ export const api = {
 
   // Voting & Charts
   getVotingList: (periodId) => fetchApi(`/voting?period_id=${periodId}`),
+  getVotingProgress: (periodId) => fetchApi(`/voting/progress?period_id=${periodId}`),
   submitVote: (data) => fetchApi('/voting', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

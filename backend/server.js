@@ -79,20 +79,34 @@ function checkIsAdmin(viewer) {
   }
 }
 
+// Check if user is a Leader/Manager eligible for management and voting
+function isLeaderUser(u) {
+  if (!u) return false;
+  if (u.role === 'admin' || u.role === 'cbql') return true;
+  if (u.target_role === 'cbql') return true;
+  if (u.role_code && ['admin', 'cbql_phong', 'ld_coquan', 'to_truong', 'hieu_pho'].includes(u.role_code)) return true;
+  if (u.data_scope && u.data_scope !== 'personal') return true;
+  try {
+    const perms = typeof u.permissions === 'string' 
+      ? JSON.parse(u.permissions || '{}') 
+      : (u.permissions || {});
+    if (perms.can_manage_system === true || perms.can_assign_tasks === true || perms.can_grade_tasks === true || perms.can_conclude_evaluation === true) {
+      return true;
+    }
+  } catch (e) {}
+  const title = `${u.gov_title || ''} ${u.party_title || ''}`.toLowerCase();
+  const leaderKeywords = [
+    'hiệu trưởng', 'hiệu phó', 'phó hiệu trưởng', 'giám đốc', 'phó giám đốc', 
+    'trưởng phòng', 'phó phòng', 'phó trưởng phòng', 'trưởng ban', 'phó ban', 
+    'tổ trưởng', 'tổ phó', 'bí thư', 'phó bí thư', 'thường trực', 'thường vụ', 
+    'cấp ủy', 'chi ủy', 'chủ tịch', 'phó chủ tịch', 'quản trị'
+  ];
+  return leaderKeywords.some(kw => title.includes(kw));
+}
+
 // Check if viewer is CBQL or Admin (Leader/Manager)
 function checkIsManagerOrAdmin(viewer) {
-  if (!viewer) return false;
-  if (viewer.role === 'admin' || viewer.role === 'cbql') return true;
-  if (viewer.role_code === 'admin' || viewer.role_code === 'cbql_phong' || viewer.role_code === 'ld_coquan') return true;
-  if (viewer.data_scope && viewer.data_scope !== 'personal') return true;
-  try {
-    const perms = typeof viewer.permissions === 'string' 
-      ? JSON.parse(viewer.permissions || '{}') 
-      : (viewer.permissions || {});
-    return perms.can_manage_system === true || perms.can_assign_tasks === true || perms.can_grade_tasks === true;
-  } catch (e) {
-    return false;
-  }
+  return isLeaderUser(viewer);
 }
 
 // Middleware: Require Admin access (Cấu hình hệ thống, quản lý tài khoản, phòng ban, vai trò)
@@ -1942,10 +1956,99 @@ app.get('/api/stats/dashboard', (req, res) => {
 // -------------------------------------------------------------
 // Voting (Biểu quyết xếp loại)
 // -------------------------------------------------------------
+// 1. Voting Progress & Council of Leaders stats
+app.get('/api/voting/progress', (req, res) => {
+  const { period_id } = req.query;
+  const viewer = getViewer(req);
+  const isViewerLeader = viewer ? isLeaderUser(viewer) : false;
+
+  // Lấy tất cả người dùng đang hoạt động để đếm số cán bộ cần đánh giá
+  const allActiveUsers = db.prepare(`
+    SELECT u.id, u.full_name, u.role, u.target_role, u.gov_title, u.party_title, u.dept_id,
+           r.code as role_code, r.permissions, r.data_scope, d.name as dept_name
+    FROM users u
+    LEFT JOIN roles r ON u.role_id = r.id
+    LEFT JOIN departments d ON u.dept_id = d.id
+    WHERE (u.is_active IS NULL OR u.is_active = 1)
+    ORDER BY u.full_name ASC
+  `).all();
+
+  const totalCandidates = allActiveUsers.length;
+
+  // Lọc danh sách Lãnh đạo / Quản lý có thẩm quyền biểu quyết
+  const eligibleLeaders = allActiveUsers.filter(isLeaderUser);
+
+  // Tiến độ bỏ phiếu của từng lãnh đạo
+  const leadersProgress = eligibleLeaders.map(leader => {
+    let votesCast = 0;
+    let lastVotedAt = null;
+
+    if (period_id) {
+      const stats = db.prepare(`
+        SELECT COUNT(DISTINCT user_id) as cast_count, MAX(created_at) as last_voted
+        FROM votes
+        WHERE period_id = ? AND voter_id = ?
+      `).get(period_id, leader.id);
+      if (stats) {
+        votesCast = stats.cast_count || 0;
+        lastVotedAt = stats.last_voted || null;
+      }
+    }
+
+    const isCompleted = totalCandidates > 0 && votesCast >= totalCandidates;
+    const hasVoted = votesCast > 0;
+    let status = 'not_started';
+    if (isCompleted) status = 'completed';
+    else if (hasVoted) status = 'in_progress';
+
+    return {
+      id: leader.id,
+      full_name: leader.full_name,
+      gov_title: leader.gov_title || 'Cán bộ Quản lý',
+      party_title: leader.party_title || '',
+      dept_name: leader.dept_name || 'Cơ quan',
+      votes_cast: votesCast,
+      total_candidates: totalCandidates,
+      has_voted: hasVoted,
+      is_completed: isCompleted,
+      status: status,
+      last_voted_at: lastVotedAt
+    };
+  });
+
+  const totalLeaders = eligibleLeaders.length;
+  const votedLeadersCount = leadersProgress.filter(l => l.has_voted).length;
+  const completedLeadersCount = leadersProgress.filter(l => l.is_completed).length;
+  const progressPct = totalLeaders > 0 ? Math.round((votedLeadersCount / totalLeaders) * 100) : 0;
+  const totalVotesCast = leadersProgress.reduce((sum, l) => sum + l.votes_cast, 0);
+  const maxPossibleVotes = totalLeaders * totalCandidates;
+  const totalVotePct = maxPossibleVotes > 0 ? Math.round((totalVotesCast / maxPossibleVotes) * 100) : 0;
+
+  res.json({
+    total_leaders: totalLeaders,
+    voted_leaders_count: votedLeadersCount,
+    completed_leaders_count: completedLeadersCount,
+    progress_pct: progressPct,
+    total_vote_pct: totalVotePct,
+    total_candidates: totalCandidates,
+    is_viewer_eligible_leader: isViewerLeader,
+    leaders: leadersProgress
+  });
+});
+
+// 2. Voting Candidate List with breakdown of who voted
 app.get('/api/voting', (req, res) => {
   const { period_id } = req.query;
-  const viewerId = getViewerId(req);
-  const accessibleUserIds = getAccessibleUserIds(viewerId);
+  const viewer = getViewer(req);
+  const viewerId = viewer?.id || getViewerId(req);
+  const isViewerLeader = viewer ? isLeaderUser(viewer) : false;
+
+  let accessibleUserIds = getAccessibleUserIds(viewerId);
+  // Nếu là CBNV thường có đơn vị, cho phép xem kết quả biểu quyết của phòng ban mình
+  if (!isViewerLeader && viewer?.dept_id) {
+    const deptMembers = db.prepare(`SELECT id FROM users WHERE dept_id = ? AND (is_active IS NULL OR is_active = 1)`).all(viewer.dept_id);
+    accessibleUserIds = deptMembers.map(m => m.id);
+  }
 
   let userClause = '';
   const params = [period_id, viewerId || '', period_id, period_id, period_id, period_id, period_id, period_id];
@@ -1972,13 +2075,56 @@ app.get('/api/voting', (req, res) => {
     ORDER BY u.full_name ASC
   `).all(...params);
 
-  res.json(users);
+  // Lấy chi tiết ai đã biểu quyết cho từng cán bộ ứng viên
+  const candidateIds = users.map(u => u.user_id);
+  const votesMap = {};
+  if (period_id && candidateIds.length > 0) {
+    const placeholders = candidateIds.map(() => '?').join(',');
+    const detailedVotes = db.prepare(`
+      SELECT v.user_id as candidate_id, v.voter_id, u.full_name as voter_name, u.gov_title, u.party_title,
+             v.vote_rank, v.comment, v.created_at
+      FROM votes v
+      JOIN users u ON v.voter_id = u.id
+      WHERE v.period_id = ? AND v.user_id IN (${placeholders})
+      ORDER BY v.created_at DESC
+    `).all(period_id, ...candidateIds);
+
+    detailedVotes.forEach(dv => {
+      if (!votesMap[dv.candidate_id]) votesMap[dv.candidate_id] = [];
+      votesMap[dv.candidate_id].push({
+        voter_id: dv.voter_id,
+        voter_name: dv.voter_name,
+        gov_title: dv.gov_title || 'Lãnh đạo',
+        party_title: dv.party_title || '',
+        vote_rank: dv.vote_rank,
+        comment: dv.comment,
+        created_at: dv.created_at
+      });
+    });
+  }
+
+  const enrichedUsers = users.map(u => ({
+    ...u,
+    voters_breakdown: votesMap[u.user_id] || []
+  }));
+
+  res.json(enrichedUsers);
 });
 
+// 3. Submit Vote (Strictly restricted to Leaders / Managers)
 app.post('/api/voting', (req, res) => {
-  const viewerId = getViewerId(req);
+  const viewer = getViewer(req);
+  const viewerId = viewer?.id || getViewerId(req);
   if (!viewerId) {
-    return res.status(401).json({ success: false, message: 'Vui lòng xác định người biểu quyết' });
+    return res.status(401).json({ success: false, message: 'Vui lòng xác định người biểu quyết (yêu cầu đăng nhập)' });
+  }
+
+  // Chặn nghiêm ngặt: Chỉ người có chức danh Lãnh đạo / Quản lý mới được biểu quyết
+  if (!viewer || !isLeaderUser(viewer)) {
+    return res.status(403).json({ 
+      success: false, 
+      message: 'Từ chối quyền: Chỉ cán bộ có chức danh Lãnh đạo / Quản lý mới có quyền tham gia biểu quyết xếp loại!' 
+    });
   }
 
   const { period_id, user_id, vote_rank, comment } = req.body;
