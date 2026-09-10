@@ -4,26 +4,32 @@
  * Chỉ chạy khi người dùng hoặc Quản trị viên chủ động kích hoạt.
  */
 
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 require('dotenv').config();
 const { Pool } = require('pg');
 const { db, createBackup, checkpointDatabase } = require('./database');
 
-const dbUrl = process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
+function getDbUrl() {
+  return process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
+}
 
 function isSupabaseConfigured() {
+  const dbUrl = getDbUrl();
   return Boolean(dbUrl && (dbUrl.startsWith('postgres://') || dbUrl.startsWith('postgresql://')));
 }
 
 function getPool() {
   if (!isSupabaseConfigured()) return null;
   return new Pool({
-    connectionString: dbUrl,
+    connectionString: getDbUrl(),
     ssl: { rejectUnauthorized: false },
     connectionTimeoutMillis: 10000
   });
 }
 
 function getMaskedUrl() {
+  const dbUrl = getDbUrl();
   if (!dbUrl) return null;
   try {
     return dbUrl.replace(/:[^:@]+@/, ':***@');

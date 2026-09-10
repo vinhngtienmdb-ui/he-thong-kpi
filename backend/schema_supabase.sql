@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS common_criteria (
     id TEXT PRIMARY KEY,
     group_no INTEGER,
     group_name TEXT,
-    code TEXT UNIQUE NOT NULL,
+    code TEXT NOT NULL,
     title TEXT NOT NULL,
     max_score NUMERIC NOT NULL,
     target_role TEXT DEFAULT 'all'

@@ -192,9 +192,10 @@ function initDatabase() {
       id TEXT PRIMARY KEY,
       group_no INTEGER,
       group_name TEXT,
-      code TEXT UNIQUE NOT NULL,
+      code TEXT NOT NULL,
       title TEXT NOT NULL,
-      max_score REAL NOT NULL
+      max_score REAL NOT NULL,
+      target_role TEXT DEFAULT 'all'
     );
 
     CREATE TABLE IF NOT EXISTS evaluations (
@@ -379,7 +380,37 @@ function initDatabase() {
     db.prepare("UPDATE departments SET location_name = 'TP. Hồ Chí Minh' WHERE location_name IS NULL OR location_name = ''").run();
   } catch (e) {}
 
-  // Ensure default roles exist
+  // Ensure common_criteria does not have a global UNIQUE constraint on code
+  try {
+    const critTableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='common_criteria'").get();
+    if (critTableSql && critTableSql.sql && critTableSql.sql.includes('code TEXT UNIQUE')) {
+      db.exec(`
+        PRAGMA foreign_keys = OFF;
+        CREATE TABLE IF NOT EXISTS common_criteria_migrated (
+          id TEXT PRIMARY KEY,
+          group_no INTEGER,
+          group_name TEXT,
+          code TEXT NOT NULL,
+          title TEXT NOT NULL,
+          max_score REAL NOT NULL,
+          target_role TEXT DEFAULT 'all'
+        );
+        INSERT OR REPLACE INTO common_criteria_migrated (id, group_no, group_name, code, title, max_score, target_role)
+        SELECT id, group_no, group_name, code, title, max_score, COALESCE(target_role, 'all') FROM common_criteria;
+        DROP TABLE common_criteria;
+        ALTER TABLE common_criteria_migrated RENAME TO common_criteria;
+        PRAGMA foreign_keys = ON;
+      `);
+    }
+  } catch (e) {
+    console.error('Error migrating common_criteria constraint:', e);
+  }
+
+  // Khởi tạo dữ liệu nền tảng
+  seedData();
+}
+
+function ensureDefaultRoles() {
   try {
     const defaultRoles = [
       {
@@ -475,24 +506,126 @@ function initDatabase() {
   } catch (e) {
     console.error('Error seeding default roles:', e);
   }
+}
 
-  // Update existing users with role_id if missing
+function ensureAllCommonCriteria() {
   try {
-    db.prepare("UPDATE users SET role_id = 'role-admin' WHERE (role = 'admin' OR username = 'admin') AND role_id IS NULL").run();
-    db.prepare("UPDATE users SET role_id = 'role-cbql-phong' WHERE role = 'cbql' AND role_id IS NULL").run();
-    db.prepare("UPDATE users SET role_id = 'role-cbnv' WHERE role = 'cbnv' AND role_id IS NULL").run();
+    const insertCriteria = db.prepare(`
+      INSERT OR REPLACE INTO common_criteria (id, group_no, group_name, code, title, max_score, target_role)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    // Nhóm 1: Về phẩm chất chính trị, đạo đức, lối sống, thực hiện trách nhiệm nêu gương (9 tiêu chí, max 2đ = 18đ) - target_role = 'all'
+    const g1 = 'Về phẩm chất chính trị, đạo đức, lối sống, thực hiện trách nhiệm nêu gương';
+    const c1Items = [
+      'Tuyệt đối trung thành với Đảng, Tổ quốc và Nhân dân; kiên định chủ nghĩa Mác - Lênin, tư tưởng Hồ Chí Minh, mục tiêu độc lập dân tộc và CNXH. Bảo vệ nền tảng tư tưởng của Đảng.',
+      'Có tinh thần yêu nước sâu sắc, tận tuỵ phục vụ Nhân dân, sâu sát cơ sở, luôn hành động vì lợi ích của Nhân dân.',
+      'Chấp hành nghiêm chủ trương, đường lối, nghị quyết, chỉ thị, quy định của Đảng, pháp luật Nhà nước và quy chế cơ quan.',
+      'Có tinh thần tự giác, trách nhiệm cao trong nghiên cứu, học tập chủ nghĩa Mác - Lênin, tư tưởng Hồ Chí Minh và bồi dưỡng chuyên môn.',
+      'Có phẩm chất đạo đức, lối sống trong sáng, cần kiệm liêm chính, chí công vô tư; chấp hành chuẩn mực đạo đức cách mạng.',
+      'Không tham vọng quyền lực, không chạy chức chạy quyền, không tham nhũng lãng phí tiêu cực, lợi ích nhóm.',
+      'Có uy tín cao, tiêu biểu về phẩm chất đạo đức và phong cách công tác; là trung tâm đoàn kết nội bộ.',
+      'Có tinh thần chủ động, đổi mới sáng tạo; phấn đấu vì mục tiêu phát triển chung của cơ quan, đơn vị.',
+      'Thực hiện việc kê khai và công khai tài sản, thu nhập theo quy định. Báo cáo trung thực, đầy đủ thông tin.'
+    ];
+    c1Items.forEach((text, i) => {
+      insertCriteria.run(`crit-1-${i + 1}`, 1, g1, `1.${i + 1}`, text, 2, 'all');
+    });
+
+    // Nhóm 2 - Dành cho CBQL (4 tiêu chí, max 1đ = 4đ) - target_role = 'cbql'
+    const g2 = 'Tư duy đổi mới, chiến lược, khát vọng cống hiến, dám nghĩ, dám làm';
+    const c2CbqlItems = [
+      'Có tư duy đổi mới, tầm nhìn chiến lược, khả năng lãnh đạo thích ứng với sự phát triển và xu thế mới.',
+      'Luôn bám sát thực tiễn, có nhiều cách làm hay, sáng tạo, đạt hiệu quả cao trong tổ chức thực hiện nhiệm vụ.',
+      'Nói đi đôi với làm, dám nghĩ, dám làm, dám chịu trách nhiệm, dám đột phá vì lợi ích chung.',
+      'Có khát vọng phấn đấu, cống hiến; có khả năng quy tụ và phát huy sức mạnh tập thể.'
+    ];
+    c2CbqlItems.forEach((text, i) => {
+      insertCriteria.run(`crit-2-${i + 1}`, 2, g2, `2.${i + 1}`, text, 1, 'cbql');
+    });
+
+    // Nhóm 2 - Dành cho CBNV (3 tiêu chí, tổng 4đ) - target_role = 'cbnv'
+    const c2CbnvItems = [
+      { id: 'crit-cbnv-2-1', code: '2.1', title: 'Năng động, sáng tạo, dám nghĩ, dám làm, dám chịu trách nhiệm vì lợi ích chung; có giải pháp, sáng kiến đổi mới nâng cao hiệu quả công tác', score: 2 },
+      { id: 'crit-cbnv-2-2', code: '2.2', title: 'Chủ động, tích cực nghiên cứu, học tập nâng cao trình độ chuyên môn nghiệp vụ; ứng dụng công nghệ thông tin, chuyển đổi số vào công việc', score: 1 },
+      { id: 'crit-cbnv-2-3', code: '2.3', title: 'Có tinh thần phối hợp tốt với đồng nghiệp; thái độ phục vụ nhân dân, tổ chức tận tình, chu đáo, không gây phiền hà, nhũng nhiễu', score: 1 }
+    ];
+    c2CbnvItems.forEach(item => {
+      insertCriteria.run(item.id, 2, g2, item.code, item.title, item.score, 'cbnv');
+    });
+
+    // Nhóm 3: Về tự phê bình và phê bình, tự soi, tự sửa, khắc phục hạn chế, khuyết điểm (4 tiêu chí, max 2đ = 8đ) - target_role = 'all'
+    const g3 = 'Về tự phê bình và phê bình, tự soi, tự sửa, khắc phục hạn chế, khuyết điểm';
+    const c3Items = [
+      'Chủ động, nghiêm túc thực hiện tự phê bình và phê bình, có tinh thần cầu thị và tiếp thu phản biện, góp ý.',
+      'Có kế hoạch rõ ràng và quyết liệt trong khắc phục hạn chế, khuyết điểm đã được chỉ ra.',
+      'Kết quả khắc phục hoàn thành từ ≥ 80% nội dung, có tiến bộ rõ, được tổ chức đánh giá tốt; không để tái diễn tồn tại.',
+      'Tự soi, tự sửa trên tinh thần trách nhiệm chính trị cao, không né tránh, không đổ lỗi.'
+    ];
+    c3Items.forEach((text, i) => {
+      insertCriteria.run(`crit-3-${i + 1}`, 3, g3, `3.${i + 1}`, text, 2, 'all');
+    });
   } catch (e) {
-    console.error('Error linking users to roles:', e);
+    console.error('Error ensuring common criteria:', e);
   }
+}
 
-  // Ensure Admin user and target_role values exist
+function ensureSystemConfigs() {
   try {
-    const adminExists = db.prepare("SELECT id FROM users WHERE username = 'admin'").get();
-    if (!adminExists) {
+    const insertConfig = db.prepare('INSERT OR IGNORE INTO system_configs (key, value, description) VALUES (?, ?, ?)');
+    insertConfig.run('progress_weight', '0.30', 'Tỷ trọng đánh giá tiến độ (30%)');
+    insertConfig.run('quality_weight', '0.70', 'Tỷ trọng đánh giá chất lượng (70%)');
+    insertConfig.run('part2_max_score', '70', 'Điểm tối đa Phần B - Kết quả công việc (70 điểm)');
+    insertConfig.run('part1_max_score', '30', 'Điểm tối đa Phần A - Nhóm tiêu chí chung (30 điểm)');
+    insertConfig.run('bonus_max_score', '7', 'Điểm thưởng tối đa (tối đa 10% Phần B = 7 điểm)');
+    insertConfig.run('bonus_rate_per_task', '0.05', 'Tỷ lệ điểm thưởng cho công việc nổi trội (5% điểm KPI việc đó)');
+    insertConfig.run('excellent_score_threshold', '90', 'Ngưỡng điểm tối thiểu xếp loại Hoàn thành xuất sắc');
+    insertConfig.run('excellent_ahead_pct', '30', 'Tỷ lệ tối thiểu công việc vượt tiến độ/chất lượng để xếp loại Xuất sắc (30%)');
+    insertConfig.run('excellent_cadre_quota', '20', 'Tỷ lệ tối đa cán bộ xếp loại Xuất sắc trong toàn cơ quan (20%)');
+    insertConfig.run('good_score_threshold', '70', 'Ngưỡng điểm tối thiểu xếp loại Hoàn thành tốt');
+    insertConfig.run('pass_score_threshold', '50', 'Ngưỡng điểm tối thiểu xếp loại Hoàn thành');
+    insertConfig.run('PARENT_AGENCY_NAME', 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH', 'Tên cơ quan cấp trên / Cơ quan chủ quản');
+    insertConfig.run('UNIT_NAME', 'BAN TỔ CHỨC THÀNH ỦY TP. HỒ CHÍ MINH', 'Tên cơ quan, đơn vị');
+    insertConfig.run('LOCATION_NAME', 'TP. Hồ Chí Minh', 'Tên địa phương lập báo cáo');
+    insertConfig.run('LEADER_SIGNER_NAME', 'Thái Thị Bích Liên', 'Họ tên Lãnh đạo/Thủ trưởng cơ quan ký');
+    insertConfig.run('LEADER_SIGNER_TITLE', 'PHÓ TRƯỞNG BAN THƯỜNG TRỰC', 'Chức danh Lãnh đạo cơ quan ký');
+    insertConfig.run('DEPT_LEADER_TITLE', 'TRƯỞNG PHÒNG', 'Chức danh người quản lý đơn vị / CBQL');
+  } catch (e) {
+    console.error('Error ensuring system configs:', e);
+  }
+}
+
+function ensureAdminUser() {
+  try {
+    // 1. Đảm bảo đơn vị mặc định tồn tại trước khi tạo/liên kết người dùng
+    let defaultDept = db.prepare("SELECT id FROM departments WHERE id = 'dept-1'").get();
+    if (!defaultDept) {
+      defaultDept = db.prepare("SELECT id FROM departments LIMIT 1").get();
+    }
+    if (!defaultDept) {
       db.prepare(`
-        INSERT INTO users (id, username, password, full_name, role, role_id, target_role, party_title, gov_title, dept_id, is_active)
-        VALUES ('usr-admin', 'admin', 'Hoangyen@123456', 'Quản trị viên Hệ thống', 'admin', 'role-admin', 'cbql', 'Cấp ủy viên', 'Quản trị viên', 'dept-1', 1)
+        INSERT OR IGNORE INTO departments (id, code, name, parent_agency, location_name)
+        VALUES ('dept-1', 'A29.123.22', 'Chi bộ Trường Mầm non Hoàng Yến', 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH', 'TP. Hồ Chí Minh')
       `).run();
+      defaultDept = { id: 'dept-1' };
+    }
+
+    // 2. Đảm bảo vai trò role-admin tồn tại
+    const adminRole = db.prepare("SELECT id FROM roles WHERE id = 'role-admin'").get();
+    if (!adminRole) {
+      db.prepare(`
+        INSERT OR IGNORE INTO roles (id, code, name, description, data_scope, permissions, is_system)
+        VALUES ('role-admin', 'admin', 'Quản trị viên Hệ thống', 'Toàn quyền cấu hình hệ thống, quản lý tài khoản, đơn vị và dữ liệu toàn cơ quan', 'all', '{"can_manage_system":true,"can_manage_users":true,"can_assign_tasks":true,"can_grade_tasks":true,"can_conclude_evaluation":true,"can_view_all_reports":true}', 1)
+      `).run();
+    }
+
+    // 3. Đảm bảo tài khoản admin tồn tại với foreign key an toàn
+    const adminUser = db.prepare("SELECT id FROM users WHERE username = 'admin'").get();
+    if (!adminUser) {
+      db.prepare(`
+        INSERT INTO users (id, username, password, full_name, role, role_id, target_role, party_title, gov_title, dept_id, birth_date, gender, phone, email, is_active)
+        VALUES ('usr-admin', 'admin', 'Hoangyen@123456', 'Quản trị viên Hệ thống', 'admin', 'role-admin', 'cbql', 'Cấp ủy viên', 'Quản trị viên', ?, '1980-01-01', 'Nam', '0909999888', 'admin@hoangyen.edu.vn', 1)
+      `).run(defaultDept.id);
     } else {
       // Tự động sửa lỗi font nếu có ký tự hỏi chấm '?' do lỗi encoding trước đây
       db.prepare(`
@@ -503,187 +636,54 @@ function initDatabase() {
         WHERE username = 'admin' AND (full_name LIKE '%?%' OR gov_title LIKE '%?%')
       `).run();
     }
+
+    // 4. Liên kết role_id và target_role nếu chưa có
+    db.prepare("UPDATE users SET role_id = 'role-admin' WHERE (role = 'admin' OR username = 'admin') AND role_id IS NULL").run();
+    db.prepare("UPDATE users SET role_id = 'role-cbql-phong' WHERE role = 'cbql' AND role_id IS NULL").run();
+    db.prepare("UPDATE users SET role_id = 'role-cbnv' WHERE role = 'cbnv' AND role_id IS NULL").run();
     db.prepare("UPDATE users SET target_role = 'cbql' WHERE role = 'cbql' AND target_role IS NULL").run();
     db.prepare("UPDATE users SET target_role = 'cbnv' WHERE role = 'cbnv' AND target_role IS NULL").run();
   } catch (e) {
     console.error('Error ensuring admin user:', e);
   }
-
-  // Ensure system_configs are seeded
-  try {
-    const cfgCount = db.prepare('SELECT COUNT(*) as count FROM system_configs').get().count;
-    if (cfgCount === 0) {
-      const insertCfg = db.prepare('INSERT OR IGNORE INTO system_configs (key, value, description) VALUES (?, ?, ?)');
-      insertCfg.run('WEIGHT_PROGRESS', '0.30', 'Tỷ trọng tiêu chí tiến độ công việc (30%)');
-      insertCfg.run('WEIGHT_QUALITY', '0.70', 'Tỷ trọng tiêu chí chất lượng công việc (70%)');
-      insertCfg.run('PART2_MAX_SCORE', '70.0', 'Điểm tối đa Phần B - Kết quả công việc (70 điểm)');
-      insertCfg.run('BONUS_RATE_PER_TASK', '0.05', 'Tỷ lệ cộng điểm thưởng cho mỗi nhiệm vụ vượt mức/sáng tạo (5%)');
-      insertCfg.run('MAX_BONUS_SCORE', '7.0', 'Điểm thưởng tối đa (10% của 70 điểm = 7 điểm)');
-      insertCfg.run('MAX_EXCELLENT_PCT', '20', 'Tỷ lệ cán bộ hoàn thành xuất sắc nhiệm vụ tối đa toàn cơ quan (20%)');
-      insertCfg.run('RANK_EXCELLENT_MIN', '90', 'Ngưỡng điểm tối thiểu xếp loại Hoàn thành xuất sắc nhiệm vụ (90 điểm)');
-      insertCfg.run('RANK_GOOD_MIN', '70', 'Ngưỡng điểm tối thiểu xếp loại Hoàn thành tốt nhiệm vụ (70 điểm)');
-      insertCfg.run('RANK_COMPLETE_MIN', '50', 'Ngưỡng điểm tối thiểu xếp loại Hoàn thành nhiệm vụ (50 điểm)');
-    }
-  } catch (e) {
-    console.error('Error seeding system_configs:', e);
-  }
-
-  // Ensure CBNV Group 2 criteria exist
-  try {
-    const cbnvCritCount = db.prepare("SELECT COUNT(*) as count FROM common_criteria WHERE code = '2.1' AND target_role = 'cbnv'").get().count;
-    if (cbnvCritCount === 0) {
-      const insCrit = db.prepare('INSERT OR IGNORE INTO common_criteria (id, group_no, group_name, code, title, max_score, target_role) VALUES (?, ?, ?, ?, ?, ?, ?)');
-      insCrit.run('crit-cbnv-2-1', 2, 'Tinh thần trách nhiệm, năng động, sáng tạo, đổi mới trong thực hiện nhiệm vụ', '2.1', 'Năng động, sáng tạo, dám nghĩ, dám làm, dám chịu trách nhiệm vì lợi ích chung; có giải pháp, sáng kiến đổi mới nâng cao hiệu quả công tác', 2.0, 'cbnv');
-      insCrit.run('crit-cbnv-2-2', 2, 'Tinh thần trách nhiệm, năng động, sáng tạo, đổi mới trong thực hiện nhiệm vụ', '2.2', 'Chủ động, tích cực nghiên cứu, học tập nâng cao trình độ chuyên môn nghiệp vụ; ứng dụng công nghệ thông tin, chuyển đổi số vào công việc', 1.0, 'cbnv');
-      insCrit.run('crit-cbnv-2-3', 2, 'Tinh thần trách nhiệm, năng động, sáng tạo, đổi mới trong thực hiện nhiệm vụ', '2.3', 'Có tinh thần phối hợp tốt với đồng nghiệp; thái độ phục vụ nhân dân, tổ chức tận tình, chu đáo, không gây phiền hà, nhũng nhiễu', 1.0, 'cbnv');
-      db.prepare("UPDATE common_criteria SET target_role = 'cbql' WHERE code IN ('10', '11', '12', '13')").run();
-    }
-  } catch (e) {
-    console.error('Error seeding CBNV criteria:', e);
-  }
-
-  seedData();
 }
 
 function seedData() {
   const deptCount = db.prepare('SELECT COUNT(*) as count FROM departments').get().count;
-  if (deptCount > 0) return;
+  if (deptCount === 0) {
+    console.log('Seeding initial system data...');
 
-  console.log('Seeding initial system data...');
+    // 1. Departments
+    const insertDept = db.prepare('INSERT OR IGNORE INTO departments (id, code, name, parent_agency, location_name) VALUES (?, ?, ?, ?, ?)');
+    insertDept.run('dept-1', 'A29.123.22', 'Chi bộ Trường Mầm non Hoàng Yến', 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH', 'TP. Hồ Chí Minh');
+    insertDept.run('dept-2', 'BTC.TU', 'Ban Tổ chức Thành ủy', 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH', 'TP. Hồ Chí Minh');
 
-  // 1. Departments
-  const insertDept = db.prepare('INSERT INTO departments (id, code, name) VALUES (?, ?, ?)');
-  insertDept.run('dept-1', 'A29.123.22', 'Chi bộ Trường Mầm non Hoàng Yến');
-  insertDept.run('dept-2', 'BTC.TU', 'Ban Tổ chức Thành ủy');
+    // 2. Default Periods
+    const insertPeriod = db.prepare(`
+      INSERT OR IGNORE INTO periods (id, code, name, start_date, end_date, is_active)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    insertPeriod.run('p-1', 'KPI-Q2-2026', 'Đánh giá KPI Quý II/2026', '2026-04-01', '2026-06-30', 1);
+    insertPeriod.run('p-2', 'KPI-Q3-2026', 'Đánh giá KPI Quý III/2026', '2026-07-01', '2026-09-30', 1);
+    insertPeriod.run('p-3', 'KPI-Q4-2026', 'Đánh giá KPI Quý IV/2026', '2026-10-01', '2026-12-31', 1);
 
-  // 2. Default Periods
-  const insertPeriod = db.prepare(`
-    INSERT INTO periods (id, code, name, start_date, end_date, is_active)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-  insertPeriod.run('p-1', 'KPI-Q2-2026', 'Đánh giá KPI Quý II/2026', '2026-04-01', '2026-06-30', 1);
-  insertPeriod.run('p-2', 'KPI-Q3-2026', 'Đánh giá KPI Quý III/2026', '2026-07-01', '2026-09-30', 1);
-  insertPeriod.run('p-3', 'KPI-Q4-2026', 'Đánh giá KPI Quý IV/2026', '2026-10-01', '2026-12-31', 1);
-
-  // 4. 6 Trục kết quả trọng tâm
-  const insertAxis = db.prepare('INSERT INTO axes (id, code, name, max_score) VALUES (?, ?, ?, ?)');
-  insertAxis.run('ax-1', 'TRUC_1', 'TRỤC 1 - THỰC HIỆN MỤC TIÊU PHÁT TRIỂN KINH TẾ - XÃ HỘI VÀ NHIỆM VỤ CHÍNH TRỊ ĐƯỢC GIAO', 10);
-  insertAxis.run('ax-2', 'TRUC_2', 'TRỤC 2 - HOÀN THIỆN THỂ CHẾ, ĐẨY MẠNH PHÂN CẤP, PHÂN QUYỀN GẮN VỚI KIỂM TRA, GIÁM SÁT', 15);
-  insertAxis.run('ax-3', 'TRUC_3', 'TRỤC 3 - THÚC ĐẨY PHÁT TRIỂN KHOA HỌC, CÔNG NGHỆ, ĐỔI MỚI SÁNG TẠO VÀ CHUYỂN ĐỔI SỐ', 10);
-  insertAxis.run('ax-4', 'TRUC_4', 'TRỤC 4 - XÂY DỰNG ĐẢNG VÀ HỆ THỐNG CHÍNH TRỊ TRONG SẠCH, VỮNG MẠNH; GIỮ GÌN ĐOÀN KẾT, THỐNG NHẤT NỘI BỘ; PHÒNG, CHỐNG THAM NHŨNG, LÃNG PHÍ, TIÊU CỰC', 20);
-  insertAxis.run('ax-5', 'TRUC_5', 'TRỤC 5 - PHÁT TRIỂN VĂN HÓA, CON NGƯỜI, BẢO ĐẢM AN SINH XÃ HỘI, NÂNG CAO ĐỜI SỐNG NHÂN DÂN', 10);
-  insertAxis.run('ax-6', 'TRUC_6', 'TRỤC 6 - CỦNG CỐ QUỐC PHÒNG, AN NINH, GIỮ VỮNG ỔN ĐỊNH CHÍNH TRỊ - XÃ HỘI, NÂNG CAO HIỆU QUẢ ĐỐI NGOẠI VÀ HỘI NHẬP QUỐC TẾ', 5);
-
-  // 5. 17 Tiêu chí chung (Quy định 366-QĐ/TW) - Tổng 30 điểm
-  const insertCriteria = db.prepare(`
-    INSERT INTO common_criteria (id, group_no, group_name, code, title, max_score)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
-
-  const g1 = 'Về phẩm chất chính trị, đạo đức, lối sống, thực hiện trách nhiệm nêu gương';
-  const c1Items = [
-    'Tuyệt đối trung thành với Đảng, Tổ quốc và Nhân dân; kiên định chủ nghĩa Mác - Lênin, tư tưởng Hồ Chí Minh, mục tiêu độc lập dân tộc và CNXH. Bảo vệ nền tảng tư tưởng của Đảng.',
-    'Có tinh thần yêu nước sâu sắc, tận tuỵ phục vụ Nhân dân, sâu sát cơ sở, luôn hành động vì lợi ích của Nhân dân.',
-    'Chấp hành nghiêm chủ trương, đường lối, nghị quyết, chỉ thị, quy định của Đảng, pháp luật Nhà nước và quy chế cơ quan.',
-    'Có tinh thần tự giác, trách nhiệm cao trong nghiên cứu, học tập chủ nghĩa Mác - Lênin, tư tưởng Hồ Chí Minh và bồi dưỡng chuyên môn.',
-    'Có phẩm chất đạo đức, lối sống trong sáng, cần kiệm liêm chính, chí công vô tư; chấp hành chuẩn mực đạo đức cách mạng.',
-    'Không tham vọng quyền lực, không chạy chức chạy quyền, không tham nhũng lãng phí tiêu cực, lợi ích nhóm.',
-    'Có uy tín cao, tiêu biểu về phẩm chất đạo đức và phong cách công tác; là trung tâm đoàn kết nội bộ.',
-    'Có tinh thần chủ động, đổi mới sáng tạo; phấn đấu vì mục tiêu phát triển chung của cơ quan, đơn vị.',
-    'Thực hiện việc kê khai và công khai tài sản, thu nhập theo quy định. Báo cáo trung thực, đầy đủ thông tin.'
-  ];
-  c1Items.forEach((text, i) => {
-    insertCriteria.run(`crit-1-${i + 1}`, 1, g1, `1.${i + 1}`, text, 2);
-  });
-
-  const g2 = 'Tư duy đổi mới, chiến lược, khát vọng cống hiến, dám nghĩ, dám làm';
-  const c2Items = [
-    'Có tư duy đổi mới, tầm nhìn chiến lược, khả năng lãnh đạo thích ứng với sự phát triển và xu thế mới.',
-    'Luôn bám sát thực tiễn, có nhiều cách làm hay, sáng tạo, đạt hiệu quả cao trong tổ chức thực hiện nhiệm vụ.',
-    'Nói đi đôi với làm, dám nghĩ, dám làm, dám chịu trách nhiệm, dám đột phá vì lợi ích chung.',
-    'Có khát vọng phấn đấu, cống hiến; có khả năng quy tụ và phát huy sức mạnh tập thể.'
-  ];
-  c2Items.forEach((text, i) => {
-    insertCriteria.run(`crit-2-${i + 1}`, 2, g2, `2.${i + 1}`, text, 1);
-  });
-
-  const g3 = 'Về tự phê bình và phê bình, tự soi, tự sửa, khắc phục hạn chế, khuyết điểm';
-  const c3Items = [
-    'Chủ động, nghiêm túc thực hiện tự phê bình và phê bình, có tinh thần cầu thị và tiếp thu phản biện, góp ý.',
-    'Có kế hoạch rõ ràng và quyết liệt trong khắc phục hạn chế, khuyết điểm đã được chỉ ra.',
-    'Kết quả khắc phục hoàn thành từ ≥ 80% nội dung, có tiến bộ rõ, được tổ chức đánh giá tốt; không để tái diễn tồn tại.',
-    'Tự soi, tự sửa trên tinh thần trách nhiệm chính trị cao, không né tránh, không đổ lỗi.'
-  ];
-  c3Items.forEach((text, i) => {
-    insertCriteria.run(`crit-3-${i + 1}`, 3, g3, `3.${i + 1}`, text, 2);
-  });
-
-  // 6. System Configs
-  const insertConfig = db.prepare('INSERT OR IGNORE INTO system_configs (key, value, description) VALUES (?, ?, ?)');
-  insertConfig.run('progress_weight', '0.30', 'Tỷ trọng đánh giá tiến độ (30%)');
-  insertConfig.run('quality_weight', '0.70', 'Tỷ trọng đánh giá chất lượng (70%)');
-  insertConfig.run('part2_max_score', '70', 'Điểm tối đa Phần B - Kết quả công việc (70 điểm)');
-  insertConfig.run('part1_max_score', '30', 'Điểm tối đa Phần A - Nhóm tiêu chí chung (30 điểm)');
-  insertConfig.run('bonus_max_score', '7', 'Điểm thưởng tối đa (tối đa 10% Phần B = 7 điểm)');
-  insertConfig.run('bonus_rate_per_task', '0.05', 'Tỷ lệ điểm thưởng cho công việc nổi trội (5% điểm KPI việc đó)');
-  insertConfig.run('excellent_score_threshold', '90', 'Ngưỡng điểm tối thiểu xếp loại Hoàn thành xuất sắc');
-  insertConfig.run('excellent_ahead_pct', '30', 'Tỷ lệ tối thiểu công việc vượt tiến độ/chất lượng để xếp loại Xuất sắc (30%)');
-  insertConfig.run('excellent_cadre_quota', '20', 'Tỷ lệ tối đa cán bộ xếp loại Xuất sắc trong toàn cơ quan (20%)');
-  insertConfig.run('good_score_threshold', '70', 'Ngưỡng điểm tối thiểu xếp loại Hoàn thành tốt');
-  insertConfig.run('pass_score_threshold', '50', 'Ngưỡng điểm tối thiểu xếp loại Hoàn thành');
-  insertConfig.run('PARENT_AGENCY_NAME', 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH', 'Tên cơ quan cấp trên / Cơ quan chủ quản');
-  insertConfig.run('UNIT_NAME', 'BAN TỔ CHỨC THÀNH ỦY TP. HỒ CHÍ MINH', 'Tên cơ quan, đơn vị');
-  insertConfig.run('LOCATION_NAME', 'TP. Hồ Chí Minh', 'Tên địa phương lập báo cáo');
-  insertConfig.run('LEADER_SIGNER_NAME', 'Thái Thị Bích Liên', 'Họ tên Lãnh đạo/Thủ trưởng cơ quan ký');
-  insertConfig.run('LEADER_SIGNER_TITLE', 'PHÓ TRƯỞNG BAN THƯỜNG TRỰC', 'Chức danh Lãnh đạo cơ quan ký');
-  insertConfig.run('DEPT_LEADER_TITLE', 'TRƯỞNG PHÒNG', 'Chức danh người quản lý đơn vị / CBQL');
-
-  // Ensure Admin user exists
-  const adminExists = db.prepare('SELECT id FROM users WHERE username = ?').get('admin');
-  if (!adminExists) {
-    db.prepare(`
-      INSERT INTO users (id, username, password, full_name, role, role_id, party_title, gov_title, dept_id, birth_date, gender, phone, email, is_active)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-    `).run('usr-admin', 'admin', 'Hoangyen@123456', 'Quản trị viên Hệ thống', 'admin', 'role-admin', 'Cấp ủy viên', 'Quản trị viên', 'dept-1', '1980-01-01', 'Nam', '0909999888', 'admin@hoangyen.edu.vn');
+    // 3. 6 Trục kết quả trọng tâm
+    const insertAxis = db.prepare('INSERT OR IGNORE INTO axes (id, code, name, max_score) VALUES (?, ?, ?, ?)');
+    insertAxis.run('ax-1', 'TRUC_1', 'TRỤC 1 - THỰC HIỆN MỤC TIÊU PHÁT TRIỂN KINH TẾ - XÃ HỘI VÀ NHIỆM VỤ CHÍNH TRỊ ĐƯỢC GIAO', 10);
+    insertAxis.run('ax-2', 'TRUC_2', 'TRỤC 2 - HOÀN THIỆN THỂ CHẾ, ĐẨY MẠNH PHÂN CẤP, PHÂN QUYỀN GẮN VỚI KIỂM TRA, GIÁM SÁT', 15);
+    insertAxis.run('ax-3', 'TRUC_3', 'TRỤC 3 - THÚC ĐẨY PHÁT TRIỂN KHOA HỌC, CÔNG NGHỆ, ĐỔI MỚI SÁNG TẠO VÀ CHUYỂN ĐỔI SỐ', 10);
+    insertAxis.run('ax-4', 'TRUC_4', 'TRỤC 4 - XÂY DỰNG ĐẢNG VÀ HỆ THỐNG CHÍNH TRỊ TRONG SẠCH, VỮNG MẠNH; GIỮ GÌN ĐOÀN KẾT, THỐNG NHẤT NỘI BỘ; PHÒNG, CHỐNG THAM NHŨNG, LÃNG PHÍ, TIÊU CỰC', 20);
+    insertAxis.run('ax-5', 'TRUC_5', 'TRỤC 5 - PHÁT TRIỂN VĂN HÓA, CON NGƯỜI, BẢO ĐẢM AN SINH XÃ HỘI, NÂNG CAO ĐỜI SỐNG NHÂN DÂN', 10);
+    insertAxis.run('ax-6', 'TRUC_6', 'TRỤC 6 - CỦNG CỐ QUỐC PHÒNG, AN NINH, GIỮ VỮNG ỔN ĐỊNH CHÍNH TRỊ - XÃ HỘI, NÂNG CAO HIỆU QUẢ ĐỐI NGOẠI VÀ HỘI NHẬP QUỐC TẾ', 5);
   }
 
-  // Update CBQL Group 2 target_role
-  db.prepare("UPDATE common_criteria SET target_role = 'cbql' WHERE group_no = 2 AND id LIKE 'crit-2-%'").run();
+  // Khởi tạo các thành phần cốt lõi an toàn
+  ensureDefaultRoles();
+  ensureAllCommonCriteria();
+  ensureSystemConfigs();
+  ensureAdminUser();
 
-  // Group 2 for CBNV (Mẫu 01-B: 3 criteria, total 4 pts)
-  const insertCriteriaRole = db.prepare(`
-    INSERT OR IGNORE INTO common_criteria (id, group_no, group_name, code, title, max_score, target_role)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  insertCriteriaRole.run(
-    'crit-cbnv-2-1',
-    2,
-    g2,
-    '2.1',
-    'Có tư duy đổi mới, thích ứng với sự phát triển của thời đại và xu thế toàn cầu hoá; phương pháp làm việc khoa học, nhạy bén chính trị',
-    2,
-    'cbnv'
-  );
-  insertCriteriaRole.run(
-    'crit-cbnv-2-2',
-    2,
-    g2,
-    '2.2',
-    'Luôn bám sát thực tiễn, có nhiều cách làm hay, sáng tạo, đạt hiệu quả cao thực hiện nhiệm vụ',
-    1,
-    'cbnv'
-  );
-  insertCriteriaRole.run(
-    'crit-cbnv-2-3',
-    2,
-    g2,
-    '2.3',
-    'Nói đi đôi với làm, dám nghĩ, dám làm, dám chịu trách nhiệm, dám đột phá vì lợi ích chung. Có khả năng phân tích, dự báo tình hình, phát hiện những khó khăn, bất cập, thời cơ, thuận lợi trong thực tiễn; kịp thời đề xuất hoặc quyết định những giải pháp phù hợp, kịp thời, hiệu quả',
-    1,
-    'cbnv'
-  );
-
-  console.log('Database initialized and seeded successfully.');
+  console.log('Database initialized and verified successfully.');
 }
 
 /**
