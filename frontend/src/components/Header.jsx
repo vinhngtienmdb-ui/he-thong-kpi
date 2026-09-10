@@ -1176,12 +1176,30 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 3.2 */}
+              {/* Version 3.3 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.2</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.3</span>
                   <span className="text-xs text-slate-500 font-medium">10/09/2026 (Bản phát hành hiện tại)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Đồng Bộ Giao Diện & Trải Nghiệm Nhập Danh Mục Công Việc Chuẩn Tương Đồng Với Phân Hệ Nhập Cán Bộ
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Chuẩn hóa giao diện Modal Nhập File Excel (.xlsx):</strong> Tái thiết kế toàn diện modal nạp Danh mục công việc chuẩn đồng nhất 100% với modal Nhập danh sách CBNV (khung modal bo góc lớn, icon huy hiệu FileSpreadsheet, khung kéo thả file dropzone trực quan, hiển thị tên tệp và dung lượng KB).</li>
+                  <li><strong>Tùy chọn kiểm soát trùng lặp dữ liệu (update_existing):</strong> Bổ sung ô tích chọn linh hoạt: <em>Cập nhật thông tin công việc nếu tên công việc đã tồn tại trong danh mục</em>; cho phép Quản trị viên và CBQL chủ động ghi đè hoặc giữ nguyên dữ liệu gốc khi nạp file.</li>
+                  <li><strong>Bảng thống kê kết quả nhập liệu trực quan (Result Summary Box):</strong> Hiển thị báo cáo kết quả nạp file với 3 ô chỉ số rõ ràng (Thêm mới, Cập nhật, Bỏ qua) cùng danh sách cảnh báo chi tiết theo từng dòng nếu file Excel có sai sót.</li>
+                  <li><strong>Hỗ trợ Nạp nhanh bản Demo & Tải biểu mẫu chuẩn:</strong> Tích hợp nút <em>⚡ Nạp bản demo</em> giúp thử nghiệm nhanh dữ liệu mẫu; liên kết tải trực tiếp biểu mẫu chuẩn 5 sheet đầy đủ công thức tự tính điểm và 6 trục trọng tâm.</li>
+                </ul>
+              </div>
+
+              {/* Version 3.2 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-400 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-bold">Phiên bản 3.2</span>
+                  <span className="text-xs text-slate-500 font-medium">10/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Tách biệt CSDL & Bảo vệ Dữ liệu Tuyệt đối khi Cập nhật Code, Tối ưu Triển khai Render & Supabase Cloud
