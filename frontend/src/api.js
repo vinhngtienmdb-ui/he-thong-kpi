@@ -106,26 +106,41 @@ export const api = {
     return fetchApi(`/standard-tasks?${query}`);
   },
   getStandardTasksTemplateUrl: () => `${BASE_URL}/standard-tasks/template`,
-  importStandardTasks: (formData) => {
+  importStandardTasks: async (formData) => {
     const headers = { ...getAuthHeaders() };
     const viewerId = getViewerId();
     const queryParam = viewerId ? `?viewer_id=${encodeURIComponent(viewerId)}` : '';
-    return fetch(`${BASE_URL}/standard-tasks/import${queryParam}`, {
-      method: 'POST',
-      headers,
-      body: formData,
-    }).then(async res => {
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.message || `Lỗi nhập danh mục công việc từ Excel (${res.status})`);
+    const url = `${BASE_URL}/standard-tasks/import${queryParam}`;
+
+    let lastError = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: formData,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.message || `Lỗi nhập danh mục công việc từ Excel (${res.status})`);
+        }
+        return data;
+      } catch (err) {
+        lastError = err;
+        const isNetworkErr = err.message === 'Failed to fetch' || err.name === 'TypeError';
+        if (attempt < 2 && isNetworkErr) {
+          // Chờ 2.5 giây rồi tự động thử lại lần 2 (đề phòng Render vừa khởi động hoặc đang wake-up)
+          await new Promise(r => setTimeout(r, 2500));
+          continue;
+        }
+        break;
       }
-      return data;
-    }).catch(err => {
-      if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
-        throw new Error('Không thể kết nối tới máy chủ (Failed to fetch). Nếu bạn vừa cập nhật mã nguồn trên Render, máy chủ đang trong quá trình build và khởi động lại; vui lòng đợi khoảng 30-60 giây rồi thử lại.');
-      }
-      throw err;
-    });
+    }
+
+    if (lastError && (lastError.message === 'Failed to fetch' || lastError.name === 'TypeError')) {
+      throw new Error('Không thể kết nối tới máy chủ (Failed to fetch). Máy chủ Render đang trong quá trình build hoặc khởi động lại; vui lòng đợi khoảng 30-60 giây rồi bấm "Thử lại ngay".');
+    }
+    throw lastError;
   },
   createStandardTask: (data) => {
     return fetchApi('/standard-tasks', {
@@ -334,26 +349,40 @@ export const api = {
     const viewerId = getViewerId();
     return `${BASE_URL}/admin/users/template${viewerId ? `?viewer_id=${encodeURIComponent(viewerId)}` : ''}`;
   },
-  importAdminUsers: (formData) => {
+  importAdminUsers: async (formData) => {
     const headers = { ...getAuthHeaders() };
     const viewerId = getViewerId();
     const queryParam = viewerId ? `?viewer_id=${encodeURIComponent(viewerId)}` : '';
-    return fetch(`${BASE_URL}/admin/users/import${queryParam}`, {
-      method: 'POST',
-      headers,
-      body: formData,
-    }).then(async (res) => {
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.message || `Lỗi nhập dữ liệu từ Excel (${res.status})`);
+    const url = `${BASE_URL}/admin/users/import${queryParam}`;
+
+    let lastError = null;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: formData,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.message || `Lỗi nhập dữ liệu từ Excel (${res.status})`);
+        }
+        return data;
+      } catch (err) {
+        lastError = err;
+        const isNetworkErr = err.message === 'Failed to fetch' || err.name === 'TypeError';
+        if (attempt < 2 && isNetworkErr) {
+          await new Promise(r => setTimeout(r, 2500));
+          continue;
+        }
+        break;
       }
-      return data;
-    }).catch(err => {
-      if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
-        throw new Error('Không thể kết nối tới máy chủ (Failed to fetch). Nếu bạn vừa cập nhật mã nguồn trên Render, máy chủ đang trong quá trình build và khởi động lại; vui lòng đợi khoảng 30-60 giây rồi thử lại.');
-      }
-      throw err;
-    });
+    }
+
+    if (lastError && (lastError.message === 'Failed to fetch' || lastError.name === 'TypeError')) {
+      throw new Error('Không thể kết nối tới máy chủ (Failed to fetch). Máy chủ Render đang trong quá trình build hoặc khởi động lại; vui lòng đợi khoảng 30-60 giây rồi bấm "Thử lại ngay".');
+    }
+    throw lastError;
   },
   createAdminUser: (data) => {
     return fetchApi('/admin/users', {

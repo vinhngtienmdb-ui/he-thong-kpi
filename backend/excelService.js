@@ -283,13 +283,6 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null, o
     throw new Error('Không tìm thấy sheet dữ liệu danh mục công việc chuẩn trong file Excel');
   }
 
-  // 2. Resolve default period
-  let periodId = targetPeriodId;
-  if (!periodId || periodId === 'undefined' || periodId === 'null' || periodId === 'all') {
-    const defaultPeriod = db.prepare('SELECT id FROM periods WHERE is_active = 1 ORDER BY id DESC LIMIT 1').get();
-    periodId = defaultPeriod ? defaultPeriod.id : 'p-1';
-  }
-
   // Pre-load periods and departments for row-level resolution
   const allPeriods = db.prepare('SELECT id, code, name FROM periods').all();
   const periodLookup = new Map();
@@ -298,6 +291,19 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null, o
     if (p.code) periodLookup.set(p.code.toLowerCase().trim(), p.id);
     if (p.name) periodLookup.set(normalizeStr(p.name), p.id);
   });
+
+  // 2. Resolve default period with DB existence validation
+  let periodId = targetPeriodId;
+  const targetExists = (periodId && typeof periodId === 'string' && periodId !== 'undefined' && periodId !== 'null' && periodId !== 'all')
+    ? periodLookup.get(periodId.toLowerCase())
+    : null;
+
+  if (targetExists) {
+    periodId = targetExists;
+  } else {
+    const defaultPeriod = db.prepare('SELECT id FROM periods WHERE is_active = 1 ORDER BY id DESC LIMIT 1').get();
+    periodId = defaultPeriod ? defaultPeriod.id : (allPeriods[0]?.id || 'p-1');
+  }
 
   const allDepts = db.prepare('SELECT id, code, name FROM departments').all();
   const deptLookup = new Map();
@@ -367,6 +373,9 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null, o
         const matchedP = periodLookup.get(periodCellText.toLowerCase().trim()) || periodLookup.get(normalizeStr(periodCellText));
         if (matchedP) rowPeriodId = matchedP;
       }
+    }
+    if (!rowPeriodId || !allPeriods.some(p => p.id === rowPeriodId)) {
+      rowPeriodId = periodId;
     }
 
     // Resolve dept_code

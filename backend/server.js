@@ -49,8 +49,15 @@ app.use(express.json());
 app.use('/uploads', express.static(localUploadDir));
 
 // Serve frontend production build if available
-const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
-if (fs.existsSync(frontendDist)) {
+const frontendDistCandidates = [
+  path.join(__dirname, '..', 'frontend', 'dist'),
+  path.join(__dirname, 'dist'),
+  path.join(process.cwd(), 'frontend', 'dist'),
+  path.join(process.cwd(), 'dist')
+];
+const frontendDist = frontendDistCandidates.find(p => fs.existsSync(p));
+if (frontendDist) {
+  console.log(`[Frontend] Serving static frontend build from: ${frontendDist}`);
   app.use(express.static(frontendDist));
 }
 
@@ -956,7 +963,13 @@ app.post('/api/standard-tasks/import', upload.single('file'), requireManagerOrAd
       fileSource = req.file.buffer || req.file.path;
     } else {
       // Use existing demo file if no file uploaded
-      fileSource = path.join(__dirname, '..', 'mau-import-new-san-pham-cong-viec-chuan.xlsx');
+      const candidates = [
+        path.join(__dirname, 'mau-import-new-san-pham-cong-viec-chuan.xlsx'),
+        path.join(__dirname, '..', 'mau-import-new-san-pham-cong-viec-chuan.xlsx'),
+        path.join(process.cwd(), 'mau-import-new-san-pham-cong-viec-chuan.xlsx'),
+        path.join(process.cwd(), 'backend', 'mau-import-new-san-pham-cong-viec-chuan.xlsx')
+      ];
+      fileSource = candidates.find(p => fs.existsSync(p)) || candidates[0];
     }
 
     const { period_id } = req.body || {};
@@ -3661,7 +3674,7 @@ app.use((err, req, res, next) => {
 });
 
 // SPA fallback for non-API routes when frontend dist is built
-if (fs.existsSync(frontendDist)) {
+if (frontendDist && fs.existsSync(frontendDist)) {
   app.use((req, res, next) => {
     if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
       return res.sendFile(path.join(frontendDist, 'index.html'));
@@ -3670,6 +3683,6 @@ if (fs.existsSync(frontendDist)) {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`Backend server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Backend server running on http://0.0.0.0:${PORT}`);
 });

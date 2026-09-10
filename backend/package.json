@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "build": "echo 'Backend ready'",
     "db:status": "node status_supabase.js",
     "db:push-supabase": "node push_to_supabase.js",
     "db:pull-supabase": "node pull_from_supabase.js",

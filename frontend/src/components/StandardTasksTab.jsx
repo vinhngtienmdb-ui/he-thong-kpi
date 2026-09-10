@@ -1075,9 +1075,22 @@ export default function StandardTasksTab({
               </div>
 
               {importError && (
-                <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <div>{importError}</div>
+                <div className="p-3.5 bg-red-50 border border-red-300 text-red-800 text-xs rounded-xl flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                    <div className="leading-relaxed">{importError}</div>
+                  </div>
+                  {importFile && (
+                    <button
+                      type="button"
+                      disabled={importing}
+                      onClick={(e) => handleImportSubmit(e, false)}
+                      className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg font-bold text-xs shrink-0 shadow-xs transition cursor-pointer disabled:opacity-50 inline-flex items-center gap-1.5"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${importing ? 'animate-spin' : ''}`} />
+                      <span>{importing ? 'Đang thử lại...' : 'Thử lại ngay'}</span>
+                    </button>
+                  )}
                 </div>
               )}
 

@@ -1176,12 +1176,30 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 3.3 */}
+              {/* Version 3.4 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.3</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.4</span>
                   <span className="text-xs text-slate-500 font-medium">10/09/2026 (Bản phát hành hiện tại)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Tối Ưu Triển Khai Render Cloud, Khắc Phục Triệt Để Lỗi Kết Nối Máy Chủ & Bảo Vệ Khóa Ngoại Kỳ Đánh Giá
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Tối ưu hóa triển khai Render Cloud tự động:</strong> Bổ sung tệp cấu hình <code>render.yaml</code> chuẩn Blueprint, tự động cấu hình chu trình <code>npm run build</code>, <code>postinstall</code> cài đặt dependencies đa tầng, thiết lập máy chủ bind lắng nghe <code>0.0.0.0</code> đáp ứng mọi kiến trúc container đám mây.</li>
+                  <li><strong>Cơ chế tự động thử lại kết nối (Auto-retry & Retry Button):</strong> Tự động gửi lại yêu cầu sau 2.5 giây khi phát hiện máy chủ Render đang khởi động lại hoặc sau trạng thái ngủ (cold-start); bổ sung nút <em>"Thử lại ngay"</em> trực tiếp trong hộp cảnh báo lỗi để người dùng thao tác tức thì.</li>
+                  <li><strong>Kiểm soát an toàn ràng buộc Khóa Ngoại (Foreign Key) Kỳ Đánh Giá:</strong> Cơ chế tự kiểm tra và fallback thông minh gán kỳ đánh giá hiện hành nếu file Excel hoặc tham số gửi lên không khớp với CSDL, loại bỏ hoàn toàn lỗi <code>FOREIGN KEY constraint failed</code>.</li>
+                  <li><strong>Khả năng dự phòng tệp mẫu demo đa tầng:</strong> Hỗ trợ tìm kiếm tệp dữ liệu mẫu chuẩn ở mọi cấp thư mục (gốc, backend, current working directory), bảo đảm tính năng nạp nhanh luôn hoạt động trơn tru.</li>
+                </ul>
+              </div>
+
+              {/* Version 3.3 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-400 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-bold">Phiên bản 3.3</span>
+                  <span className="text-xs text-slate-500 font-medium">10/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Đồng Bộ Giao Diện & Trải Nghiệm Nhập Danh Mục Công Việc Chuẩn Tương Đồng Với Phân Hệ Nhập Cán Bộ
