@@ -188,13 +188,19 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
   const handleRoleChange = (selRoleId) => {
     const selRole = roles.find(r => r.id === selRoleId);
     let newRole = 'cbnv';
-    let newTgtRole = 'cbnv';
+    let newTgtRole = formData.target_role || 'cbnv';
     if (selRole?.code === 'admin' || selRole?.code === 'admin_donvi') {
       newRole = 'admin';
       newTgtRole = 'admin';
-    } else if (selRole?.code === 'cbql_phong' || selRole?.code === 'ld_coquan') {
+    } else if (selRole?.code === 'cbql_phong' || selRole?.code === 'ld_coquan' || selRole?.code === 'hieu_pho' || selRole?.data_scope === 'dept_tree' || selRole?.data_scope === 'all') {
       newRole = 'cbql';
-      newTgtRole = 'cbql';
+      newTgtRole = (formData.target_role && formData.target_role !== 'admin') ? formData.target_role : 'cbql';
+    } else if (selRole?.code === 'to_truong' || selRole?.data_scope === 'subordinates') {
+      newRole = 'cbql';
+      newTgtRole = (formData.target_role && formData.target_role !== 'admin') ? formData.target_role : 'cbnv';
+    } else {
+      newRole = 'cbnv';
+      newTgtRole = (formData.target_role && formData.target_role !== 'admin') ? formData.target_role : 'cbnv';
     }
     setFormData(prev => ({
       ...prev,

@@ -29,6 +29,9 @@ const {
   pullFromSupabase, 
   isSupabaseConfigured,
   triggerBackgroundSupabaseSync,
+  syncDirectUserToSupabase,
+  syncDirectRoleToSupabase,
+  syncWithSupabaseOnStartup,
   autoRestoreFromSupabaseIfFresh,
   deleteStandardTasksFromSupabase
 } = require('./supabaseSync');
@@ -36,9 +39,9 @@ const {
 // Initialize database
 initDatabase();
 
-// Tự động khôi phục dữ liệu từ Supabase Cloud nếu phát hiện container Render mới (fresh container)
-autoRestoreFromSupabaseIfFresh().catch(err => {
-  console.error('[Supabase Auto-Restore] Khởi chạy auto-restore thất bại:', err.message);
+// Tự động đồng bộ hai chiều khi khởi động: nếu Supabase có dữ liệu thì kéo về, nếu trống thì đẩy lên
+syncWithSupabaseOnStartup().catch(err => {
+  console.error('[Supabase Startup Sync] Khởi chạy đồng bộ Supabase thất bại:', err.message);
 });
 
 const app = express();
@@ -55,6 +58,22 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// Continuous Live Sync Middleware:
+// Tự động kích hoạt đồng bộ nền lên Supabase Cloud cho MỌI thao tác thay đổi dữ liệu thành công (POST, PUT, PATCH, DELETE)
+app.use((req, res, next) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && req.path.startsWith('/api/')) {
+    if (!req.path.startsWith('/api/supabase/') && !req.path.startsWith('/api/backup/')) {
+      res.on('finish', () => {
+        if (res.statusCode >= 200 && res.statusCode < 400) {
+          triggerBackgroundSupabaseSync(300);
+        }
+      });
+    }
+  }
+  next();
+});
+
 app.use('/uploads', express.static(localUploadDir));
 
 // Serve frontend production build if available
@@ -580,7 +599,7 @@ app.get('/api/roles', (req, res) => {
   res.json(formatted);
 });
 
-app.post('/api/roles', requireAdmin, (req, res) => {
+app.post('/api/roles', requireAdmin, async (req, res) => {
   const { code, name, description, data_scope, permissions } = req.body;
   if (!code || !name) return res.status(400).json({ success: false, message: 'Thiếu mã hoặc tên vai trò' });
 
@@ -594,10 +613,13 @@ app.post('/api/roles', requireAdmin, (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, 0)
   `).run(id, code, name, description || '', data_scope || 'personal', permStr);
 
+  const createdRole = db.prepare('SELECT * FROM roles WHERE id = ?').get(id);
+  await syncDirectRoleToSupabase(createdRole);
+
   res.json({ success: true, id, message: 'Đã tạo vai trò mới thành công' });
 });
 
-app.put('/api/roles/:id', requireAdmin, (req, res) => {
+app.put('/api/roles/:id', requireAdmin, async (req, res) => {
   const { id } = req.params;
   const { code, name, description, data_scope, permissions } = req.body;
   const role = db.prepare('SELECT * FROM roles WHERE id = ?').get(id);
@@ -616,6 +638,9 @@ app.put('/api/roles/:id', requireAdmin, (req, res) => {
         permissions = ?
     WHERE id = ?
   `).run(code, name, description, data_scope, permStr, id);
+
+  const updatedRole = db.prepare('SELECT * FROM roles WHERE id = ?').get(id);
+  await syncDirectRoleToSupabase(updatedRole);
 
   res.json({ success: true, message: 'Đã cập nhật vai trò thành công' });
 });
@@ -888,7 +913,7 @@ app.get('/api/directory/export', async (req, res) => {
 });
 
 // Admin / Unit Admin: Add new user
-app.post('/api/admin/users', requireCanManageUsers, (req, res) => {
+app.post('/api/admin/users', requireCanManageUsers, async (req, res) => {
   const { 
     username, password, full_name, role, target_role, role_id, manager_id,
     management_role, final_evaluator_id,
@@ -905,7 +930,6 @@ app.post('/api/admin/users', requireCanManageUsers, (req, res) => {
 
   const viewer = req.viewer || getViewer(req);
   const isSysAdmin = checkIsAdmin(viewer);
-  const accessibleUserIds = getAccessibleUserIds(viewer?.id);
 
   // Phân quyền tạo cán bộ: Quản trị đơn vị chỉ được tạo cán bộ trong đơn vị mình quản lý
   if (!isSysAdmin && viewer?.dept_id && dept_id) {
@@ -932,12 +956,15 @@ app.post('/api/admin/users', requireCanManageUsers, (req, res) => {
         }
         effectiveRole = 'admin';
         effectiveTargetRole = 'admin'; // Miễn đánh giá KPI
-      } else if (r.code === 'cbql_phong' || r.code === 'ld_coquan') {
+      } else if (r.code === 'cbql_phong' || r.code === 'ld_coquan' || r.code === 'hieu_pho' || r.data_scope === 'dept_tree' || r.data_scope === 'all') {
         effectiveRole = 'cbql';
-        effectiveTargetRole = 'cbql';
+        effectiveTargetRole = target_role || 'cbql';
+      } else if (r.code === 'to_truong' || r.data_scope === 'subordinates') {
+        effectiveRole = 'cbql';
+        effectiveTargetRole = target_role || 'cbnv';
       } else {
         effectiveRole = 'cbnv';
-        effectiveTargetRole = 'cbnv';
+        effectiveTargetRole = target_role || 'cbnv';
       }
     }
   } else {
@@ -974,12 +1001,15 @@ app.post('/api/admin/users', requireCanManageUsers, (req, res) => {
     birth_date || '1985-01-01', gender || 'Nam', phone || '', email || ''
   );
 
+  const newUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  await syncDirectUserToSupabase(newUser);
+
   res.json({ success: true, id, message: 'Đã thêm cán bộ nhân viên thành công' });
-  triggerBackgroundSupabaseSync();
+  triggerBackgroundSupabaseSync(300);
 });
 
 // Admin / Unit Admin: Update user
-app.put('/api/admin/users/:id', requireCanManageUsers, (req, res) => {
+app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
   const { id } = req.params;
   const { 
     full_name, role, target_role, role_id, manager_id,
@@ -1003,8 +1033,8 @@ app.put('/api/admin/users/:id', requireCanManageUsers, (req, res) => {
   let effectiveTargetRole = target_role !== undefined ? target_role : user.target_role;
   let effectiveRoleId = role_id !== undefined ? role_id : user.role_id;
 
-  if (role_id && role_id !== user.role_id) {
-    const r = db.prepare('SELECT * FROM roles WHERE id = ?').get(role_id);
+  if (effectiveRoleId) {
+    const r = db.prepare('SELECT * FROM roles WHERE id = ?').get(effectiveRoleId);
     if (r) {
       if (r.code === 'admin' || r.code === 'admin_donvi') {
         if (!isSysAdmin && r.code === 'admin') {
@@ -1012,15 +1042,18 @@ app.put('/api/admin/users/:id', requireCanManageUsers, (req, res) => {
         }
         effectiveRole = 'admin';
         effectiveTargetRole = 'admin';
-      } else if (r.code === 'cbql_phong' || r.code === 'ld_coquan') {
+      } else if (r.code === 'cbql_phong' || r.code === 'ld_coquan' || r.code === 'hieu_pho' || r.data_scope === 'dept_tree' || r.data_scope === 'all') {
         effectiveRole = 'cbql';
-        effectiveTargetRole = 'cbql';
+        effectiveTargetRole = target_role !== undefined ? target_role : (user.target_role || 'cbql');
+      } else if (r.code === 'to_truong' || r.data_scope === 'subordinates') {
+        effectiveRole = 'cbql';
+        effectiveTargetRole = target_role !== undefined ? target_role : (user.target_role || 'cbnv');
       } else {
         effectiveRole = 'cbnv';
-        effectiveTargetRole = 'cbnv';
+        effectiveTargetRole = target_role !== undefined ? target_role : (user.target_role || 'cbnv');
       }
     }
-  } else if (user.role_id === 'role-admin-donvi' || role === 'admin_donvi') {
+  } else if (effectiveRole === 'admin' || effectiveRole === 'admin_donvi') {
     effectiveRole = 'admin';
     effectiveTargetRole = 'admin';
   }
@@ -1052,12 +1085,16 @@ app.put('/api/admin/users/:id', requireCanManageUsers, (req, res) => {
   params.push(id);
 
   db.prepare(updateQuery).run(...params);
+
+  const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  await syncDirectUserToSupabase(updatedUser);
+
   res.json({ success: true, message: 'Đã cập nhật thông tin cán bộ thành công' });
-  triggerBackgroundSupabaseSync();
+  triggerBackgroundSupabaseSync(300);
 });
 
 // Admin / Unit Admin: Delete or deactivate user
-app.delete('/api/admin/users/:id', requireCanManageUsers, (req, res) => {
+app.delete('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
   const { id } = req.params;
   const viewer = req.viewer || getViewer(req);
   const isSysAdmin = checkIsAdmin(viewer);
@@ -1068,12 +1105,15 @@ app.delete('/api/admin/users/:id', requireCanManageUsers, (req, res) => {
   }
 
   db.prepare('UPDATE users SET is_active = 0 WHERE id = ?').run(id);
+  const deactivatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (deactivatedUser) await syncDirectUserToSupabase(deactivatedUser);
+
   res.json({ success: true, message: 'Đã ngừng kích hoạt tài khoản cán bộ' });
-  triggerBackgroundSupabaseSync();
+  triggerBackgroundSupabaseSync(300);
 });
 
 // Admin / Unit Admin: Reset / Re-issue user password
-app.post('/api/admin/users/:id/reset-password', requireCanManageUsers, (req, res) => {
+app.post('/api/admin/users/:id/reset-password', requireCanManageUsers, async (req, res) => {
   const { id } = req.params;
   const { new_password } = req.body || {};
   const passwordToSet = new_password && new_password.trim() ? new_password.trim() : '123456';
@@ -1096,11 +1136,15 @@ app.post('/api/admin/users/:id/reset-password', requireCanManageUsers, (req, res
   }
 
   db.prepare('UPDATE users SET password = ? WHERE id = ?').run(passwordToSet, id);
+  const updatedUserWithPass = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (updatedUserWithPass) await syncDirectUserToSupabase(updatedUserWithPass);
+
   res.json({ 
     success: true, 
     message: `Đã cấp lại mật khẩu cho cán bộ "${user.full_name}" thành công!`, 
     new_password: passwordToSet 
   });
+  triggerBackgroundSupabaseSync(300);
 });
 
 // Admin / Unit Admin: Download Excel template for user import
