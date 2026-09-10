@@ -1145,6 +1145,13 @@ app.post('/api/standard-tasks/import', upload.single('file'), requireManagerOrAd
       }
     } catch (e) {}
 
+    // Dereference buffer/file immediately to free memory on 512MB RAM containers like Render
+    fileSource = null;
+    if (req.file) {
+      req.file.buffer = null;
+      req.file = null;
+    }
+
     if (result.importedCount === 0 && (result.skippedCount || 0) === 0) {
       return res.status(400).json({
         success: false,

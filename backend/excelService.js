@@ -351,112 +351,116 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null, o
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  sheet.eachRow((row, rowNumber) => {
-    // Skip header and title rows
-    if (rowNumber <= headerRowIndex) return;
+  const runImport = db.transaction(() => {
+    sheet.eachRow((row, rowNumber) => {
+      // Skip header and title rows
+      if (rowNumber <= headerRowIndex) return;
 
-    // Get task name
-    const taskNameCell = mapping.task_name ? row.getCell(mapping.task_name) : null;
-    const taskName = extractCellText(taskNameCell).trim();
-    if (!taskName) return;
+      // Get task name
+      const taskNameCell = mapping.task_name ? row.getCell(mapping.task_name) : null;
+      const taskName = extractCellText(taskNameCell).trim();
+      if (!taskName) return;
 
-    // Skip numeric sub-header rows (e.g. Row 3: 1, 2, 3...) or repeated headers
-    if (/^\d+$/.test(taskName)) return;
-    const taskNameNorm = normalizeStr(taskName);
-    if (taskNameNorm.includes('ten cong viec') || taskNameNorm.includes('ten nhiem vu') || taskNameNorm.includes('noi dung cong viec')) return;
+      // Skip numeric sub-header rows (e.g. Row 3: 1, 2, 3...) or repeated headers
+      if (/^\d+$/.test(taskName)) return;
+      const taskNameNorm = normalizeStr(taskName);
+      if (taskNameNorm.includes('ten cong viec') || taskNameNorm.includes('ten nhiem vu') || taskNameNorm.includes('noi dung cong viec')) return;
 
-    // Resolve row-level period if specified
-    let rowPeriodId = periodId;
-    if (mapping.period) {
-      const periodCellText = extractCellText(row.getCell(mapping.period));
-      if (periodCellText) {
-        const matchedP = periodLookup.get(periodCellText.toLowerCase().trim()) || periodLookup.get(normalizeStr(periodCellText));
-        if (matchedP) rowPeriodId = matchedP;
+      // Resolve row-level period if specified
+      let rowPeriodId = periodId;
+      if (mapping.period) {
+        const periodCellText = extractCellText(row.getCell(mapping.period));
+        if (periodCellText) {
+          const matchedP = periodLookup.get(periodCellText.toLowerCase().trim()) || periodLookup.get(normalizeStr(periodCellText));
+          if (matchedP) rowPeriodId = matchedP;
+        }
       }
-    }
-    if (!rowPeriodId || !allPeriods.some(p => p.id === rowPeriodId)) {
-      rowPeriodId = periodId;
-    }
-
-    // Resolve dept_code
-    let deptCode = '';
-    if (mapping.dept_code) {
-      const rawDept = extractCellText(row.getCell(mapping.dept_code)).trim();
-      if (rawDept) {
-        deptCode = deptLookup.get(rawDept.toLowerCase()) || deptLookup.get(normalizeStr(rawDept)) || rawDept;
+      if (!rowPeriodId || !allPeriods.some(p => p.id === rowPeriodId)) {
+        rowPeriodId = periodId;
       }
-    }
-    if (!deptCode && allDepts.length > 0) {
-      deptCode = allDepts[0].code || 'A29.123.22';
-    }
 
-    // Output result
-    const rawOutputResult = mapping.output_result ? extractCellText(row.getCell(mapping.output_result)).trim() : '';
-    const outputResult = normalizeOutputResult(rawOutputResult);
+      // Resolve dept_code
+      let deptCode = '';
+      if (mapping.dept_code) {
+        const rawDept = extractCellText(row.getCell(mapping.dept_code)).trim();
+        if (rawDept) {
+          deptCode = deptLookup.get(rawDept.toLowerCase()) || deptLookup.get(normalizeStr(rawDept)) || rawDept;
+        }
+      }
+      if (!deptCode && allDepts.length > 0) {
+        deptCode = allDepts[0].code || 'A29.123.22';
+      }
 
-    // Deadline
-    const deadlineVal = mapping.deadline ? extractCellValue(row.getCell(mapping.deadline)) : null;
-    const deadline = formatDate(deadlineVal) || '2026-09-30';
+      // Output result
+      const rawOutputResult = mapping.output_result ? extractCellText(row.getCell(mapping.output_result)).trim() : '';
+      const outputResult = normalizeOutputResult(rawOutputResult);
 
-    // Task type
-    const rawTaskType = mapping.task_type ? extractCellText(row.getCell(mapping.task_type)).trim() : '';
-    const taskType = normalizeTaskType(rawTaskType);
+      // Deadline
+      const deadlineVal = mapping.deadline ? extractCellValue(row.getCell(mapping.deadline)) : null;
+      const deadline = formatDate(deadlineVal) || '2026-09-30';
 
-    // Standard score
-    const stdCell = mapping.standard_score ? row.getCell(mapping.standard_score) : null;
-    let standardScore = parseExcelNumber(stdCell, taskType === 'Đột xuất' ? 12 : 10);
-    if (standardScore <= 0) standardScore = (taskType === 'Đột xuất' ? 12 : 10);
+      // Task type
+      const rawTaskType = mapping.task_type ? extractCellText(row.getCell(mapping.task_type)).trim() : '';
+      const taskType = normalizeTaskType(rawTaskType);
 
-    // Difficulty weight
-    const diffCell = mapping.difficulty_weight ? row.getCell(mapping.difficulty_weight) : null;
-    let difficultyWeight = parseExcelNumber(diffCell, 1.0);
-    if (difficultyWeight > 10 && difficultyWeight <= 200) {
-      difficultyWeight = difficultyWeight / 100;
-    }
-    if (difficultyWeight <= 0) difficultyWeight = 1.0;
+      // Standard score
+      const stdCell = mapping.standard_score ? row.getCell(mapping.standard_score) : null;
+      let standardScore = parseExcelNumber(stdCell, taskType === 'Đột xuất' ? 12 : 10);
+      if (standardScore <= 0) standardScore = (taskType === 'Đột xuất' ? 12 : 10);
 
-    // Max converted score
-    const maxCell = mapping.max_converted_score ? row.getCell(mapping.max_converted_score) : null;
-    let maxConvertedScore = parseExcelNumber(maxCell, 0);
-    if (maxConvertedScore <= 0) {
-      maxConvertedScore = Math.round(standardScore * difficultyWeight * 100) / 100;
-    }
+      // Difficulty weight
+      const diffCell = mapping.difficulty_weight ? row.getCell(mapping.difficulty_weight) : null;
+      let difficultyWeight = parseExcelNumber(diffCell, 1.0);
+      if (difficultyWeight > 10 && difficultyWeight <= 200) {
+        difficultyWeight = difficultyWeight / 100;
+      }
+      if (difficultyWeight <= 0) difficultyWeight = 1.0;
 
-    // Expected evidence, note, axis, status
-    const expectedEvidence = mapping.expected_evidence ? extractCellText(row.getCell(mapping.expected_evidence)).trim() : '';
-    const note = mapping.note ? extractCellText(row.getCell(mapping.note)).trim() : '';
-    const axisCell = mapping.axis_code ? row.getCell(mapping.axis_code) : null;
-    const axisText = extractCellValue(axisCell);
-    const axisCode = parseAxisCode(axisText);
-    const rawStatus = mapping.status ? extractCellText(row.getCell(mapping.status)).trim() : '';
-    const status = rawStatus || 'Hoạt động';
+      // Max converted score
+      const maxCell = mapping.max_converted_score ? row.getCell(mapping.max_converted_score) : null;
+      let maxConvertedScore = parseExcelNumber(maxCell, 0);
+      if (maxConvertedScore <= 0) {
+        maxConvertedScore = Math.round(standardScore * difficultyWeight * 100) / 100;
+      }
 
-    // Upsert task: Update if already exists in this period, else Insert
-    const existing = checkExisting.get(rowPeriodId, taskName.toLowerCase());
-    if (existing) {
-      if (updateExisting) {
-        updateTask.run(
-          deptCode, outputResult, deadline, taskType, standardScore,
-          difficultyWeight, maxConvertedScore, expectedEvidence, note,
-          axisCode, status, existing.id
-        );
-        updatedCount++;
-        tasks.push({ id: existing.id, taskName, standardScore, difficultyWeight, axisCode, isUpdated: true });
+      // Expected evidence, note, axis, status
+      const expectedEvidence = mapping.expected_evidence ? extractCellText(row.getCell(mapping.expected_evidence)).trim() : '';
+      const note = mapping.note ? extractCellText(row.getCell(mapping.note)).trim() : '';
+      const axisCell = mapping.axis_code ? row.getCell(mapping.axis_code) : null;
+      const axisText = extractCellValue(axisCell);
+      const axisCode = parseAxisCode(axisText);
+      const rawStatus = mapping.status ? extractCellText(row.getCell(mapping.status)).trim() : '';
+      const status = rawStatus || 'Hoạt động';
+
+      // Upsert task: Update if already exists in this period, else Insert
+      const existing = checkExisting.get(rowPeriodId, taskName.toLowerCase());
+      if (existing) {
+        if (updateExisting) {
+          updateTask.run(
+            deptCode, outputResult, deadline, taskType, standardScore,
+            difficultyWeight, maxConvertedScore, expectedEvidence, note,
+            axisCode, status, existing.id
+          );
+          updatedCount++;
+          tasks.push({ id: existing.id, taskName, standardScore, difficultyWeight, axisCode, isUpdated: true });
+        } else {
+          skippedCount++;
+          tasks.push({ id: existing.id, taskName, standardScore, difficultyWeight, axisCode, isSkipped: true });
+        }
       } else {
-        skippedCount++;
-        tasks.push({ id: existing.id, taskName, standardScore, difficultyWeight, axisCode, isSkipped: true });
+        const id = uuidv4();
+        insertTask.run(
+          id, rowPeriodId, deptCode, taskName, outputResult, deadline,
+          taskType, standardScore, difficultyWeight, maxConvertedScore,
+          expectedEvidence, note, axisCode, status
+        );
+        insertedCount++;
+        tasks.push({ id, taskName, standardScore, difficultyWeight, axisCode, isInserted: true });
       }
-    } else {
-      const id = uuidv4();
-      insertTask.run(
-        id, rowPeriodId, deptCode, taskName, outputResult, deadline,
-        taskType, standardScore, difficultyWeight, maxConvertedScore,
-        expectedEvidence, note, axisCode, status
-      );
-      insertedCount++;
-      tasks.push({ id, taskName, standardScore, difficultyWeight, axisCode, isInserted: true });
-    }
+    });
   });
+
+  runImport();
 
   return {
     importedCount: insertedCount + updatedCount,
