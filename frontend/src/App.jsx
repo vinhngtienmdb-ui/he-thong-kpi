@@ -18,10 +18,40 @@ import LoginScreen from './components/LoginScreen';
 import { api, setViewerId } from './api';
 import { Calendar, CheckCircle2 } from 'lucide-react';
 
+const VALID_TABS = [
+  'dashboard', 'standard', 'documents', 'assignment', 'execution',
+  'self_eval', 'grading', 'advisory', 'voting', 'charts',
+  'reports', 'users_mgmt', 'system_config'
+];
+
+function getInitialTab() {
+  try {
+    const hash = window.location.hash.replace(/^#/, '');
+    if (hash && VALID_TABS.includes(hash)) {
+      return hash;
+    }
+    const saved = localStorage.getItem('kpi_active_tab');
+    if (saved && VALID_TABS.includes(saved)) {
+      return saved;
+    }
+  } catch (e) {
+    // ignore
+  }
+  return 'dashboard';
+}
+
+function getInitialPeriod() {
+  try {
+    return localStorage.getItem('kpi_selected_period') || '';
+  } catch (e) {
+    return '';
+  }
+}
+
 export default function App() {
-  const [currentTab, setCurrentTab] = useState('dashboard');
+  const [currentTab, setCurrentTab] = useState(getInitialTab);
   const [periods, setPeriods] = useState([]);
-  const [selectedPeriod, setSelectedPeriod] = useState('');
+  const [selectedPeriod, setSelectedPeriod] = useState(getInitialPeriod);
   const [users, setUsers] = useState([]);
   const [accessibleUsers, setAccessibleUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(() => {
@@ -53,8 +83,14 @@ export default function App() {
       ]);
 
       setPeriods(periodsData);
-      if (periodsData.length > 0 && !selectedPeriod) {
-        setSelectedPeriod(periodsData[0].id);
+      const savedPeriod = localStorage.getItem('kpi_selected_period');
+      const isSavedPeriodValid = periodsData.some(p => p.id === savedPeriod);
+
+      if (isSavedPeriodValid) {
+        setSelectedPeriod(savedPeriod);
+      } else if (periodsData.length > 0 && !selectedPeriod) {
+        const activePeriod = periodsData.find(p => p.status === 'active') || periodsData[0];
+        setSelectedPeriod(activePeriod.id);
       }
 
       setUsers(usersData);
@@ -78,9 +114,13 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('kpi_user');
+    localStorage.removeItem('kpi_active_tab');
     setCurrentUser(null);
     setViewerId(null);
     setCurrentTab('dashboard');
+    try {
+      window.history.replaceState(null, '', '#dashboard');
+    } catch (e) {}
     api.logout().catch(() => {});
   };
 
@@ -89,6 +129,46 @@ export default function App() {
     setViewerId(user.id);
     loadInitialData();
   };
+
+  // Đồng bộ currentTab với localStorage và URL hash
+  useEffect(() => {
+    if (currentTab && VALID_TABS.includes(currentTab)) {
+      try {
+        localStorage.setItem('kpi_active_tab', currentTab);
+        if (window.location.hash.replace(/^#/, '') !== currentTab) {
+          window.history.replaceState(null, '', `#${currentTab}`);
+        }
+      } catch (e) {}
+    }
+  }, [currentTab]);
+
+  // Lắng nghe sự kiện hashchange (back/forward browser hoặc thay đổi URL)
+  useEffect(() => {
+    const onHashChange = () => {
+      const hash = window.location.hash.replace(/^#/, '');
+      if (hash && VALID_TABS.includes(hash)) {
+        setCurrentTab(hash);
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  // Bảo vệ: Cán bộ không phải admin không ở lại các tab quản trị
+  useEffect(() => {
+    if (currentUser && currentUser.role !== 'admin' && ['users_mgmt', 'system_config'].includes(currentTab)) {
+      setCurrentTab('dashboard');
+    }
+  }, [currentUser, currentTab]);
+
+  // Đồng bộ selectedPeriod với localStorage
+  useEffect(() => {
+    if (selectedPeriod) {
+      try {
+        localStorage.setItem('kpi_selected_period', selectedPeriod);
+      } catch (e) {}
+    }
+  }, [selectedPeriod]);
 
   useEffect(() => {
     loadInitialData();
