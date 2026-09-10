@@ -38,9 +38,21 @@ const PORT = process.env.PORT || 5000;
 // Storage Module (Supports Cloudflare R2 and Local Disk Fallback)
 const { upload, saveUploadedFile, deleteUploadedFile, isR2Configured, localUploadDir } = require('./storage');
 
-app.use(cors());
+const corsOptions = {
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-viewer-id', 'x-user-id', 'x-requested-with', 'Accept', 'Origin']
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use('/uploads', express.static(localUploadDir));
+
+// Serve frontend production build if available
+const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
+if (fs.existsSync(frontendDist)) {
+  app.use(express.static(frontendDist));
+}
 
 // Proxy route to view / download files from Cloudflare R2 (when R2_PUBLIC_URL is not set or for private bucket)
 app.get(/^\/api\/storage\/(.+)$/, async (req, res) => {
@@ -3633,6 +3645,30 @@ app.post('/api/system/supabase/pull', async (req, res) => {
     res.status(500).json({ error: 'Lỗi khôi phục từ Supabase: ' + err.message });
   }
 });
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({ success: false, message: `Lỗi tải file: ${err.message}` });
+  }
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'Lỗi xử lý yêu cầu trên máy chủ'
+  });
+});
+
+// SPA fallback for non-API routes when frontend dist is built
+if (fs.existsSync(frontendDist)) {
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+      return res.sendFile(path.join(frontendDist, 'index.html'));
+    }
+    next();
+  });
+}
 
 app.listen(PORT, () => {
   console.log(`Backend server running on http://localhost:${PORT}`);

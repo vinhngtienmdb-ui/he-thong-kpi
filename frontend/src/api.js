@@ -117,9 +117,14 @@ export const api = {
     }).then(async res => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.message || 'Lỗi nhập danh mục công việc từ Excel');
+        throw new Error(data.message || `Lỗi nhập danh mục công việc từ Excel (${res.status})`);
       }
       return data;
+    }).catch(err => {
+      if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+        throw new Error('Không thể kết nối tới máy chủ (Failed to fetch). Nếu bạn vừa cập nhật mã nguồn trên Render, máy chủ đang trong quá trình build và khởi động lại; vui lòng đợi khoảng 30-60 giây rồi thử lại.');
+      }
+      throw err;
     });
   },
   createStandardTask: (data) => {
@@ -340,9 +345,14 @@ export const api = {
     }).then(async (res) => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.message || 'Lỗi nhập dữ liệu từ Excel');
+        throw new Error(data.message || `Lỗi nhập dữ liệu từ Excel (${res.status})`);
       }
       return data;
+    }).catch(err => {
+      if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+        throw new Error('Không thể kết nối tới máy chủ (Failed to fetch). Nếu bạn vừa cập nhật mã nguồn trên Render, máy chủ đang trong quá trình build và khởi động lại; vui lòng đợi khoảng 30-60 giây rồi thử lại.');
+      }
+      throw err;
     });
   },
   createAdminUser: (data) => {
