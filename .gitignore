@@ -20,6 +20,7 @@ backend/test_*.xlsx
 .env
 .env.local
 .env.*.local
+backend/.env
 
 # Logs
 npm-debug.log*
