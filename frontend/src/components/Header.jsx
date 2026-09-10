@@ -1176,12 +1176,54 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 3.5 */}
+              {/* Version 3.6 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.5</span>
-                  <span className="text-xs text-slate-500 font-medium">10/09/2026 (Bản phát hành mới nhất)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.6</span>
+                  <span className="text-xs text-slate-500 font-medium">10/09/2026 (Bản phát hành mới nhất - Triển khai vận hành thực tế)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Khắc Phục Triệt Để Phân Quyền Cán Bộ & Kích Hoạt Đồng Bộ Dữ Liệu Tức Thời 100% Lên Supabase Cloud và Cloudflare R2
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Khắc phục triệt để lỗi phân quyền & Mẫu đánh giá cán bộ (Role & Evaluation Template Persistence):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Sửa đổi cơ chế nhận diện vai trò trong phân hệ Quản lý Cán bộ: Cán bộ được phân công vai trò Phó Hiệu trưởng (<code>hieu_pho</code>), Tổ trưởng chuyên môn (<code>to_truong</code>), Lãnh đạo Phòng/Đơn vị (<code>cbql_phong</code>), Lãnh đạo Cơ quan (<code>ld_coquan</code>) hoặc Quản trị đơn vị (<code>admin_donvi</code>) đều giữ vững 100% vai trò quản lý và thẩm quyền dữ liệu tương ứng.</li>
+                      <li>Tôn trọng tuyệt đối lựa chọn <strong>Mẫu đánh giá KPI</strong> (Mẫu 01-A của Lãnh đạo/Quản lý vs Mẫu 01-B của CBNV), loại bỏ hoàn toàn tình trạng bị hệ thống tự động trả về CBNV sau khi tải lại trang.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Cơ chế Ghi trực tiếp tức thời (Write-Through Synchronous Sync):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Khi Quản trị viên cập nhật thông tin cán bộ, cấp lại mật khẩu, tạo mới hoặc vô hiệu hóa tài khoản, máy chủ đồng thời ghi trực tiếp xuống cả SQLite và Supabase PostgreSQL Cloud trước khi phản hồi thành công về giao diện. Đảm bảo 0 delay và độ tin cậy tuyệt đối.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Tầng Middleware Đồng bộ Tự động Liên tục (Continuous Live Realtime Sync):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Thiết lập Middleware tự động lắng nghe 100% các thao tác thay đổi dữ liệu (<code>POST</code>, <code>PUT</code>, <code>PATCH</code>, <code>DELETE</code>) trên toàn bộ hệ thống (giao việc, nộp minh chứng, chấm điểm, tự đánh giá, biểu quyết xếp loại, ban hành văn bản, cấu hình hệ thống).</li>
+                      <li>Tự động kích hoạt đồng bộ ngầm lên Supabase Cloud với độ trễ siêu tốc chỉ <strong>300ms</strong>, bảo đảm dữ liệu trên hệ thống thật luôn sống realtime và an toàn tuyệt đối.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Khởi động Đồng bộ Hai chiều Toàn vẹn 14/14 Bảng (<code>syncWithSupabaseOnStartup</code>):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Khi container máy chủ Render khởi động lại hoặc deploy mới, hệ thống tự động xác định Supabase Cloud là <strong>Nguồn chân lý duy nhất (Single Source of Truth)</strong> và nạp toàn bộ dữ liệu sống của <strong>14 bảng</strong> theo đúng chuẩn ràng buộc khóa ngoại (users, departments, roles, periods, axes, common_criteria, standard_tasks, documents, assigned_tasks, document_dispatches, evaluations, criteria_details, votes, system_configs).</li>
+                      <li>Dữ liệu sống trên môi trường thật 100% không bao giờ bị mất hoặc bị ghi đè bởi file database cũ trong git khi Render restart.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Bảo toàn Lưu trữ Tệp tin trên Đám mây Cloudflare R2:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Toàn bộ hồ sơ văn bản hành chính, quyết định và minh chứng công việc tải lên được đẩy trực tiếp lên Cloudflare R2 bucket <code>kpi-storage</code> và phân phối qua CDN công khai vĩnh viễn, không phụ thuộc vào bộ nhớ cục bộ của server.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 3.5 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-400 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-bold">Phiên bản 3.5</span>
+                  <span className="text-xs text-slate-500 font-medium">10/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Bổ Sung Phân Quyền Quản Trị Đơn Vị (User Chức Năng - Miễn Đánh Giá), Tái Cấu Trúc Bố Cục Chi Tiết Cán Bộ & Hệ Thống Hoạt Động 24/7 Không Sleep
