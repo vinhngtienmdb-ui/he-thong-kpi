@@ -1254,7 +1254,7 @@ async function exportMau02Workbook(periodId) {
     FROM users u
     LEFT JOIN departments d ON u.dept_id = d.id
     LEFT JOIN evaluations e ON e.user_id = u.id AND e.period_id = ?
-    WHERE u.is_active = 1
+    WHERE u.is_active = 1 AND u.role != 'admin'
     ORDER BY u.role DESC, u.full_name ASC
   `).all(periodId);
 

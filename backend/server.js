@@ -1202,6 +1202,15 @@ app.post('/api/assigned-tasks/assign', requireManagerOrAdmin, (req, res) => {
     return res.status(400).json({ success: false, message: 'Vui lòng chọn ít nhất 1 cán bộ/nhân viên nhận việc' });
   }
 
+  // Guard: Không giao việc KPI cho tài khoản admin nghiệp vụ
+  const adminUsers = db.prepare(`SELECT id, full_name FROM users WHERE id IN (${targetUserIds.map(() => '?').join(',')}) AND role = 'admin'`).all(...targetUserIds);
+  if (adminUsers.length > 0) {
+    return res.status(400).json({ 
+      success: false, 
+      message: `Tài khoản Quản trị viên (${adminUsers.map(u => u.full_name).join(', ')}) là tài khoản nghiệp vụ, không áp dụng giao việc KPI cá nhân.` 
+    });
+  }
+
   // Guard: Phân quyền giao việc trong phạm vi quản lý
   const viewerId = getViewerId(req) || assigned_by;
   const accessibleUserIds = getAccessibleUserIds(viewerId);
@@ -1303,6 +1312,15 @@ app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) =>
   }
   if (targetUserIds.length === 0) {
     return res.status(400).json({ success: false, message: 'Vui lòng chọn ít nhất 1 cán bộ nhận nhiệm vụ' });
+  }
+
+  // Guard: Không giao việc KPI cho tài khoản admin nghiệp vụ
+  const adminUsers = db.prepare(`SELECT id, full_name FROM users WHERE id IN (${targetUserIds.map(() => '?').join(',')}) AND role = 'admin'`).all(...targetUserIds);
+  if (adminUsers.length > 0) {
+    return res.status(400).json({ 
+      success: false, 
+      message: `Tài khoản Quản trị viên (${adminUsers.map(u => u.full_name).join(', ')}) là tài khoản nghiệp vụ, không áp dụng giao việc KPI cá nhân.` 
+    });
   }
 
   // Guard: Phân quyền giao việc
@@ -1435,6 +1453,15 @@ app.post('/api/assigned-tasks/register', (req, res) => {
     period_id, user_id, standard_task_id, task_name, output_result,
     deadline, task_type, standard_score, difficulty_weight, axis_code
   } = req.body;
+
+  // Guard: Không áp dụng đăng ký công việc cá nhân cho tài khoản admin
+  const targetUser = db.prepare('SELECT role FROM users WHERE id = ?').get(user_id);
+  if (targetUser?.role === 'admin') {
+    return res.status(400).json({
+      success: false,
+      message: 'Tài khoản Quản trị viên là tài khoản nghiệp vụ kỹ thuật, không áp dụng tự đăng ký KPI cá nhân.'
+    });
+  }
 
   // Kiểm tra trùng lặp
   const duplicates = checkTaskDuplicates({
@@ -1678,6 +1705,15 @@ app.put('/api/assigned-tasks/:id/grade', requireManagerOrAdmin, (req, res) => {
 
   const task = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
   if (!task) return res.status(404).json({ message: 'Không tìm thấy công việc' });
+
+  // Guard: Không chấm điểm cho tài khoản admin kỹ thuật
+  const taskAssignee = db.prepare('SELECT role FROM users WHERE id = ?').get(task.user_id);
+  if (taskAssignee?.role === 'admin') {
+    return res.status(400).json({
+      success: false,
+      message: 'Tài khoản Quản trị viên là tài khoản nghiệp vụ kỹ thuật, không tham gia đánh giá/chấm điểm KPI cá nhân.'
+    });
+  }
 
   // Guard: Tuyệt đối không được trực tiếp tự chấm điểm nhiệm vụ của bản thân
   const viewerId = getViewerId(req);
@@ -1925,6 +1961,37 @@ app.get('/api/evaluations', (req, res) => {
   `).get(user_id);
   if (!targetUser) return res.status(404).json({ message: 'Không tìm thấy thông tin cán bộ' });
 
+  // Guard: Tài khoản Admin là tài khoản nghiệp vụ, không áp dụng KPI cá nhân
+  if (targetUser.role === 'admin') {
+    return res.json({
+      is_admin_account: true,
+      message: 'Tài khoản Quản trị viên là tài khoản nghiệp vụ kỹ thuật, không tham gia đánh giá chấm điểm KPI cá nhân.',
+      user: targetUser,
+      evaluation: {
+        id: null,
+        period_id,
+        user_id,
+        part1_score: 0,
+        part2_score: 0,
+        bonus_score: 0,
+        total_score: 0,
+        rank_proposed: 'Tài khoản Quản trị nghiệp vụ',
+        step: 'step_1_register'
+      },
+      criteria: [],
+      axesSummary: [],
+      stats: {
+        totalTasksCount: 0,
+        approvedTasksCount: 0,
+        aheadScheduleCount: 0,
+        aheadSchedulePct: 0,
+        planTotalMaxScore: 0,
+        executedTotalConvScore: 0,
+        bonusScore: 0
+      }
+    });
+  }
+
   // Get or initialize evaluation record
   let evaluation = db.prepare('SELECT * FROM evaluations WHERE period_id = ? AND user_id = ?').get(period_id, user_id);
   if (!evaluation) {
@@ -2130,8 +2197,12 @@ app.post('/api/evaluations/submit', (req, res) => {
   const { evaluation_id } = req.body;
   if (!evaluation_id) return res.status(400).json({ success: false, message: 'Thiếu evaluation_id' });
 
-  const evalRec = db.prepare('SELECT e.*, p.is_locked, p.name as period_name FROM evaluations e LEFT JOIN periods p ON e.period_id = p.id WHERE e.id = ?').get(evaluation_id);
+  const evalRec = db.prepare('SELECT e.*, p.is_locked, p.name as period_name, u.role as user_role FROM evaluations e LEFT JOIN periods p ON e.period_id = p.id LEFT JOIN users u ON e.user_id = u.id WHERE e.id = ?').get(evaluation_id);
   if (!evalRec) return res.status(404).json({ success: false, message: 'Không tìm thấy bản tự đánh giá' });
+
+  if (evalRec.user_role === 'admin') {
+    return res.status(400).json({ success: false, message: 'Tài khoản Quản trị viên là tài khoản nghiệp vụ kỹ thuật, không áp dụng tự đánh giá KPI cá nhân.' });
+  }
 
   if (evalRec.is_locked === 1) {
     return res.status(403).json({ success: false, message: `Kỳ đánh giá "${evalRec.period_name}" đã Chốt KPI. Không thể nộp sửa đổi!` });
@@ -2189,8 +2260,12 @@ app.post('/api/evaluations/return', requireManagerOrAdmin, (req, res) => {
 app.post('/api/evaluations/conclude', requireManagerOrAdmin, (req, res) => {
   const { evaluation_id, superior_rank, superior_comment, status } = req.body;
 
-  const evalRec = db.prepare('SELECT e.*, p.is_locked, p.grading_lock_date, p.name as period_name FROM evaluations e LEFT JOIN periods p ON e.period_id = p.id WHERE e.id = ?').get(evaluation_id);
+  const evalRec = db.prepare('SELECT e.*, p.is_locked, p.grading_lock_date, p.name as period_name, u.role as user_role FROM evaluations e LEFT JOIN periods p ON e.period_id = p.id LEFT JOIN users u ON e.user_id = u.id WHERE e.id = ?').get(evaluation_id);
   if (!evalRec) return res.status(404).json({ success: false, message: 'Không tìm thấy bản đánh giá' });
+
+  if (evalRec.user_role === 'admin') {
+    return res.status(400).json({ success: false, message: 'Tài khoản Quản trị viên là tài khoản nghiệp vụ kỹ thuật, không áp dụng đánh giá xếp loại KPI cá nhân.' });
+  }
 
   const viewerId = getViewerId(req);
   const viewer = viewerId ? db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId) : null;
@@ -2248,6 +2323,7 @@ app.get('/api/reports/mau-02', (req, res) => {
     LEFT JOIN departments d ON u.dept_id = d.id
     LEFT JOIN evaluations e ON e.user_id = u.id AND e.period_id = ?
     WHERE (u.is_active IS NULL OR u.is_active = 1)
+      AND u.role != 'admin'
   `;
   const params = [pId, pId, pId, pId];
 
@@ -2433,7 +2509,7 @@ app.get('/api/advisory-summary', (req, res) => {
     LEFT JOIN departments d ON u.dept_id = d.id
     LEFT JOIN evaluations e ON e.user_id = u.id AND e.period_id = ?
     LEFT JOIN users adv_user ON e.advisory_by = adv_user.id
-    WHERE (u.is_active IS NULL OR u.is_active = 1) ${userClause}
+    WHERE (u.is_active IS NULL OR u.is_active = 1) AND u.role != 'admin' ${userClause}
     ORDER BY d.name ASC, u.full_name ASC
   `).all(...params);
 
@@ -2640,7 +2716,7 @@ app.get('/api/voting', (req, res) => {
     FROM users u
     LEFT JOIN departments d ON u.dept_id = d.id
     LEFT JOIN evaluations e ON e.user_id = u.id AND e.period_id = ?
-    WHERE (u.is_active IS NULL OR u.is_active = 1) ${userClause}
+    WHERE (u.is_active IS NULL OR u.is_active = 1) AND u.role != 'admin' ${userClause}
     ORDER BY u.full_name ASC
   `).all(...params);
 

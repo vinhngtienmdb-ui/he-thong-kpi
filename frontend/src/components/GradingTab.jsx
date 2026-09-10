@@ -23,8 +23,8 @@ import { formatDate } from '../constants';
 import FinalizePeriodModal from './FinalizePeriodModal';
 
 export default function GradingTab({ selectedPeriod, currentUser, users, axes, periods = [], onReloadPeriods, onPeriodChange }) {
-  // Lọc danh sách cán bộ có thể thẩm định: TUYỆT ĐỐI KHÔNG ĐƯỢC CHẤM ĐIỂM CHO BẢN THÂN
-  const evaluatableUsers = users.filter(u => u.id !== currentUser?.id);
+  // Lọc danh sách cán bộ có thể thẩm định: TUYỆT ĐỐI KHÔNG ĐƯỢC CHẤM ĐIỂM CHO BẢN THÂN VÀ KHÔNG ĐÁNH GIÁ TÀI KHOẢN ADMIN NGHIỆP VỤ
+  const evaluatableUsers = users.filter(u => u.id !== currentUser?.id && u.role !== 'admin');
   const [selectedUser, setSelectedUser] = useState('');
   const [evalData, setEvalData] = useState(null);
   const [userTasks, setUserTasks] = useState([]);

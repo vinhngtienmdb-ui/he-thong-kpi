@@ -59,11 +59,12 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
     try {
       setLoading(true);
       const data = await api.getAdvisorySummary(selectedPeriod);
-      setAdvisoryList(data);
+      const nonAdminList = (data || []).filter(item => item.role !== 'admin');
+      setAdvisoryList(nonAdminList);
       
       // Khởi tạo state chỉnh sửa theo dữ liệu hiện tại
       const rowState = {};
-      data.forEach(item => {
+      nonAdminList.forEach(item => {
         const key = item.evaluation_id || item.user_id;
         rowState[key] = {
           rank: item.advisory_rank || item.superior_rank || item.rank_proposed || 'Hoàn thành tốt nhiệm vụ',

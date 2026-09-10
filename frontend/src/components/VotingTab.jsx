@@ -77,7 +77,7 @@ export default function VotingTab({ selectedPeriod, currentUser, users = [] }) {
         api.getVotingList(selectedPeriod),
         api.getVotingProgress(selectedPeriod)
       ]);
-      setVotingList(listData || []);
+      setVotingList((listData || []).filter(item => item.role !== 'admin'));
       setProgressData(progressRes || null);
 
       // initialize myVotes map

@@ -110,7 +110,9 @@ export default function AssignmentTab({
   const [stdTaskSearch, setStdTaskSearch] = useState('');
 
   const isCBQL = currentUser?.role === 'cbql' || currentUser?.role === 'admin' || (currentUser?.data_scope && currentUser?.data_scope !== 'personal');
-  const assignableUsers = isCBQL ? users : (currentUser ? [currentUser] : []);
+  const assignableUsers = isCBQL 
+    ? users.filter(u => u.role !== 'admin') 
+    : (currentUser && currentUser.role !== 'admin' ? [currentUser] : []);
 
   useEffect(() => {
     loadData();

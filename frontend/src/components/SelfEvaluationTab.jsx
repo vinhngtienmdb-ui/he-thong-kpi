@@ -193,6 +193,7 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
 
   const liveScore = criteriaList.reduce((sum, c) => sum + (c.is_satisfied === 1 ? c.max_score : 0), 0);
   const targetUser = users.find(u => u.id === selectedUser) || currentUser;
+  const isAdminAccount = Boolean(evalData?.is_admin_account || targetUser?.role === 'admin');
   const isCbnv = (targetUser?.target_role === 'cbnv') || (targetUser?.role === 'cbnv' && targetUser?.target_role !== 'cbql');
 
   return (
@@ -228,25 +229,31 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
               >
                 {users.map(u => (
                   <option key={u.id} value={u.id}>
-                    {u.full_name} ({u.role === 'cbql' ? 'CBQL' : u.role === 'admin' ? 'Admin' : 'CBNV'})
+                    {u.full_name} ({u.role === 'cbql' ? 'CBQL' : u.role === 'admin' ? '⚙️ Admin Nghiệp vụ' : 'CBNV'})
                   </option>
                 ))}
               </select>
             </div>
           )}
 
-          <a
-            href={api.getExportUrl(selectedPeriod, selectedUser)}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-700 text-red-700 bg-white hover:bg-red-50 text-xs font-bold transition shadow-2xs"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Tải {isCbnv ? 'Mẫu 01-B' : 'Mẫu 01-A'}</span>
-          </a>
+          {!isAdminAccount && (
+            <a
+              href={api.getExportUrl(selectedPeriod, selectedUser)}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-700 text-red-700 bg-white hover:bg-red-50 text-xs font-bold transition shadow-2xs"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Tải {isCbnv ? 'Mẫu 01-B' : 'Mẫu 01-A'}</span>
+            </a>
+          )}
 
           {/* Action buttons: Lock Badge if submitted/approved; Save & Submit buttons if draft/returned */}
-          {isLocked ? (
+          {isAdminAccount ? (
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold shadow-2xs">
+              <span>⚙️ Tài khoản Nghiệp vụ (Không đánh giá)</span>
+            </div>
+          ) : isLocked ? (
             <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold shadow-2xs">
               <Lock className="w-3.5 h-3.5 text-amber-700" />
               <span>Đã nộp tự đánh giá (Đang khóa)</span>
@@ -276,6 +283,26 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
           )}
         </div>
       </div>
+
+      {/* BANNER CHO TÀI KHOẢN ADMIN NGHIỆP VỤ */}
+      {isAdminAccount && (
+        <div className="bg-slate-50 border-2 border-slate-300 text-slate-800 p-4 rounded-xl shadow-xs flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+          <div className="space-y-1 text-xs">
+            <span className="font-bold text-sm text-slate-900">
+              ⚙️ Tài khoản Quản trị viên là tài khoản nghiệp vụ kỹ thuật
+            </span>
+            <p className="text-slate-600">
+              Theo quy định, tài khoản Quản trị viên (Admin) chỉ thực hiện các chức năng quản trị hệ thống, danh mục, phân quyền và xuất báo cáo. Tài khoản này <strong>không áp dụng KPI cá nhân</strong>, không tham gia tự đánh giá (Mẫu 01) và không xếp loại thi đua.
+            </p>
+            {users.some(u => u.role !== 'admin') && (
+              <p className="text-indigo-700 font-medium pt-1">
+                👉 Vui lòng sử dụng hộp chọn <strong>"Xem cán bộ"</strong> ở trên để xem hồ sơ và biểu mẫu tự đánh giá của cán bộ, nhân viên trong đơn vị.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* BANNER 1: THÔNG BÁO BỊ TRẢ VỀ YÊU CẦU THỰC HIỆN LẠI */}
       {isReturned && (

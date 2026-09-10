@@ -56,9 +56,14 @@ export default function ReportTab({
 
   useEffect(() => {
     if (currentUser) {
-      const isAccessible = users.some(u => u.id === selectedUser);
+      const nonAdminUsers = users.filter(u => u.role !== 'admin');
+      const isAccessible = nonAdminUsers.some(u => u.id === selectedUser);
       if (!isAccessible) {
-        setSelectedUser(currentUser.id);
+        if (currentUser.role === 'admin' && nonAdminUsers.length > 0) {
+          setSelectedUser(nonAdminUsers[0].id);
+        } else {
+          setSelectedUser(currentUser.id);
+        }
       }
     }
   }, [currentUser, users]);
@@ -245,9 +250,9 @@ export default function ReportTab({
                   onChange={(e) => setSelectedUser(e.target.value)}
                   className="text-xs font-semibold p-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-2 focus:ring-red-500"
                 >
-                  {users.map(u => (
+                  {users.filter(u => u.role !== 'admin').map(u => (
                     <option key={u.id} value={u.id}>
-                      {u.full_name} ({u.role === 'cbql' ? 'CBQL' : u.role === 'admin' ? 'Admin' : 'CBNV'})
+                      {u.full_name} ({u.role === 'cbql' ? 'CBQL' : 'CBNV'})
                     </option>
                   ))}
                 </select>
