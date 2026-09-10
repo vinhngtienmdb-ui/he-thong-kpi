@@ -243,7 +243,8 @@ function findHeaderRowAndMapping(sheet) {
   return { headerRowIndex: bestRowIndex, mapping: bestMapping };
 }
 
-async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null) {
+async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null, options = {}) {
+  const updateExisting = options.updateExisting !== undefined ? Boolean(options.updateExisting) : true;
   const workbook = new ExcelJS.Workbook();
   if (Buffer.isBuffer(fileOrPath)) {
     await workbook.xlsx.load(fileOrPath);
@@ -312,6 +313,7 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null) {
   const tasks = [];
   let insertedCount = 0;
   let updatedCount = 0;
+  let skippedCount = 0;
 
   const checkExisting = db.prepare(`
     SELECT id FROM standard_tasks 
@@ -423,13 +425,18 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null) {
     // Upsert task: Update if already exists in this period, else Insert
     const existing = checkExisting.get(rowPeriodId, taskName.toLowerCase());
     if (existing) {
-      updateTask.run(
-        deptCode, outputResult, deadline, taskType, standardScore,
-        difficultyWeight, maxConvertedScore, expectedEvidence, note,
-        axisCode, status, existing.id
-      );
-      updatedCount++;
-      tasks.push({ id: existing.id, taskName, standardScore, difficultyWeight, axisCode, isUpdated: true });
+      if (updateExisting) {
+        updateTask.run(
+          deptCode, outputResult, deadline, taskType, standardScore,
+          difficultyWeight, maxConvertedScore, expectedEvidence, note,
+          axisCode, status, existing.id
+        );
+        updatedCount++;
+        tasks.push({ id: existing.id, taskName, standardScore, difficultyWeight, axisCode, isUpdated: true });
+      } else {
+        skippedCount++;
+        tasks.push({ id: existing.id, taskName, standardScore, difficultyWeight, axisCode, isSkipped: true });
+      }
     } else {
       const id = uuidv4();
       insertTask.run(
@@ -446,6 +453,7 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null) {
     importedCount: insertedCount + updatedCount,
     insertedCount,
     updatedCount,
+    skippedCount,
     sheetName: sheet.name,
     tasks
   };

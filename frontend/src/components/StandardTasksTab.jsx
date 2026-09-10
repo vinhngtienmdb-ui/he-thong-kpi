@@ -20,7 +20,8 @@ import {
   Check,
   X,
   UserCheck,
-  Eye
+  Eye,
+  RefreshCw
 } from 'lucide-react';
 import { api } from '../api';
 import { OUTPUT_RESULT_OPTIONS, formatDate, toInputDateFormat } from '../constants';
@@ -47,11 +48,22 @@ export default function StandardTasksTab({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAxis, setSelectedAxis] = useState('');
   const [selectedOutputResult, setSelectedOutputResult] = useState('');
-  const [showImportModal, setShowImportModal] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
+  // Import Excel Modal state
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [updateExisting, setUpdateExisting] = useState(true);
   const [importing, setImporting] = useState(false);
-  const [importMessage, setImportMessage] = useState(null);
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [importResult, setImportResult] = useState(null);
+  const [importError, setImportError] = useState('');
+
+  const openImportModal = () => {
+    setImportFile(null);
+    setUpdateExisting(true);
+    setImportResult(null);
+    setImportError('');
+    setIsImportModalOpen(true);
+  };
+  const [showAddModal, setShowAddModal] = useState(false);
   const [customOutputResult, setCustomOutputResult] = useState('');
   const [advancedFilterOpen, setAdvancedFilterOpen] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState([]);
@@ -118,30 +130,32 @@ export default function StandardTasksTab({
     }
   }
 
-  async function handleImport(useDefault = false) {
+  async function handleImportSubmit(e, useDefault = false) {
+    if (e) e.preventDefault();
+    if (!useDefault && !importFile) {
+      setImportError('Vui lòng chọn file Excel (.xlsx) danh mục công việc');
+      return;
+    }
     try {
       setImporting(true);
-      setImportMessage(null);
+      setImportError('');
       const formData = new FormData();
       if (selectedPeriod) {
         formData.append('period_id', selectedPeriod);
       }
-      if (currentUser?.id) {
-        formData.append('viewer_id', currentUser.id);
+      const vId = currentUser?.id || (api.getViewerId ? api.getViewerId() : null);
+      if (vId) {
+        formData.append('viewer_id', vId);
       }
-      if (!useDefault && selectedFile) {
-        formData.append('file', selectedFile);
+      formData.append('update_existing', updateExisting);
+      if (!useDefault && importFile) {
+        formData.append('file', importFile);
       }
       const res = await api.importStandardTasks(formData);
-      if (res.success) {
-        setImportMessage({ type: 'success', text: res.message });
-        loadTasks();
-        setTimeout(() => setShowImportModal(false), 2200);
-      } else {
-        setImportMessage({ type: 'error', text: res.message });
-      }
+      setImportResult(res);
+      await loadTasks();
     } catch (err) {
-      setImportMessage({ type: 'error', text: err.message });
+      setImportError(err.message || 'Lỗi xử lý file Excel');
     } finally {
       setImporting(false);
     }
@@ -603,8 +617,9 @@ export default function StandardTasksTab({
           {isCBQL && (
             <button
               type="button"
-              onClick={() => setShowImportModal(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-red-700 text-red-700 bg-white hover:bg-red-50 text-xs font-bold transition shadow-2xs"
+              onClick={openImportModal}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-red-700 text-red-700 bg-white hover:bg-red-50 text-xs font-bold transition shadow-2xs cursor-pointer"
+              title="Nhập danh mục công việc từ file Excel (.xlsx)"
             >
               <span>↑ Nhập file</span>
             </button>
@@ -1011,126 +1026,213 @@ export default function StandardTasksTab({
       )}
 
       {/* IMPORT EXCEL MODAL */}
-      {showImportModal && (
+      {isImportModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-xl w-[95%] sm:max-w-lg p-4 sm:p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
-                <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
-                <span>Nạp Danh mục từ File Excel mẫu</span>
-              </h3>
+          <div className="bg-white rounded-2xl shadow-xl w-[95%] sm:max-w-xl border border-slate-200 overflow-hidden my-4 sm:my-8 max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-100 text-emerald-800 rounded-lg">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Nhập Danh Mục Công Việc Từ File Excel
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Nạp danh mục công việc chuẩn và định mức điểm hàng loạt theo file Excel
+                  </p>
+                </div>
+              </div>
               <button 
-                onClick={() => setShowImportModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-sm font-bold"
+                type="button"
+                onClick={() => setIsImportModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer transition"
               >
-                ✕
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Template Download Prompt */}
-            <div className="p-3.5 bg-blue-50/90 border border-blue-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-              <div className="space-y-0.5">
-                <div className="font-bold text-blue-950 flex items-center gap-1.5">
-                  <FileSpreadsheet className="w-4 h-4 text-blue-700" />
-                  <span>Biểu mẫu Excel chuẩn đính kèm</span>
-                </div>
-                <div className="text-blue-800 text-[11px] leading-relaxed">
-                  Tải file mẫu gồm 5 sheet: <b>Mẫu import</b> (có sẵn công thức tự tính điểm), <b>Hướng dẫn</b>, <b>6 Trục trọng tâm</b>, <b>Đơn vị</b> và <b>Kỳ đánh giá</b>.
-                </div>
-              </div>
-              <a
-                href={api.getStandardTasksTemplateUrl()}
-                download="Mau_nhap_danh_muc_cong_viec_chuan.xlsx"
-                className="inline-flex items-center justify-center gap-1.5 bg-white hover:bg-blue-100 text-blue-800 font-bold px-3.5 py-2 rounded-lg border border-blue-300 shadow-xs transition shrink-0 cursor-pointer text-xs"
-              >
-                <Download className="w-3.5 h-3.5 text-blue-700" />
-                <span>Tải file mẫu (.xlsx)</span>
-              </a>
-            </div>
-
-            <div className="text-xs text-slate-600 space-y-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <p className="font-semibold text-slate-800">Quy tắc nạp dữ liệu từ biểu mẫu:</p>
-              <ul className="list-disc list-inside space-y-1 text-slate-600">
-                <li>Hỗ trợ file Excel <b>.xlsx</b> (mẫu tải về hoặc file tự tạo có cột <i>Tên công việc</i>).</li>
-                <li>Tự động nhận diện sheet và khớp các cột dữ liệu thông minh.</li>
-                <li>Tự động tính Điểm chuẩn (10đ Thường xuyên, 12đ Đột xuất) và Điểm quy đổi tối đa.</li>
-                <li>Hỗ trợ định dạng số thập phân kiểu Việt Nam (<i>1,1</i>) và tỷ lệ phần trăm (<i>110%</i>).</li>
-                <li>Tự động cập nhật công việc đã có, tránh trùng lặp danh mục.</li>
-              </ul>
-            </div>
-
-            {/* Custom file upload */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                Tải lên file Excel (.xlsx) <span className="text-red-500">*</span>
-              </label>
-              <div className="border-2 border-dashed border-slate-300 rounded-xl p-5 text-center hover:border-emerald-500 transition-colors bg-slate-50/50">
-                <input
-                  type="file"
-                  accept=".xlsx, .xls"
-                  id="excelStandardTaskFileInput"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0])}
-                  className="hidden"
-                />
-                <label htmlFor="excelStandardTaskFileInput" className="cursor-pointer flex flex-col items-center justify-center space-y-2">
-                  <div className="p-3 bg-emerald-100 text-emerald-800 rounded-full">
-                    <Upload className="w-5 h-5" />
+            <div className="p-6 space-y-4">
+              {/* Template Download Prompt */}
+              <div className="p-3.5 bg-blue-50/90 border border-blue-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="space-y-0.5">
+                  <div className="font-bold text-blue-950 flex items-center gap-1.5">
+                    <FileSpreadsheet className="w-4 h-4 text-blue-700" />
+                    <span>Biểu mẫu Excel chuẩn đính kèm</span>
                   </div>
-                  {selectedFile ? (
-                    <div className="text-xs">
-                      <span className="font-bold text-slate-800 block text-sm">{selectedFile.name}</span>
-                      <span className="text-slate-500 text-[11px]">{(selectedFile.size / 1024).toFixed(1)} KB - Nhấp để chọn file khác</span>
+                  <div className="text-blue-800 text-[11px] leading-relaxed">
+                    Tải file mẫu gồm 5 sheet: <b>Mẫu import</b> (có sẵn công thức tự tính điểm), <b>Hướng dẫn</b>, <b>6 Trục trọng tâm</b>, <b>Đơn vị</b> và <b>Kỳ đánh giá</b>.
+                  </div>
+                </div>
+                <a
+                  href={api.getStandardTasksTemplateUrl()}
+                  download="Mau_nhap_danh_muc_cong_viec_chuan.xlsx"
+                  className="inline-flex items-center justify-center gap-1.5 bg-white hover:bg-blue-100 text-blue-800 font-bold px-3.5 py-2 rounded-lg border border-blue-300 shadow-xs transition shrink-0 cursor-pointer text-xs"
+                >
+                  <Download className="w-3.5 h-3.5 text-blue-700" />
+                  <span>Tải file mẫu (.xlsx)</span>
+                </a>
+              </div>
+
+              {importError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div>{importError}</div>
+                </div>
+              )}
+
+              {/* Result Summary Box if imported */}
+              {importResult && (
+                <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-900 space-y-2">
+                  <div className="flex items-center gap-2 font-bold text-sm text-emerald-800">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>{importResult.message}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    <div className="bg-white p-2 rounded border border-emerald-200 text-center">
+                      <span className="text-slate-500 block text-[11px]">Thêm mới</span>
+                      <span className="text-base font-bold text-emerald-700">{importResult.insertedCount || 0}</span>
                     </div>
-                  ) : (
-                    <div className="text-xs">
-                      <span className="font-semibold text-slate-700 block">Nhấp để chọn file hoặc kéo thả vào đây</span>
-                      <span className="text-slate-400 text-[11px]">Hỗ trợ định dạng .xlsx theo đúng biểu mẫu đính kèm</span>
+                    <div className="bg-white p-2 rounded border border-emerald-200 text-center">
+                      <span className="text-slate-500 block text-[11px]">Cập nhật</span>
+                      <span className="text-base font-bold text-indigo-700">{importResult.updatedCount || 0}</span>
+                    </div>
+                    <div className="bg-white p-2 rounded border border-emerald-200 text-center">
+                      <span className="text-slate-500 block text-[11px]">Bỏ qua</span>
+                      <span className="text-base font-bold text-slate-600">{importResult.skippedCount || 0}</span>
+                    </div>
+                  </div>
+
+                  {importResult.errors && importResult.errors.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-emerald-200">
+                      <div className="font-semibold text-amber-800 mb-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <span>Có {importResult.errors.length} dòng cần chú ý:</span>
+                      </div>
+                      <ul className="list-disc pl-4 space-y-0.5 text-slate-700 max-h-32 overflow-y-auto">
+                        {importResult.errors.map((err, idx) => (
+                          <li key={idx}>
+                            Dòng {err.row}: <b>{err.task_name || err.name || 'Công việc'}</b> - {err.message}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   )}
-                </label>
-              </div>
+                </div>
+              )}
 
-              {selectedFile && (
-                <button
-                  disabled={importing}
-                  onClick={() => handleImport(false)}
-                  className="mt-3 w-full bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-xs cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-4 h-4" />
-                  <span>{importing ? 'Đang xử lý...' : `Tiến hành nạp dữ liệu từ file: ${selectedFile.name}`}</span>
-                </button>
+              {!importResult && (
+                <form onSubmit={(e) => handleImportSubmit(e, false)} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                      Chọn file Excel (.xlsx) <span className="text-red-500">*</span>
+                    </label>
+                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-emerald-500 transition-colors bg-slate-50/50">
+                      <input
+                        type="file"
+                        accept=".xlsx, .xls"
+                        id="excelStandardTaskFileInput"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setImportFile(file);
+                            setImportError('');
+                          }
+                        }}
+                        className="hidden"
+                      />
+                      <label htmlFor="excelStandardTaskFileInput" className="cursor-pointer flex flex-col items-center justify-center space-y-2">
+                        <div className="p-3 bg-emerald-100 text-emerald-800 rounded-full">
+                          <Upload className="w-6 h-6" />
+                        </div>
+                        {importFile ? (
+                          <div className="text-xs">
+                            <span className="font-bold text-slate-800 block text-sm">{importFile.name}</span>
+                            <span className="text-slate-500 text-[11px]">{(importFile.size / 1024).toFixed(1)} KB - Nhấp để chọn file khác</span>
+                          </div>
+                        ) : (
+                          <div className="text-xs">
+                            <span className="font-semibold text-slate-700 block">Nhấp để chọn file hoặc kéo thả vào đây</span>
+                            <span className="text-slate-400 text-[11px]">Hỗ trợ định dạng .xlsx chuẩn theo biểu mẫu đính kèm</span>
+                          </div>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <input
+                      type="checkbox"
+                      id="updateExistingTaskCheckbox"
+                      checked={updateExisting}
+                      onChange={(e) => setUpdateExisting(e.target.checked)}
+                      className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                    />
+                    <label htmlFor="updateExistingTaskCheckbox" className="text-xs font-medium text-slate-700 cursor-pointer">
+                      Cập nhật thông tin công việc nếu tên công việc đã tồn tại trong danh mục
+                    </label>
+                  </div>
+
+                  {/* Hoặc nạp nhanh từ file demo */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2 text-slate-700">
+                      <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                      <span>Nạp trực tiếp bộ dữ liệu mẫu chuẩn demo có sẵn</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={importing}
+                      onClick={(e) => handleImportSubmit(e, true)}
+                      className="bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold px-3 py-1.5 rounded-md shadow-xs transition-colors shrink-0 cursor-pointer disabled:opacity-50"
+                    >
+                      {importing ? 'Đang nạp...' : '⚡ Nạp bản demo'}
+                    </button>
+                  </div>
+
+                  <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => setIsImportModalOpen(false)}
+                      className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={importing || !importFile}
+                      className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-lg shadow-xs transition cursor-pointer"
+                    >
+                      {importing ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Đang xử lý...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FileSpreadsheet className="w-4 h-4" />
+                          <span>Bắt đầu nạp dữ liệu</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {importResult && (
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsImportModalOpen(false);
+                      setImportResult(null);
+                    }}
+                    className="px-5 py-2 text-xs font-semibold bg-slate-800 hover:bg-slate-900 text-white rounded-lg transition shadow-xs cursor-pointer"
+                  >
+                    Đóng
+                  </button>
+                </div>
               )}
             </div>
-
-            <div className="relative flex py-1 items-center">
-              <div className="grow border-t border-slate-200"></div>
-              <span className="shrink mx-3 text-slate-400 text-[11px] uppercase font-medium">Hoặc nạp nhanh từ file demo</span>
-              <div className="grow border-t border-slate-200"></div>
-            </div>
-
-            {/* Default file quick import */}
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 flex items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2 text-slate-700">
-                <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
-                <span>Nạp trực tiếp bộ dữ liệu mẫu chuẩn demo có sẵn</span>
-              </div>
-              <button
-                disabled={importing}
-                onClick={() => handleImport(true)}
-                className="bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold px-3 py-1.5 rounded-md shadow-xs transition-colors shrink-0 cursor-pointer"
-              >
-                {importing ? 'Đang nạp...' : '⚡ Nạp bản demo'}
-              </button>
-            </div>
-
-            {importMessage && (
-              <div className={`p-3 rounded-lg text-xs flex items-center space-x-2 ${
-                importMessage.type === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-              }`}>
-                {importMessage.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
-                <span>{importMessage.text}</span>
-              </div>
-            )}
           </div>
         </div>
       )}

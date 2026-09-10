@@ -947,9 +947,21 @@ app.post('/api/standard-tasks/import', upload.single('file'), requireManagerOrAd
       fileSource = path.join(__dirname, '..', 'mau-import-new-san-pham-cong-viec-chuan.xlsx');
     }
 
-    const { period_id } = req.body;
-    const result = await importStandardTasksFromExcel(fileSource, period_id);
-    if (result.importedCount === 0) {
+    const { period_id } = req.body || {};
+    const updateExisting = req.body?.update_existing !== undefined
+      ? (req.body.update_existing === 'true' || req.body.update_existing === true || req.body.update_existing === '1')
+      : true;
+
+    const result = await importStandardTasksFromExcel(fileSource, period_id, { updateExisting });
+
+    // Clean up temporary uploaded file if on disk
+    try {
+      if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+    } catch (e) {}
+
+    if (result.importedCount === 0 && (result.skippedCount || 0) === 0) {
       return res.status(400).json({
         success: false,
         importedCount: 0,
@@ -959,9 +971,13 @@ app.post('/api/standard-tasks/import', upload.single('file'), requireManagerOrAd
 
     let detailMsg = `Đã nạp thành công ${result.importedCount} công việc chuẩn`;
     if (result.insertedCount > 0 && result.updatedCount > 0) {
-      detailMsg += ` (${result.insertedCount} công việc mới, cập nhật ${result.updatedCount} công việc có sẵn)`;
+      detailMsg += ` (Thêm mới ${result.insertedCount}, Cập nhật ${result.updatedCount}${result.skippedCount > 0 ? `, Bỏ qua ${result.skippedCount}` : ''})`;
     } else if (result.updatedCount > 0) {
-      detailMsg += ` (đã cập nhật ${result.updatedCount} công việc có sẵn)`;
+      detailMsg += ` (Đã cập nhật ${result.updatedCount} công việc có sẵn${result.skippedCount > 0 ? `, Bỏ qua ${result.skippedCount}` : ''})`;
+    } else if (result.insertedCount > 0) {
+      detailMsg += ` (Thêm mới ${result.insertedCount}${result.skippedCount > 0 ? `, Bỏ qua ${result.skippedCount}` : ''})`;
+    } else if (result.skippedCount > 0) {
+      detailMsg = `Đã bỏ qua ${result.skippedCount} công việc do đã tồn tại trong danh mục`;
     }
 
     res.json({ success: true, message: detailMsg, ...result });
