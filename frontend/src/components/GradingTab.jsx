@@ -19,12 +19,14 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate } from '../constants';
+import FinalizePeriodModal from './FinalizePeriodModal';
 
-export default function GradingTab({ selectedPeriod, currentUser, users, axes, periods = [], onReloadPeriods }) {
+export default function GradingTab({ selectedPeriod, currentUser, users, axes, periods = [], onReloadPeriods, onPeriodChange }) {
   const [selectedUser, setSelectedUser] = useState(currentUser?.id || '');
   const [evalData, setEvalData] = useState(null);
   const [userTasks, setUserTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isFinalizeModalOpen, setIsFinalizeModalOpen] = useState(false);
 
   // Active grading modal state
   const [gradingTask, setGradingTask] = useState(null);
@@ -333,25 +335,26 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          {(currentUser?.role === 'admin' || currentUser?.role === 'cbql') && currentPeriodObj && (
+          {(currentUser?.role === 'admin' || currentUser?.role === 'cbql' || currentUser?.role === 'lanh_dao') && (
             <button
-              onClick={handleToggleFinalizePeriod}
+              type="button"
+              onClick={() => setIsFinalizeModalOpen(true)}
               className={`flex items-center space-x-1.5 text-xs font-semibold px-3.5 py-2 rounded-lg shadow-xs transition-colors cursor-pointer ${
                 isPeriodLocked
                   ? 'bg-amber-600 hover:bg-amber-700 text-white'
                   : 'bg-emerald-700 hover:bg-emerald-800 text-white'
               }`}
-              title={isPeriodLocked ? `Mở khóa KPI kỳ "${currentPeriodObj.name}" để tiếp tục chấm điểm` : `Chốt toàn bộ kết quả KPI cho toàn cơ quan trong kỳ "${currentPeriodObj.name}"`}
+              title="Quản lý Chốt / Mở khóa kết quả KPI theo Quý"
             >
               {isPeriodLocked ? (
                 <>
                   <Unlock className="w-4 h-4" />
-                  <span>Mở khóa KPI ({currentPeriodObj.name})</span>
+                  <span>Quản lý Chốt KPI Quý ({currentPeriodObj?.name || 'Theo Quý'})</span>
                 </>
               ) : (
                 <>
                   <Lock className="w-4 h-4" />
-                  <span>Chốt KPI ({currentPeriodObj.name})</span>
+                  <span>Chốt KPI theo Quý ({currentPeriodObj?.name || 'Theo Quý'})</span>
                 </>
               )}
             </button>
@@ -1182,6 +1185,20 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
           </div>
         </div>
       )}
+
+      {/* Modal Chốt / Mở khóa KPI theo Quý */}
+      <FinalizePeriodModal
+        isOpen={isFinalizeModalOpen}
+        onClose={() => setIsFinalizeModalOpen(false)}
+        periods={periods}
+        currentPeriodId={selectedPeriod}
+        onSelectPeriod={onPeriodChange}
+        onReloadPeriods={async () => {
+          if (onReloadPeriods) await onReloadPeriods();
+          loadData();
+        }}
+        currentUser={currentUser}
+      />
 
     </div>
   );

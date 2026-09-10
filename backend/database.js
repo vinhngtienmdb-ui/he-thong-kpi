@@ -456,8 +456,9 @@ function seedData() {
     INSERT INTO periods (id, code, name, start_date, end_date, is_active)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
-  insertPeriod.run('p-1', 'KPI-Q3-2026', '(Chính thức) Đánh giá Quý III/2026', '2026-06-11', '2026-09-10', 1);
-  insertPeriod.run('p-2', 'KPI-T09-2026', 'Đánh giá KPI Tháng 9/2026', '2026-09-01', '2026-09-30', 1);
+  insertPeriod.run('p-1', 'KPI-Q2-2026', 'Đánh giá KPI Quý II/2026', '2026-04-01', '2026-06-30', 1);
+  insertPeriod.run('p-2', 'KPI-Q3-2026', 'Đánh giá KPI Quý III/2026', '2026-07-01', '2026-09-30', 1);
+  insertPeriod.run('p-3', 'KPI-Q4-2026', 'Đánh giá KPI Quý IV/2026', '2026-10-01', '2026-12-31', 1);
 
   // 4. 6 Trục kết quả trọng tâm
   const insertAxis = db.prepare('INSERT INTO axes (id, code, name, max_score) VALUES (?, ?, ?, ?)');

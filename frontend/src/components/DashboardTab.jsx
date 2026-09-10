@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate } from '../constants';
+import FinalizePeriodModal from './FinalizePeriodModal';
 
 export default function DashboardTab({ 
   selectedPeriod, 
@@ -40,7 +41,8 @@ export default function DashboardTab({
   departments = [],
   periods = [],
   axes = [],
-  onReloadPeriods
+  onReloadPeriods,
+  onPeriodChange
 }) {
   const [stats, setStats] = useState(null);
   const [evalData, setEvalData] = useState(null);
@@ -49,6 +51,7 @@ export default function DashboardTab({
   const [configs, setConfigs] = useState(null);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
+  const [isFinalizeModalOpen, setIsFinalizeModalOpen] = useState(false);
 
   // Permissions
   const isAdminOrLeader = currentUser?.role === 'admin' || currentUser?.role === 'lanh_dao' || currentUser?.data_scope === 'all';
@@ -305,26 +308,26 @@ export default function DashboardTab({
 
         {/* Global Print & Excel Actions */}
         <div className="flex flex-wrap items-center gap-2 self-stretch sm:self-auto justify-end">
-          {isAdminOrLeader && currentPeriodObj && (
+          {isAdminOrLeader && (
             <button
               type="button"
-              onClick={handleToggleFinalizePeriod}
+              onClick={() => setIsFinalizeModalOpen(true)}
               className={`flex items-center space-x-1.5 text-xs font-semibold px-3.5 py-2 rounded-lg shadow-xs transition-colors cursor-pointer ${
                 isPeriodLocked
                   ? 'bg-amber-600 hover:bg-amber-700 text-white'
                   : 'bg-emerald-700 hover:bg-emerald-800 text-white'
               }`}
-              title={isPeriodLocked ? `Mở khóa KPI kỳ "${currentPeriodObj.name}" để tiếp tục đánh giá` : `Chốt toàn bộ kết quả KPI cho toàn cơ quan trong kỳ "${currentPeriodObj.name}"`}
+              title="Quản lý Chốt / Mở khóa kết quả KPI theo Quý"
             >
               {isPeriodLocked ? (
                 <>
                   <Unlock className="w-4 h-4 text-white" />
-                  <span>Mở khóa KPI ({currentPeriodObj.name})</span>
+                  <span>Quản lý Chốt KPI Quý ({currentPeriodObj?.name || 'Theo Quý'})</span>
                 </>
               ) : (
                 <>
                   <Lock className="w-4 h-4 text-white" />
-                  <span>Chốt KPI ({currentPeriodObj.name})</span>
+                  <span>Chốt KPI theo Quý ({currentPeriodObj?.name || 'Theo Quý'})</span>
                 </>
               )}
             </button>
@@ -1714,6 +1717,20 @@ export default function DashboardTab({
           </div>
         </div>
       )}
+
+      {/* Modal Chốt / Mở khóa KPI theo Quý */}
+      <FinalizePeriodModal
+        isOpen={isFinalizeModalOpen}
+        onClose={() => setIsFinalizeModalOpen(false)}
+        periods={periods}
+        currentPeriodId={selectedPeriod}
+        onSelectPeriod={onPeriodChange}
+        onReloadPeriods={async () => {
+          if (onReloadPeriods) await onReloadPeriods();
+          loadData();
+        }}
+        currentUser={currentUser}
+      />
 
     </div>
   );

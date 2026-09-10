@@ -130,6 +130,13 @@ export default function App() {
     loadInitialData();
   };
 
+  const handlePeriodChange = (newPeriodId) => {
+    setSelectedPeriod(newPeriodId);
+    try {
+      localStorage.setItem('kpi_selected_period', newPeriodId);
+    } catch (e) {}
+  };
+
   // Đồng bộ currentTab với localStorage và URL hash
   useEffect(() => {
     if (currentTab && VALID_TABS.includes(currentTab)) {
@@ -335,7 +342,7 @@ export default function App() {
         {/* 6-Step Evaluation Process Stepper (Hidden during print) */}
         <div className="no-print bg-white border-b border-slate-200 shadow-2xs py-2 px-3 sm:px-6 lg:px-8">
           <div className="w-full">
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-700 text-white text-xs font-bold shrink-0">
                   ✓
@@ -347,9 +354,25 @@ export default function App() {
                   (Theo Hướng dẫn 06-HD/BTCTU)
                 </span>
               </div>
-              <div className="shrink-0 flex items-center gap-1 text-[11px] text-slate-500">
-                <span className="hidden xl:inline">Nhấp vào từng bước để chuyển nhanh</span>
-                <span className="xl:hidden italic text-red-600 bg-red-50 px-1.5 py-0.5 rounded font-medium">Vuốt ngang ➔</span>
+
+              {/* Bộ chọn Kỳ KPI Hoạt động (Chọn Quý đang mở để đánh giá/chốt) */}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200/80 border border-slate-300 rounded-lg px-2.5 py-1 text-xs transition shadow-2xs">
+                  <Calendar className="w-3.5 h-3.5 text-red-700 shrink-0" />
+                  <span className="font-semibold text-slate-600 hidden sm:inline">Kỳ KPI hoạt động:</span>
+                  <select
+                    value={selectedPeriod}
+                    onChange={(e) => handlePeriodChange(e.target.value)}
+                    className="bg-transparent font-bold text-slate-800 focus:outline-hidden cursor-pointer text-xs"
+                    title="Chuyển đổi kỳ KPI đánh giá đang hoạt động"
+                  >
+                    {periods.filter(p => p.is_active === 1 || p.is_active === true).map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} {p.is_locked ? '🔒 [Đã chốt]' : '🔓 [Đang mở]'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -403,6 +426,7 @@ export default function App() {
               periods={periods}
               axes={axes}
               onReloadPeriods={loadInitialData}
+              onPeriodChange={handlePeriodChange}
             />
           )}
 
@@ -464,6 +488,7 @@ export default function App() {
               axes={axes}
               periods={periods}
               onReloadPeriods={loadInitialData}
+              onPeriodChange={handlePeriodChange}
             />
           )}
 
