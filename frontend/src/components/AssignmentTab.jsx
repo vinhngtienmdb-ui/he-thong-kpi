@@ -181,6 +181,18 @@ export default function AssignmentTab({
   function closeModal() {
     setIsModalOpen(false);
     setCustomOutputResult('');
+    setFormData({
+      user_id: '',
+      task_source: 'standard',
+      standard_task_id: '',
+      task_name: '',
+      output_result: OUTPUT_RESULT_OPTIONS[0],
+      deadline: '2026-09-30',
+      task_type: 'Thường xuyên',
+      standard_score: 10,
+      difficulty_weight: 1.0,
+      axis_code: 'TRUC_1'
+    });
   }
 
   // Danh sách các cán bộ đã có nhiệm vụ này trong kỳ (để chặn giao trùng lặp)
@@ -2237,28 +2249,14 @@ export default function AssignmentTab({
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
                 >
                   Quay lại
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setFormData({
-                      user_id: '',
-                      task_source: 'standard',
-                      standard_task_id: '',
-                      task_name: '',
-                      output_result: OUTPUT_RESULT_OPTIONS[0],
-                      deadline: '2026-09-30',
-                      task_type: 'Thường xuyên',
-                      standard_score: 10,
-                      difficulty_weight: 1.0,
-                      axis_code: 'TRUC_1'
-                    });
-                    setCustomOutputResult('');
-                  }}
-                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                  onClick={closeModal}
+                  className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-200 hover:bg-slate-300 rounded-xl transition cursor-pointer"
                 >
                   Hủy
                 </button>

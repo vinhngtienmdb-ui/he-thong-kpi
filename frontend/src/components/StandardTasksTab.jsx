@@ -226,8 +226,8 @@ export default function StandardTasksTab({
   };
 
   const handleCancelEdit = () => {
-    if (!editingTask) return;
-    handleOpenEdit(editingTask);
+    setEditingTask(null);
+    setEditForm(null);
   };
 
   const handleBackEdit = () => {
@@ -341,13 +341,14 @@ export default function StandardTasksTab({
   };
 
   const handleCancelAssign = () => {
+    setAssigningTask(null);
+    setAssignUserSearch('');
     setAssignForm({
       user_ids: (users && users.length > 0) ? [users[0].id] : [],
       deadline: assigningTask?.deadline || '2026-09-30',
       quantity: 1,
       notes: ''
     });
-    setAssignUserSearch('');
   };
 
   const handleBackAssign = () => {
@@ -453,6 +454,7 @@ export default function StandardTasksTab({
   };
 
   const handleCancelLock = () => {
+    setLockingTask(null);
     setLockNote('');
   };
 
@@ -1455,7 +1457,7 @@ export default function StandardTasksTab({
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg shadow-2xs transition"
+                  className="px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg shadow-2xs transition cursor-pointer"
                 >
                   Quay lại
                 </button>
@@ -1474,8 +1476,9 @@ export default function StandardTasksTab({
                       dept_code: 'A29.123.22',
                     });
                     setCustomOutputResult('');
+                    setShowAddModal(false);
                   }}
-                  className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-200 hover:bg-slate-300 rounded-lg shadow-2xs transition"
+                  className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-200 hover:bg-slate-300 rounded-lg shadow-2xs transition cursor-pointer"
                 >
                   Hủy
                 </button>
