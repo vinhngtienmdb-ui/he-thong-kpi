@@ -1,14 +1,16 @@
--- ==============================================================================
+﻿-- ==============================================================================
 -- HE THONG KPI & QUAN LY VAN BAN - SUPABASE POSTGRESQL DDL SCHEMA
 -- Chay truc tiep tren Supabase SQL Editor de khoi tao toan bo co so du lieu
 -- ==============================================================================
+
+SET search_path = public;
 
 -- 1. Departments (Don vi / Phong ban)
 CREATE TABLE IF NOT EXISTS departments (
     id TEXT PRIMARY KEY,
     code TEXT UNIQUE NOT NULL,
     name TEXT NOT NULL,
-    parent_id TEXT REFERENCES departments(id) ON DELETE SET NULL,
+    parent_id TEXT,
     leader_id TEXT,
     is_active INTEGER DEFAULT 1,
     description TEXT,
@@ -45,12 +47,8 @@ CREATE TABLE IF NOT EXISTS users (
     is_active INTEGER DEFAULT 1,
     target_role TEXT DEFAULT 'cbnv',
     role_id TEXT REFERENCES roles(id) ON DELETE SET NULL,
-    manager_id TEXT REFERENCES users(id) ON DELETE SET NULL
+    manager_id TEXT
 );
-
--- Cap nhat khoa ngoai leader_id cho departments sau khi users da ton tai
-ALTER TABLE departments DROP CONSTRAINT IF EXISTS fk_departments_leader;
-ALTER TABLE departments ADD CONSTRAINT fk_departments_leader FOREIGN KEY (leader_id) REFERENCES users(id) ON DELETE SET NULL;
 
 -- 4. Periods (Ky danh gia KPI)
 CREATE TABLE IF NOT EXISTS periods (
@@ -94,7 +92,40 @@ CREATE TABLE IF NOT EXISTS standard_tasks (
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
--- 7. Assigned Tasks (Cong viec giao & Tu dang ky, Minh chung & Diem)
+-- 7. Common Criteria (Tieu chi chung)
+CREATE TABLE IF NOT EXISTS common_criteria (
+    id TEXT PRIMARY KEY,
+    group_no INTEGER,
+    group_name TEXT,
+    code TEXT UNIQUE NOT NULL,
+    title TEXT NOT NULL,
+    max_score NUMERIC NOT NULL,
+    target_role TEXT DEFAULT 'all'
+);
+
+-- 8. Documents (Quan ly Van ban den & di)
+CREATE TABLE IF NOT EXISTS documents (
+    id TEXT PRIMARY KEY,
+    doc_number TEXT NOT NULL,
+    doc_date TEXT,
+    arrival_date TEXT,
+    arrival_number TEXT,
+    issuer TEXT NOT NULL,
+    doc_type TEXT NOT NULL,
+    field TEXT,
+    urgency TEXT DEFAULT 'Thường',
+    security_level TEXT DEFAULT 'Thường',
+    summary TEXT NOT NULL,
+    file_url TEXT,
+    file_name TEXT,
+    deadline TEXT,
+    status TEXT DEFAULT 'pending_dispatch',
+    created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 9. Assigned Tasks (Cong viec giao & Tu dang ky, Minh chung & Diem)
 CREATE TABLE IF NOT EXISTS assigned_tasks (
     id TEXT PRIMARY KEY,
     period_id TEXT NOT NULL REFERENCES periods(id) ON DELETE CASCADE,
@@ -130,21 +161,10 @@ CREATE TABLE IF NOT EXISTS assigned_tasks (
     bonus_reason TEXT,
     return_reason TEXT,
     is_returned INTEGER DEFAULT 0,
-    document_id TEXT
+    document_id TEXT REFERENCES documents(id) ON DELETE SET NULL
 );
 
--- 8. Common Criteria (Tieu chi chung)
-CREATE TABLE IF NOT EXISTS common_criteria (
-    id TEXT PRIMARY KEY,
-    group_no INTEGER,
-    group_name TEXT,
-    code TEXT UNIQUE NOT NULL,
-    title TEXT NOT NULL,
-    max_score NUMERIC NOT NULL,
-    target_role TEXT DEFAULT 'all'
-);
-
--- 9. Evaluations (Bang tong hop danh gia KPI ca nhan)
+-- 10. Evaluations (Bang tong hop danh gia KPI ca nhan)
 CREATE TABLE IF NOT EXISTS evaluations (
     id TEXT PRIMARY KEY,
     period_id TEXT NOT NULL REFERENCES periods(id) ON DELETE CASCADE,
@@ -171,7 +191,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
     UNIQUE (period_id, user_id)
 );
 
--- 10. Evaluation Criteria Details (Chi tiet cham tieu chi chung)
+-- 11. Evaluation Criteria Details (Chi tiet cham tieu chi chung)
 CREATE TABLE IF NOT EXISTS evaluation_criteria_details (
     id TEXT PRIMARY KEY,
     evaluation_id TEXT NOT NULL REFERENCES evaluations(id) ON DELETE CASCADE,
@@ -181,14 +201,14 @@ CREATE TABLE IF NOT EXISTS evaluation_criteria_details (
     note TEXT
 );
 
--- 11. System Configs (Cau hinh he thong)
+-- 12. System Configs (Cau hinh he thong)
 CREATE TABLE IF NOT EXISTS system_configs (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
     description TEXT
 );
 
--- 12. Votes (Bieu quyet xep loai can bo cua Hoi dong Lanh dao)
+-- 13. Votes (Bieu quyet xep loai can bo cua Hoi dong Lanh dao)
 CREATE TABLE IF NOT EXISTS votes (
     id TEXT PRIMARY KEY,
     period_id TEXT NOT NULL REFERENCES periods(id) ON DELETE CASCADE,
@@ -198,28 +218,6 @@ CREATE TABLE IF NOT EXISTS votes (
     comment TEXT,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (period_id, user_id, voter_id)
-);
-
--- 13. Documents (Quan ly Van ban den & di)
-CREATE TABLE IF NOT EXISTS documents (
-    id TEXT PRIMARY KEY,
-    doc_number TEXT NOT NULL,
-    doc_date TEXT,
-    arrival_date TEXT,
-    arrival_number TEXT,
-    issuer TEXT NOT NULL,
-    doc_type TEXT NOT NULL,
-    field TEXT,
-    urgency TEXT DEFAULT 'Thường',
-    security_level TEXT DEFAULT 'Thường',
-    summary TEXT NOT NULL,
-    file_url TEXT,
-    file_name TEXT,
-    deadline TEXT,
-    status TEXT DEFAULT 'pending_dispatch',
-    created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 14. Document Dispatches (Phan bo van ban cho can bo & theo doi tien do)
@@ -239,11 +237,21 @@ CREATE TABLE IF NOT EXISTS document_dispatches (
     completion_note TEXT
 );
 
--- Foreign key giua assigned_tasks va documents
-ALTER TABLE assigned_tasks DROP CONSTRAINT IF EXISTS fk_assigned_tasks_doc;
-ALTER TABLE assigned_tasks ADD CONSTRAINT fk_assigned_tasks_doc FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE SET NULL;
+-- ==============================================================================
+-- KHOA NGOAI TU THAM CHIEU & LIEN KET CHEO (THEM SAU KHI TAT CA CAC BANG DA TAO)
+-- ==============================================================================
+ALTER TABLE departments DROP CONSTRAINT IF EXISTS fk_departments_parent;
+ALTER TABLE departments ADD CONSTRAINT fk_departments_parent FOREIGN KEY (parent_id) REFERENCES departments(id) ON DELETE SET NULL;
 
--- INDEXES FOR MAXIMUM PERFORMANCE
+ALTER TABLE departments DROP CONSTRAINT IF EXISTS fk_departments_leader;
+ALTER TABLE departments ADD CONSTRAINT fk_departments_leader FOREIGN KEY (leader_id) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE users DROP CONSTRAINT IF EXISTS fk_users_manager;
+ALTER TABLE users ADD CONSTRAINT fk_users_manager FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE SET NULL;
+
+-- ==============================================================================
+-- CHI MUC (INDEXES) TOI UU TOC DO TRUY VAN
+-- ==============================================================================
 CREATE INDEX IF NOT EXISTS idx_users_dept ON users(dept_id);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role_id);
 CREATE INDEX IF NOT EXISTS idx_assigned_tasks_user ON assigned_tasks(user_id, period_id);
