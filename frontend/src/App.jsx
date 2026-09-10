@@ -89,7 +89,7 @@ export default function App() {
       if (isSavedPeriodValid) {
         setSelectedPeriod(savedPeriod);
       } else if (periodsData.length > 0 && !selectedPeriod) {
-        const activePeriod = periodsData.find(p => p.status === 'active') || periodsData[0];
+        const activePeriod = periodsData.find(p => p.is_active === 1 || p.is_active === true || p.status === 'active') || periodsData[0];
         setSelectedPeriod(activePeriod.id);
       }
 

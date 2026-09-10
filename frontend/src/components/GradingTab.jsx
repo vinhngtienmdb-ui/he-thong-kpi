@@ -344,17 +344,17 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                   ? 'bg-amber-600 hover:bg-amber-700 text-white'
                   : 'bg-emerald-700 hover:bg-emerald-800 text-white'
               }`}
-              title="Quản lý Chốt / Mở khóa kết quả KPI theo Quý"
+              title="Quản lý Chốt / Mở khóa kết quả KPI theo từng Quý đánh giá"
             >
               {isPeriodLocked ? (
                 <>
                   <Unlock className="w-4 h-4" />
-                  <span>Quản lý Chốt KPI Quý ({currentPeriodObj?.name || 'Theo Quý'})</span>
+                  <span>Quản lý Chốt / Mở khóa KPI Quý</span>
                 </>
               ) : (
                 <>
                   <Lock className="w-4 h-4" />
-                  <span>Chốt KPI theo Quý ({currentPeriodObj?.name || 'Theo Quý'})</span>
+                  <span>Chốt KPI theo Quý</span>
                 </>
               )}
             </button>
