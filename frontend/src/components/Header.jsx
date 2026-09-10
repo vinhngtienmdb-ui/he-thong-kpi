@@ -1202,6 +1202,13 @@ export default function Header({
                       <li><strong>Lớp màng bảo vệ tiến trình & Dọn dẹp bộ đệm định kỳ:</strong> Tích hợp bộ bắt lỗi toàn cục <code>uncaughtException</code> và <code>unhandledRejection</code> ngăn ngừa crash tiến trình Node.js; tự động checkpoint cơ sở dữ liệu SQLite WAL mỗi 30 phút duy trì hiệu năng tối đa.</li>
                     </ul>
                   </li>
+                  <li><strong>Quy tắc Thẩm định & Chấm điểm hoàn thành công việc:</strong> Bổ sung chỉ dẫn và cơ chế phân định thẩm quyền chấm điểm hoàn thành trong module cập nhật công việc:
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li><em>Nhiệm vụ được phân công:</em> <strong>Việc ai giao thì người đó chấm điểm hoàn thành</strong> (người giao việc trực tiếp theo dõi, thẩm định sản phẩm và chấm điểm).</li>
+                      <li><em>Nhiệm vụ tự đăng ký:</em> Mặc định người thẩm định và chấm điểm là <strong>Lãnh đạo đơn vị</strong> (Trưởng phòng/ban hoặc Lãnh đạo phụ trách).</li>
+                      <li>Tích hợp huy hiệu nhận diện người chấm điểm, thông báo nhắc việc tại màn hình nộp minh chứng và bảng thẩm định chấm điểm.</li>
+                    </ul>
+                  </li>
                 </ul>
               </div>
 

@@ -15,7 +15,8 @@ import {
   MessageSquare,
   X,
   Download,
-  Check
+  Check,
+  Info
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate, toInputDateFormat, parseDateOnly } from '../constants';
@@ -193,6 +194,23 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
         </div>
       </div>
 
+      {/* Notice Banner: Thẩm quyền chấm điểm */}
+      <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-slate-50 border border-blue-200 p-4 rounded-xl flex items-start gap-3 text-blue-900 shadow-2xs">
+        <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+          <Info className="w-4 h-4" />
+        </div>
+        <div className="text-xs space-y-1">
+          <div className="font-bold text-blue-950 text-sm flex items-center gap-1.5">
+            <span>Lưu ý nguyên tắc thẩm định & chấm điểm hoàn thành công việc:</span>
+          </div>
+          <p className="text-blue-900 leading-relaxed">
+            • <strong>Nhiệm vụ được phân công:</strong> Việc ai giao thì người đó trực tiếp theo dõi, thẩm định và chấm điểm hoàn thành.
+            <br />
+            • <strong>Nhiệm vụ do cá nhân tự đăng ký:</strong> Mặc định người thẩm định và chấm điểm là <strong>Lãnh đạo đơn vị</strong> (Trưởng phòng/ban hoặc Lãnh đạo phụ trách).
+          </p>
+        </div>
+      </div>
+
       {/* Task List */}
       <div className="space-y-3">
         {loading ? (
@@ -233,6 +251,14 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
                       {task.origin === 'assigned' 
                         ? (task.assigner_name ? `Lãnh đạo giao (${task.assigner_name})` : 'Lãnh đạo giao')
                         : 'Tự đăng ký'}
+                    </span>
+                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 inline-flex items-center gap-1">
+                      <span>👤 Người chấm điểm:</span>
+                      <strong className="text-indigo-900">
+                        {task.origin === 'assigned' 
+                          ? (task.assigner_name ? `Người giao (${task.assigner_name})` : 'Lãnh đạo giao việc')
+                          : `Lãnh đạo đơn vị${task.grader_name && task.grader_name !== 'Lãnh đạo đơn vị' ? ` (${task.grader_name})` : ''}`}
+                      </strong>
                     </span>
                     <span className="text-xs font-medium text-slate-500">
                       HSĐK: {Math.round(task.difficulty_weight * 100)}%
@@ -655,6 +681,21 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
                     <option value="0.0">Không đạt yêu cầu: 0%</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Notice: Người chấm điểm hoàn thành */}
+              <div className="p-3 bg-indigo-50/80 border border-indigo-200 rounded-xl text-xs text-indigo-950 space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-indigo-900">
+                  <Info className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span>Người thẩm định & chấm điểm hoàn thành nhiệm vụ này:</span>
+                </div>
+                <p className="leading-relaxed text-[11px] text-indigo-900">
+                  {activeTask.origin === 'assigned' ? (
+                    <>Nhiệm vụ do <strong>{activeTask.assigner_name || 'Lãnh đạo'}</strong> giao việc. Theo quy chế: <em>Việc ai giao thì người đó trực tiếp thẩm định và chấm điểm hoàn thành</em>.</>
+                  ) : (
+                    <>Nhiệm vụ do cán bộ <strong>tự đăng ký</strong>. Theo quy định: Mặc định <strong>Lãnh đạo đơn vị</strong> ({activeTask.grader_name || 'Trưởng phòng/Ban hoặc Lãnh đạo phụ trách'}) sẽ thẩm định và chấm điểm hoàn thành.</>
+                  )}
+                </p>
               </div>
 
               <div className="pt-3 flex justify-end space-x-2 border-t border-slate-100">

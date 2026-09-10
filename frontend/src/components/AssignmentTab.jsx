@@ -1891,6 +1891,19 @@ export default function AssignmentTab({
             {/* Modal Body */}
             <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 flex-1 overflow-y-auto">
               
+              {/* Notice: Nguyên tắc thẩm định & chấm điểm */}
+              <div className="p-3 bg-amber-50/90 border border-amber-200 rounded-xl text-xs text-amber-950 space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-amber-900">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Nguyên tắc thẩm định & chấm điểm hoàn thành công việc:</span>
+                </div>
+                <p className="leading-relaxed text-[11px] text-amber-900">
+                  • <strong>Việc ai giao thì người đó chấm điểm hoàn thành</strong> (Lãnh đạo giao việc trực tiếp theo dõi và đánh giá kết quả).
+                  <br />
+                  • <strong>Nếu cá nhân tự đăng ký:</strong> Mặc định người thẩm định và chấm điểm là <strong>Lãnh đạo đơn vị</strong> (Trưởng phòng/ban hoặc Lãnh đạo phụ trách).
+                </p>
+              </div>
+
               {/* If assigning: Multi-officer selection */}
               {modalMode === 'assign' && (
                 <div className="space-y-2 p-4 bg-slate-50 rounded-xl border border-slate-200">

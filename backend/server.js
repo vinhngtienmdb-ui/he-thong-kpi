@@ -1290,11 +1290,20 @@ app.get('/api/assigned-tasks', (req, res) => {
 
   let query = `
     SELECT t.*, u.full_name as user_name, u.role as user_role, d.name as dept_name,
-           assigner.full_name as assigner_name
+           assigner.full_name as assigner_name,
+           mgr.full_name as manager_name,
+           fe.full_name as final_evaluator_name,
+           CASE 
+             WHEN t.origin = 'assigned' AND assigner.full_name IS NOT NULL THEN assigner.full_name
+             WHEN t.origin = 'assigned' THEN 'Người giao việc'
+             ELSE COALESCE(fe.full_name, mgr.full_name, 'Lãnh đạo đơn vị')
+           END as grader_name
     FROM assigned_tasks t
     JOIN users u ON t.user_id = u.id
     LEFT JOIN departments d ON u.dept_id = d.id
     LEFT JOIN users assigner ON t.assigned_by = assigner.id
+    LEFT JOIN users mgr ON u.manager_id = mgr.id
+    LEFT JOIN users fe ON u.final_evaluator_id = fe.id
     WHERE 1=1
   `;
   const params = [];
@@ -1979,9 +1988,10 @@ app.put('/api/assigned-tasks/:id/grade', requireManagerOrAdmin, (req, res) => {
     });
   }
 
-  // Guard: Kiểm tra thẩm quyền chấm điểm cán bộ
+  // Guard: Kiểm tra thẩm quyền chấm điểm cán bộ (Việc ai giao thì người đó chấm điểm; nếu tự đăng ký mặc định là Lãnh đạo đơn vị)
   const accessibleUserIds = getAccessibleUserIds(viewerId);
-  if (accessibleUserIds !== null && !accessibleUserIds.includes(task.user_id)) {
+  const isTaskAssigner = task.assigned_by && task.assigned_by === viewerId;
+  if (!isTaskAssigner && accessibleUserIds !== null && !accessibleUserIds.includes(task.user_id)) {
     return res.status(403).json({ 
       success: false, 
       message: 'Bạn không có thẩm quyền chấm điểm/thẩm định công việc của cán bộ ngoài phạm vi quản lý' 

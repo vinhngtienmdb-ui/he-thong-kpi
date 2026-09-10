@@ -554,6 +554,12 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
             <p className="text-xs text-slate-500 mt-0.5">
               Hệ thống áp dụng công thức Chuẩn theo Phụ lục 5 Hướng dẫn 06-HD/BTCTU: <code>Điểm thực hiện = Điểm chuẩn × (30% Tiến độ + 70% Chất lượng) | Điểm quy đổi = Điểm thực hiện × Hệ số độ khó (100%, 110%, 120%)</code>
             </p>
+            <div className="mt-2.5 p-2.5 bg-blue-50/80 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-start gap-2">
+              <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <strong>Lưu ý nguyên tắc chấm điểm:</strong> Việc ai giao thì người đó trực tiếp thẩm định và chấm điểm hoàn thành. Nếu cán bộ tự đăng ký, mặc định thẩm quyền thẩm định và chấm điểm là <strong>Lãnh đạo đơn vị</strong>.
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1054,6 +1060,17 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                     📥 Tệp minh chứng được kế thừa từ cấp dưới: <span className="font-bold">{gradingTask.inherited_from_user_name}</span>
                   </div>
                 )}
+                <div><span className="font-semibold text-slate-700">Hình thức nhiệm vụ:</span>{' '}
+                  {gradingTask.origin === 'assigned' ? (
+                    <span className="text-indigo-800 font-bold">
+                      Được giao (Bởi: {gradingTask.assigner_name || 'Lãnh đạo'}) — <em>Việc ai giao thì người đó chấm điểm hoàn thành</em>
+                    </span>
+                  ) : (
+                    <span className="text-amber-800 font-bold">
+                      Cá nhân tự đăng ký — <em>Mặc định Lãnh đạo đơn vị chấm điểm</em>
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Difficulty weight & Standard score */}
