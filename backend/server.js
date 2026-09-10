@@ -1080,7 +1080,83 @@ app.get('/api/assigned-tasks', (req, res) => {
   res.json(tasks);
 });
 
-// CBQL Giao việc (hỗ trợ giao cho 1 hoặc nhiều người cùng thực hiện)
+// Helper: Check duplicate tasks for user(s) in a given period (Không cho phép giao trùng cùng 1 đầu việc)
+function checkTaskDuplicates({ period_id, user_ids, standard_task_id, task_name }) {
+  if (!period_id || !user_ids || user_ids.length === 0) return [];
+  const normName = (task_name || '').trim().toLowerCase();
+  if (!normName && !standard_task_id) return [];
+
+  const placeholders = user_ids.map(() => '?').join(',');
+  let query = `
+    SELECT t.id, t.user_id, t.task_name, t.standard_task_id, t.status, u.full_name as user_name
+    FROM assigned_tasks t
+    JOIN users u ON t.user_id = u.id
+    WHERE t.period_id = ?
+      AND t.user_id IN (${placeholders})
+      AND t.status NOT IN ('rejected', 'cancelled')
+  `;
+  const params = [period_id, ...user_ids];
+
+  if (standard_task_id && normName) {
+    query += ` AND (t.standard_task_id = ? OR LOWER(TRIM(t.task_name)) = ?)`;
+    params.push(standard_task_id, normName);
+  } else if (standard_task_id) {
+    query += ` AND t.standard_task_id = ?`;
+    params.push(standard_task_id);
+  } else {
+    query += ` AND LOWER(TRIM(t.task_name)) = ?`;
+    params.push(normName);
+  }
+
+  return db.prepare(query).all(...params);
+}
+
+// API Kiểm tra trùng lặp nhiệm vụ trước khi giao việc
+app.post('/api/assigned-tasks/check-duplicates', requireManagerOrAdmin, (req, res) => {
+  try {
+    const { period_id, user_ids, user_id, standard_task_id, task_name, task_ids, tasks } = req.body;
+    let targetUserIds = [];
+    if (Array.isArray(user_ids) && user_ids.length > 0) {
+      targetUserIds = [...new Set(user_ids.filter(Boolean))];
+    } else if (user_id) {
+      targetUserIds = [user_id];
+    }
+
+    if (!period_id || targetUserIds.length === 0) {
+      return res.json({ has_duplicates: false, duplicates: [] });
+    }
+
+    let tasksToCheck = [];
+    if (Array.isArray(tasks) && tasks.length > 0) {
+      tasksToCheck = tasks;
+    } else if (Array.isArray(task_ids) && task_ids.length > 0) {
+      const placeholders = task_ids.map(() => '?').join(',');
+      tasksToCheck = db.prepare(`SELECT * FROM standard_tasks WHERE id IN (${placeholders})`).all(...task_ids);
+    } else if (standard_task_id || task_name) {
+      tasksToCheck = [{ id: standard_task_id, standard_task_id, task_name }];
+    }
+
+    const duplicates = [];
+    for (const t of tasksToCheck) {
+      const dups = checkTaskDuplicates({
+        period_id,
+        user_ids: targetUserIds,
+        standard_task_id: t.standard_task_id || t.id,
+        task_name: t.task_name
+      });
+      duplicates.push(...dups);
+    }
+
+    res.json({
+      has_duplicates: duplicates.length > 0,
+      duplicates
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// CBQL Giao việc (hỗ trợ giao cho 1 hoặc nhiều người cùng thực hiện - Kiểm tra trùng lặp)
 app.post('/api/assigned-tasks/assign', requireManagerOrAdmin, (req, res) => {
   const {
     period_id, user_id, user_ids, standard_task_id, task_name, output_result,
@@ -1107,6 +1183,34 @@ app.post('/api/assigned-tasks/assign', requireManagerOrAdmin, (req, res) => {
       return res.status(403).json({ 
         success: false, 
         message: 'Bạn không có quyền giao việc cho cán bộ/nhân viên ngoài thẩm quyền quản lý của đơn vị' 
+      });
+    }
+  }
+
+  // Kiểm tra trùng lặp: Không cho phép giao trùng cùng 1 đầu việc cho cấp dưới
+  const duplicates = checkTaskDuplicates({
+    period_id,
+    user_ids: targetUserIds,
+    standard_task_id,
+    task_name
+  });
+
+  if (duplicates.length > 0) {
+    if (targetUserIds.length === 1) {
+      const dup = duplicates[0];
+      return res.status(400).json({
+        success: false,
+        is_duplicate: true,
+        message: `Không thể giao việc: Cán bộ "${dup.user_name}" đã được giao nhiệm vụ "${dup.task_name}" trong kỳ đánh giá này. Hệ thống không cho phép giao trùng!`,
+        duplicates
+      });
+    } else {
+      const dupNames = [...new Set(duplicates.map(d => d.user_name))].join(', ');
+      return res.status(400).json({
+        success: false,
+        is_duplicate: true,
+        message: `Không thể giao việc: Các cán bộ sau đã được giao nhiệm vụ này trong kỳ đánh giá: ${dupNames}. Vui lòng bỏ chọn những cán bộ đã có nhiệm vụ để tiếp tục.`,
+        duplicates
       });
     }
   }
@@ -1150,7 +1254,7 @@ app.post('/api/assigned-tasks/assign', requireManagerOrAdmin, (req, res) => {
   });
 });
 
-// Bulk Assign multiple tasks to multiple users
+// Bulk Assign multiple tasks to multiple users (Loại bỏ các lượt trùng lặp)
 app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) => {
   const {
     period_id,
@@ -1199,6 +1303,45 @@ app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) =>
     return res.status(400).json({ success: false, message: 'Vui lòng chọn ít nhất 1 nhiệm vụ để phân công' });
   }
 
+  // Kiểm tra trùng lặp từng cặp (nhiệm vụ, cán bộ)
+  const validAssignments = [];
+  const duplicatePairs = [];
+
+  for (const t of tasksToAssign) {
+    const stdId = t.standard_task_id || t.id || null;
+    const taskName = t.task_name;
+    const dups = checkTaskDuplicates({
+      period_id,
+      user_ids: targetUserIds,
+      standard_task_id: stdId,
+      task_name: taskName
+    });
+    const dupUserIds = new Set(dups.map(d => d.user_id));
+
+    for (const uid of targetUserIds) {
+      if (dupUserIds.has(uid)) {
+        const found = dups.find(d => d.user_id === uid);
+        duplicatePairs.push({
+          user_id: uid,
+          user_name: found?.user_name || 'Cán bộ',
+          task_name: taskName,
+          standard_task_id: stdId
+        });
+      } else {
+        validAssignments.push({ user_id: uid, task: t });
+      }
+    }
+  }
+
+  if (validAssignments.length === 0) {
+    return res.status(400).json({
+      success: false,
+      is_duplicate: true,
+      message: 'Tất cả các lượt phân công được chọn đều đã được giao trước đó cho các cán bộ này trong kỳ đánh giá. Hệ thống không cho phép giao trùng!',
+      duplicate_pairs: duplicatePairs
+    });
+  }
+
   const insertStmt = db.prepare(`
     INSERT INTO assigned_tasks (
       id, period_id, user_id, standard_task_id, task_name, output_result,
@@ -1209,60 +1352,76 @@ app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) =>
 
   const createdIds = [];
   const runTransaction = db.transaction(() => {
-    for (const t of tasksToAssign) {
+    for (const item of validAssignments) {
+      const t = item.task;
+      const uid = item.user_id;
       const stdScore = parseFloat(t.standard_score) || (t.task_type === 'Đột xuất' ? 12 : 10);
       const diffWeight = parseFloat(t.difficulty_weight) || 1.0;
       const maxConv = Number((stdScore * diffWeight).toFixed(2));
       const taskDeadline = deadline || t.deadline || '2026-09-30';
       const groupId = targetUserIds.length > 1 ? uuidv4() : null;
+      const id = uuidv4();
+      const initialStatus = (uid === (assigned_by || viewerId)) ? 'in_progress' : 'pending_acceptance';
 
-      for (const uid of targetUserIds) {
-        const id = uuidv4();
-        const initialStatus = (uid === (assigned_by || viewerId)) ? 'in_progress' : 'pending_acceptance';
-        insertStmt.run(
-          id,
-          period_id,
-          uid,
-          t.standard_task_id || t.id || null,
-          t.task_name,
-          t.output_result || 'Văn bản/ Tài liệu',
-          taskDeadline,
-          t.task_type || 'Thường xuyên',
-          stdScore,
-          diffWeight,
-          maxConv,
-          t.axis_code || 'TRUC_1',
-          initialStatus,
-          assigned_by || viewerId,
-          groupId
-        );
-        createdIds.push(id);
-      }
+      insertStmt.run(
+        id,
+        period_id,
+        uid,
+        t.standard_task_id || t.id || null,
+        t.task_name,
+        t.output_result || 'Văn bản/ Tài liệu',
+        taskDeadline,
+        t.task_type || 'Thường xuyên',
+        stdScore,
+        diffWeight,
+        maxConv,
+        t.axis_code || 'TRUC_1',
+        initialStatus,
+        assigned_by || viewerId,
+        groupId
+      );
+      createdIds.push(id);
     }
   });
 
   runTransaction();
 
-  const tasksCount = tasksToAssign.length;
-  const usersCount = targetUserIds.length;
-  const totalCount = createdIds.length;
+  const dupSummary = duplicatePairs.length > 0
+    ? ` Đã tự động loại bỏ ${duplicatePairs.length} lượt trùng lặp do cán bộ đã có nhiệm vụ này trong kỳ (${duplicatePairs.slice(0, 3).map(d => `${d.user_name} - ${d.task_name}`).join('; ')}${duplicatePairs.length > 3 ? '...' : ''}).`
+    : '';
 
   res.json({
     success: true,
     created_ids: createdIds,
-    tasks_count: tasksCount,
-    users_count: usersCount,
-    total_assignments: totalCount,
-    message: `Đã phân công thành công ${tasksCount} nhiệm vụ cho ${usersCount} cán bộ (Tổng cộng ${totalCount} lượt phân công)!`
+    tasks_count: tasksToAssign.length,
+    users_count: targetUserIds.length,
+    total_assignments: createdIds.length,
+    skipped_duplicates_count: duplicatePairs.length,
+    message: `Đã phân công thành công ${createdIds.length} lượt nhiệm vụ.${dupSummary}`
   });
 });
 
-// CBNV Tự đăng ký việc
+// CBNV Tự đăng ký việc (Kiểm tra trùng lặp)
 app.post('/api/assigned-tasks/register', (req, res) => {
   const {
     period_id, user_id, standard_task_id, task_name, output_result,
     deadline, task_type, standard_score, difficulty_weight, axis_code
   } = req.body;
+
+  // Kiểm tra trùng lặp
+  const duplicates = checkTaskDuplicates({
+    period_id,
+    user_ids: [user_id],
+    standard_task_id,
+    task_name
+  });
+  if (duplicates.length > 0) {
+    return res.status(400).json({
+      success: false,
+      is_duplicate: true,
+      message: `Bạn đã có nhiệm vụ "${duplicates[0].task_name}" trong kỳ đánh giá này rồi. Không thể đăng ký trùng lặp!`
+    });
+  }
 
   const id = uuidv4();
   const stdScore = parseFloat(standard_score) || (task_type === 'Đột xuất' ? 12 : 10);

@@ -140,6 +140,13 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+  checkDuplicateTasks: (data) => {
+    return fetchApi('/assigned-tasks/check-duplicates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
   registerSelfTask: (data) => {
     return fetchApi('/assigned-tasks/register', {
       method: 'POST',

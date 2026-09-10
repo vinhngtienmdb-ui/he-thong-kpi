@@ -181,14 +181,44 @@ export default function AssignmentTab({
     setCustomOutputResult('');
   }
 
+  // Danh sách các cán bộ đã có nhiệm vụ này trong kỳ (để chặn giao trùng lặp)
+  const duplicateUserIds = useMemo(() => {
+    if (!selectedPeriod || modalMode !== 'assign') return new Set();
+    const stdId = formData.standard_task_id;
+    const normName = (formData.task_name || '').trim().toLowerCase();
+    if (!stdId && !normName) return new Set();
+
+    const dupIds = new Set();
+    (assignedTasks || []).forEach(t => {
+      if (t.period_id === selectedPeriod && !['rejected', 'cancelled'].includes(t.status)) {
+        const matchStd = stdId && t.standard_task_id === stdId;
+        const matchName = normName && (t.task_name || '').trim().toLowerCase() === normName;
+        if (matchStd || matchName) {
+          dupIds.add(t.user_id);
+        }
+      }
+    });
+    return dupIds;
+  }, [selectedPeriod, modalMode, formData.standard_task_id, formData.task_name, assignedTasks]);
+
   function toggleUser(userId) {
+    if (duplicateUserIds.has(userId)) {
+      const u = assignableUsers.find(usr => usr.id === userId);
+      alert(`Cán bộ ${u ? u.full_name : ''} đã có đầu việc này trong kỳ đánh giá. Không thể chọn giao trùng!`);
+      return;
+    }
     setSelectedUserIds(prev => 
       prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
     );
   }
 
   function selectAllUsers() {
-    setSelectedUserIds(assignableUsers.map(u => u.id));
+    const availableUsers = assignableUsers.filter(u => !duplicateUserIds.has(u.id));
+    if (availableUsers.length === 0 && assignableUsers.length > 0) {
+      alert('Tất cả các cán bộ đều đã được giao đầu việc này trong kỳ đánh giá!');
+      return;
+    }
+    setSelectedUserIds(availableUsers.map(u => u.id));
   }
 
   function clearAllUsers() {
@@ -223,6 +253,18 @@ export default function AssignmentTab({
       if (modalMode === 'assign') {
         if (selectedUserIds.length === 0) {
           alert('Vui lòng chọn ít nhất 1 cán bộ/nhân viên nhận việc!');
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Kiểm tra chặn giao việc trùng lặp
+        const dupSelected = selectedUserIds.filter(id => duplicateUserIds.has(id));
+        if (dupSelected.length > 0) {
+          const dupNames = dupSelected.map(id => {
+            const u = assignableUsers.find(usr => usr.id === id);
+            return u ? u.full_name : id;
+          }).join(', ');
+          alert(`CẢNH BÁO TRÙNG LẶP:\nCác cán bộ sau đã được giao đầu việc này trong kỳ đánh giá:\n👉 ${dupNames}\n\nHệ thống không cho phép giao trùng cùng 1 đầu việc. Vui lòng bỏ chọn cán bộ đã có việc để tiếp tục!`);
           setIsSubmitting(false);
           return;
         }
@@ -1888,21 +1930,38 @@ export default function AssignmentTab({
                       .filter(u => !modalUserSearch.trim() || u.full_name?.toLowerCase().includes(modalUserSearch.toLowerCase()) || u.dept_name?.toLowerCase().includes(modalUserSearch.toLowerCase()))
                       .map(u => {
                         const isChecked = selectedUserIds.includes(u.id);
+                        const isDup = duplicateUserIds.has(u.id);
                         return (
                           <label
                             key={u.id}
                             className={`flex items-center gap-2.5 p-2 rounded-lg cursor-pointer transition text-xs ${
-                              isChecked ? 'bg-red-50/80 font-bold text-red-900' : 'hover:bg-slate-50 text-slate-700'
+                              isDup
+                                ? 'bg-amber-50/70 border border-amber-200 text-slate-700'
+                                : isChecked ? 'bg-red-50/80 font-bold text-red-900' : 'hover:bg-slate-50 text-slate-700'
                             }`}
                           >
                             <input
                               type="checkbox"
                               checked={isChecked}
-                              onChange={() => toggleUser(u.id)}
-                              className="rounded text-red-600 focus:ring-red-500 w-4 h-4"
+                              disabled={isDup}
+                              onChange={() => {
+                                if (isDup) {
+                                  alert(`Cán bộ ${u.full_name} đã có đầu việc này trong kỳ đánh giá. Không thể chọn giao trùng!`);
+                                  return;
+                                }
+                                toggleUser(u.id);
+                              }}
+                              className={`rounded w-4 h-4 ${isDup ? 'cursor-not-allowed text-slate-300' : 'text-red-600 focus:ring-red-500'}`}
                             />
                             <div className="flex-1 min-w-0">
-                              <span className="truncate block font-semibold">{u.full_name}</span>
+                              <div className="flex items-center justify-between">
+                                <span className={`truncate block ${isChecked ? 'font-bold' : 'font-semibold'}`}>{u.full_name}</span>
+                                {isDup && (
+                                  <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.2 rounded font-medium flex items-center gap-1 shrink-0">
+                                    <span>⚠️ Đã có nhiệm vụ này</span>
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-[11px] text-slate-400 truncate block">{u.dept_name || 'Cơ quan'} • {u.gov_title || 'Chuyên viên'}</span>
                             </div>
                           </label>

@@ -62,6 +62,7 @@ export default function StandardTasksTab({
     notes: ''
   });
   const [assignUserSearch, setAssignUserSearch] = useState('');
+  const [assignDuplicateUserIds, setAssignDuplicateUserIds] = useState(new Set());
 
   // Bulk Assignment Modal State
   const [isBulkAssignModalOpen, setIsBulkAssignModalOpen] = useState(false);
@@ -206,10 +207,27 @@ export default function StandardTasksTab({
   };
 
   // GIAO VIỆC (Assign - Phân công 1 hoặc nhiều người)
-  const handleOpenAssign = (task) => {
+  const handleOpenAssign = async (task) => {
     setAssigningTask(task);
     setAssignUserSearch('');
-    const defaultIds = (users && users.length > 0) ? [users[0].id] : [];
+    let dupIds = new Set();
+    try {
+      const res = await api.checkDuplicateTasks({
+        period_id: selectedPeriod,
+        user_ids: (users || []).map(u => u.id),
+        standard_task_id: task.id,
+        task_name: task.task_name
+      });
+      if (res && res.duplicates) {
+        dupIds = new Set(res.duplicates.map(d => d.user_id));
+      }
+    } catch (e) {
+      console.error('Error checking duplicate tasks:', e);
+    }
+    setAssignDuplicateUserIds(dupIds);
+
+    const availableUsers = (users || []).filter(u => !dupIds.has(u.id));
+    const defaultIds = availableUsers.length > 0 ? [availableUsers[0].id] : [];
     setAssignForm({
       user_ids: defaultIds,
       deadline: task.deadline || '2026-09-30',
@@ -219,6 +237,11 @@ export default function StandardTasksTab({
   };
 
   const handleToggleAssignUser = (userId) => {
+    if (assignDuplicateUserIds.has(userId)) {
+      const u = users.find(usr => usr.id === userId);
+      alert(`Cán bộ ${u ? u.full_name : ''} đã có đầu việc này trong kỳ đánh giá. Không thể chọn giao trùng!`);
+      return;
+    }
     setAssignForm(prev => {
       const current = prev.user_ids || [];
       if (current.includes(userId)) {
@@ -230,10 +253,15 @@ export default function StandardTasksTab({
   };
 
   const handleSelectAllAssignUsers = () => {
-    if (assignForm.user_ids.length === users.length) {
+    const availableUsers = users.filter(u => !assignDuplicateUserIds.has(u.id));
+    if (availableUsers.length === 0 && users.length > 0) {
+      alert('Tất cả cán bộ đều đã được giao nhiệm vụ này trong kỳ đánh giá!');
+      return;
+    }
+    if (assignForm.user_ids.length === availableUsers.length) {
       setAssignForm(prev => ({ ...prev, user_ids: [] }));
     } else {
-      setAssignForm(prev => ({ ...prev, user_ids: users.map(u => u.id) }));
+      setAssignForm(prev => ({ ...prev, user_ids: availableUsers.map(u => u.id) }));
     }
   };
 
@@ -244,6 +272,14 @@ export default function StandardTasksTab({
       alert('Vui lòng chọn ít nhất 1 cán bộ nhận nhiệm vụ!');
       return;
     }
+
+    const dupSelected = assignForm.user_ids.filter(id => assignDuplicateUserIds.has(id));
+    if (dupSelected.length > 0) {
+      const dupNames = dupSelected.map(id => users.find(u => u.id === id)?.full_name || id).join(', ');
+      alert(`CẢNH BÁO TRÙNG LẶP:\nCác cán bộ sau đã được giao đầu việc này trong kỳ đánh giá:\n👉 ${dupNames}\n\nHệ thống không cho phép giao trùng cùng 1 đầu việc. Vui lòng bỏ chọn cán bộ đã có việc để tiếp tục!`);
+      return;
+    }
+
     try {
       const res = await api.assignTask({
         period_id: selectedPeriod,
@@ -1549,6 +1585,7 @@ export default function StandardTasksTab({
                     })
                     .map(u => {
                       const isChecked = assignForm.user_ids?.includes(u.id);
+                      const isDup = assignDuplicateUserIds.has(u.id);
                       const initial = u.full_name ? u.full_name.split(' ').pop().charAt(0).toUpperCase() : 'C';
                       return (
                         <div
@@ -1556,27 +1593,37 @@ export default function StandardTasksTab({
                           onClick={() => handleToggleAssignUser(u.id)}
                           className={`
                             flex items-center gap-2.5 p-2 rounded-lg cursor-pointer transition border text-xs
-                            ${isChecked 
-                              ? 'bg-red-50 border-red-300 text-slate-900 font-semibold shadow-2xs' 
-                              : 'bg-white hover:bg-slate-100/80 border-slate-200 text-slate-700'
+                            ${isDup
+                              ? 'bg-amber-50/70 border-amber-200 text-slate-700'
+                              : isChecked 
+                                ? 'bg-red-50 border-red-300 text-slate-900 font-semibold shadow-2xs' 
+                                : 'bg-white hover:bg-slate-100/80 border-slate-200 text-slate-700'
                             }
                           `}
                         >
                           <input
                             type="checkbox"
                             checked={isChecked}
+                            disabled={isDup}
                             onChange={() => {}} 
-                            className="rounded text-red-700 focus:ring-red-500 w-4 h-4 cursor-pointer shrink-0"
+                            className={`rounded w-4 h-4 shrink-0 ${isDup ? 'cursor-not-allowed text-slate-300' : 'text-red-700 focus:ring-red-500 cursor-pointer'}`}
                           />
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] shrink-0 ${isChecked ? 'bg-red-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
                             {initial}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="truncate">{u.full_name}</span>
-                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                                {u.role === 'cbql' ? 'Lãnh đạo' : 'Chuyên viên'}
-                              </span>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className={`truncate ${isChecked ? 'font-bold' : ''}`}>{u.full_name}</span>
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+                                  {u.role === 'cbql' ? 'Lãnh đạo' : 'Chuyên viên'}
+                                </span>
+                              </div>
+                              {isDup && (
+                                <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.2 rounded font-medium flex items-center gap-1 shrink-0">
+                                  <span>⚠️ Đã có việc</span>
+                                </span>
+                              )}
                             </div>
                             <div className="text-[10.5px] text-slate-400 truncate">
                               {u.gov_title || u.party_title || 'Cán bộ'} • {u.dept_name || 'Cơ quan'}
