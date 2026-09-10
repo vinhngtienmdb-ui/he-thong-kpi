@@ -1,4 +1,4 @@
-﻿/**
+/**
  * SCRIPT DI CHUYEN DU LIEU TU SQLITE SANG SUPABASE POSTGRESQL
  * Cach dung:
  *   DATABASE_URL="postgresql://postgres:[PASS]@[HOST]:[PORT]/postgres" node migrate_to_supabase.js
@@ -93,12 +93,15 @@ async function migrate() {
     }
     console.log(`✓ users: Da dong bo ${users.length} ban ghi`);
 
+    const validUserIds = new Set(users.map(u => u.id));
+
     // Update departments parent_id and leader_id now that users exist
     for (const d of depts) {
       if (d.parent_id || d.leader_id) {
+        const leaderId = validUserIds.has(d.leader_id) ? d.leader_id : null;
         await client.query(`
           UPDATE departments SET parent_id = $1, leader_id = $2 WHERE id = $3
-        `, [d.parent_id || null, d.leader_id || null, d.id]);
+        `, [d.parent_id || null, leaderId, d.id]);
       }
     }
     console.log(`✓ departments: Da cap nhat lien ket leader_id & parent_id`);
@@ -106,6 +109,7 @@ async function migrate() {
     // 5. periods
     const periods = sqlite.prepare('SELECT * FROM periods').all();
     for (const p of periods) {
+      const finalizedBy = validUserIds.has(p.finalized_by) ? p.finalized_by : null;
       await client.query(`
         INSERT INTO periods (id, code, name, start_date, end_date, is_active,
                              grading_lock_date, is_locked, finalized_at, finalized_by, finalized_note)
@@ -115,7 +119,7 @@ async function migrate() {
           end_date = EXCLUDED.end_date, is_active = EXCLUDED.is_active,
           grading_lock_date = EXCLUDED.grading_lock_date, is_locked = EXCLUDED.is_locked
       `, [p.id, p.code, p.name, p.start_date, p.end_date, p.is_active ?? 1,
-          p.grading_lock_date, p.is_locked ?? 0, p.finalized_at, p.finalized_by, p.finalized_note]);
+          p.grading_lock_date, p.is_locked ?? 0, p.finalized_at, finalizedBy, p.finalized_note]);
     }
     console.log(`✓ periods: Da dong bo ${periods.length} ban ghi`);
 
@@ -163,6 +167,7 @@ async function migrate() {
     // 9. documents
     const documents = sqlite.prepare('SELECT * FROM documents').all();
     for (const doc of documents) {
+      const createdBy = validUserIds.has(doc.created_by) ? doc.created_by : null;
       await client.query(`
         INSERT INTO documents (id, doc_number, doc_date, arrival_date, arrival_number, issuer,
                                doc_type, field, urgency, security_level, summary, file_url,
@@ -173,13 +178,14 @@ async function migrate() {
           file_url = EXCLUDED.file_url, file_name = EXCLUDED.file_name, updated_at = EXCLUDED.updated_at
       `, [doc.id, doc.doc_number, doc.doc_date, doc.arrival_date, doc.arrival_number, doc.issuer,
           doc.doc_type, doc.field, doc.urgency, doc.security_level, doc.summary, doc.file_url,
-          doc.file_name, doc.deadline, doc.status, doc.created_by, doc.created_at, doc.updated_at]);
+          doc.file_name, doc.deadline, doc.status, createdBy, doc.created_at, doc.updated_at]);
     }
     console.log(`✓ documents: Da dong bo ${documents.length} ban ghi`);
 
     // 10. assigned_tasks
     const assignedTasks = sqlite.prepare('SELECT * FROM assigned_tasks').all();
     for (const at of assignedTasks) {
+      const assignedBy = validUserIds.has(at.assigned_by) ? at.assigned_by : null;
       await client.query(`
         INSERT INTO assigned_tasks (id, period_id, user_id, standard_task_id, task_name, output_result,
                                     deadline, task_type, standard_score, difficulty_weight, max_converted_score,
@@ -199,7 +205,7 @@ async function migrate() {
           at.axis_code, at.origin, at.status, at.actual_finish_date, at.evidence_text,
           at.evidence_file_url, at.evidence_file_name, at.quantity_pct, at.progress_pct,
           at.quality_pct, at.leadership_pct, at.execution_score, at.converted_score,
-          at.cbql_comment, at.assigned_by, at.created_at, at.updated_at, at.group_id,
+          at.cbql_comment, assignedBy, at.created_at, at.updated_at, at.group_id,
           at.is_bonus_proposed ?? 0, at.bonus_score ?? 0, at.bonus_reason, at.return_reason,
           at.is_returned ?? 0, at.document_id]);
     }
@@ -208,6 +214,7 @@ async function migrate() {
     // 11. document_dispatches
     const dispatches = sqlite.prepare('SELECT * FROM document_dispatches').all();
     for (const dd of dispatches) {
+      const dispatchedBy = validUserIds.has(dd.dispatched_by) ? dd.dispatched_by : null;
       await client.query(`
         INSERT INTO document_dispatches (id, document_id, department_id, assigned_to_user_id,
                                          coordinating_user_ids, instruction, deadline, task_id,
@@ -217,13 +224,14 @@ async function migrate() {
           status = EXCLUDED.status, completed_at = EXCLUDED.completed_at, completion_note = EXCLUDED.completion_note
       `, [dd.id, dd.document_id, dd.department_id, dd.assigned_to_user_id,
           dd.coordinating_user_ids, dd.instruction, dd.deadline, dd.task_id,
-          dd.status, dd.dispatched_by, dd.dispatched_at, dd.completed_at, dd.completion_note]);
+          dd.status, dispatchedBy, dd.dispatched_at, dd.completed_at, dd.completion_note]);
     }
     console.log(`✓ document_dispatches: Da dong bo ${dispatches.length} ban ghi`);
 
     // 12. evaluations
     const evaluations = sqlite.prepare('SELECT * FROM evaluations').all();
     for (const ev of evaluations) {
+      const returnedBy = validUserIds.has(ev.returned_by) ? ev.returned_by : null;
       await client.query(`
         INSERT INTO evaluations (id, period_id, user_id, part1_score, part2_score, total_score,
                                  rank_proposed, superior_rank, superior_comment, status, updated_at,
@@ -238,7 +246,7 @@ async function migrate() {
           ev.rank_proposed, ev.superior_rank, ev.superior_comment, ev.status, ev.updated_at,
           ev.step, ev.bonus_score, ev.bonus_note, ev.plan_total_max_score, ev.executed_total_conv_score,
           ev.summary_reason, ev.cadre_proposal_note, ev.return_reason, ev.returned_at,
-          ev.returned_by, ev.submitted_at]);
+          returnedBy, ev.submitted_at]);
     }
     console.log(`✓ evaluations: Da dong bo ${evaluations.length} ban ghi`);
 
