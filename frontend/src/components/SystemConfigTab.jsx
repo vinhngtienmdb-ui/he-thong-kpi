@@ -25,6 +25,7 @@ import {
   CheckCircle2, 
   XCircle,
   Database,
+  Cloud,
   Download,
   UploadCloud,
   RefreshCw,
@@ -81,6 +82,11 @@ export default function SystemConfigTab({
   const [restoring, setRestoring] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Supabase Cloud Sync State
+  const [supabaseStatus, setSupabaseStatus] = useState(null);
+  const [supabaseLoading, setSupabaseLoading] = useState(false);
+  const [supabaseActionLoading, setSupabaseActionLoading] = useState(false);
+
   const loadBackups = async () => {
     try {
       setBackupsLoading(true);
@@ -93,11 +99,62 @@ export default function SystemConfigTab({
     }
   };
 
+  const loadSupabaseStatus = async () => {
+    try {
+      setSupabaseLoading(true);
+      const data = await api.getSupabaseStatus();
+      setSupabaseStatus(data);
+    } catch (err) {
+      console.error('Error loading Supabase status:', err);
+    } finally {
+      setSupabaseLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeSubTab === 'database') {
       loadBackups();
+      loadSupabaseStatus();
     }
   }, [activeSubTab]);
+
+  const handlePushToSupabase = async () => {
+    const confirmMsg = `XÁC NHẬN ĐỒNG BỘ LÊN SUPABASE CLOUD:\n\n` +
+      `Thao tác này sẽ tải toàn bộ dữ liệu hiện tại từ máy chủ (cán bộ, phòng ban, nhiệm vụ, văn bản, kết quả đánh giá) lên cơ sở dữ liệu Supabase Cloud (PostgreSQL).\n\n` +
+      `Dữ liệu trên Supabase sẽ được đồng bộ cập nhật (Upsert an toàn không xóa mất mát).\n\n` +
+      `Bạn có muốn tiếp tục?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      setSupabaseActionLoading(true);
+      const res = await api.pushToSupabase();
+      alert(res.message || 'Đã đồng bộ lên Supabase Cloud thành công!');
+      await loadSupabaseStatus();
+    } catch (err) {
+      alert('Lỗi sao lưu lên Supabase: ' + err.message);
+    } finally {
+      setSupabaseActionLoading(false);
+    }
+  };
+
+  const handlePullFromSupabase = async () => {
+    const confirmMsg = `CẢNH BÁO PHỤC HỒI TỪ SUPABASE CLOUD:\n\n` +
+      `Thao tác này sẽ tải toàn bộ dữ liệu từ Supabase Cloud về máy chủ này.\n\n` +
+      `Hệ thống sẽ tự động tạo 1 bản snapshot backup an toàn trên máy chủ trước khi đồng bộ.\n\n` +
+      `Bạn có chắc chắn muốn khôi phục dữ liệu từ Supabase Cloud?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      setSupabaseActionLoading(true);
+      const res = await api.pullFromSupabase();
+      alert(res.message || 'Đã phục hồi CSDL từ Supabase về máy chủ thành công!');
+      window.location.reload();
+    } catch (err) {
+      alert('Lỗi phục hồi từ Supabase: ' + err.message);
+    } finally {
+      setSupabaseActionLoading(false);
+    }
+  };
 
   const handleCreateManualBackup = async () => {
     try {
@@ -1342,18 +1399,141 @@ export default function SystemConfigTab({
       {/* SUB-TAB 4: DATABASE BACKUP & RESTORE */}
       {activeSubTab === 'database' && (
         <div className="space-y-6">
-          {/* Thông báo giải thích cơ chế bảo vệ dữ liệu */}
+          {/* Thông báo giải thích cơ chế tách biệt cập nhật code & CSDL */}
           <div className="bg-emerald-50 border-2 border-emerald-300 text-emerald-950 p-5 rounded-2xl shadow-xs flex items-start gap-4">
             <div className="p-2.5 rounded-xl bg-emerald-600 text-white shrink-0 mt-0.5">
               <ShieldCheck className="w-6 h-6" />
             </div>
             <div className="space-y-1.5 text-xs">
               <h3 className="font-bold text-sm text-emerald-950">
-                🔒 Dữ liệu đã được Cách ly & Bảo vệ An toàn tuyệt đối khi Cập nhật Code (Git Pull)
+                🔒 Đã Tách Biệt Hoàn Toàn Việc Cập Nhật Phần Mềm và Cơ Sở Dữ Liệu
               </h3>
               <p className="text-emerald-800 leading-relaxed">
-                Tệp cơ sở dữ liệu thực tế (<code>kpi.db</code>) đã được cấu hình loại trừ khỏi Git (<code>.gitignore</code>) và bổ sung cơ chế tự động ghi trọn vẹn (WAL checkpoint) cùng sao lưu xoay vòng tự động mỗi khi khởi động hệ thống. Khi bạn hoặc quản trị viên chạy lệnh cập nhật code từ GitHub, <strong>toàn bộ dữ liệu cán bộ, nhiệm vụ, văn bản và điểm đánh giá đã thực hiện sẽ được giữ nguyên 100%</strong> mà không lo bị ghi đè.
+                • <strong>Không ghi đè CSDL khi update code:</strong> Tệp CSDL <code>kpi.db</code> được bảo vệ nghiêm ngặt và máy chủ có cơ chế <em>Tự phục hồi thông minh (Self-healing Auto Recovery)</em> từ thư mục <code>backend/backups/</code>.<br/>
+                • <strong>Tách biệt với Supabase Cloud:</strong> Quá trình khởi động hoặc update code <strong>KHÔNG BAO GIỜ</strong> tự động ghi hay xóa dữ liệu trên Supabase. Mọi hoạt động sao lưu lên đám mây (Push) hoặc khôi phục về (Pull) đều <strong>hoàn toàn do Quản trị viên chủ động quyết định</strong> qua giao diện bên dưới hoặc qua dòng lệnh terminal.
               </p>
+            </div>
+          </div>
+
+          {/* Box Supabase: ĐỒNG BỘ ĐÁM MÂY SUPABASE CLOUD (POSTGRESQL) */}
+          <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-6 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-sky-100 text-sky-700 rounded-xl">
+                  <Cloud className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">Đồng bộ Đám mây Supabase (PostgreSQL Cloud)</h3>
+                    {supabaseStatus?.connected ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800">
+                        <CheckCircle2 className="w-3 h-3" /> Đã kết nối Supabase Cloud
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800">
+                        <AlertTriangle className="w-3 h-3" /> {supabaseStatus?.configured ? 'Lỗi kết nối Supabase' : 'Chưa cấu hình Supabase'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Lưu trữ dữ liệu an toàn trên đám mây Supabase. Độc lập hoàn toàn với quá trình cập nhật mã nguồn (code).
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={loadSupabaseStatus}
+                  disabled={supabaseLoading}
+                  className="px-3.5 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${supabaseLoading ? 'animate-spin text-sky-600' : ''}`} />
+                  <span>{supabaseLoading ? 'Đang kiểm tra...' : 'Kiểm tra trạng thái'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Thông tin URL & Chi tiết so sánh dữ liệu */}
+            {supabaseStatus && (
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 text-xs space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-slate-600 font-medium">Địa chỉ kết nối Supabase Cloud:</span>
+                  <code className="font-mono text-[11px] bg-white px-2.5 py-1 rounded-md border border-slate-200 text-slate-800 font-semibold">
+                    {supabaseStatus.dbUrlMasked || 'Chưa cấu hình DATABASE_URL'}
+                  </code>
+                </div>
+
+                {/* Bảng so sánh số lượng bản ghi SQLite Cục bộ vs Supabase Cloud */}
+                <div>
+                  <div className="font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                    <Database className="w-3.5 h-3.5 text-slate-500" />
+                    <span>So sánh dữ liệu hiện tại (Máy chủ cục bộ vs Supabase Cloud):</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                    {[
+                      { key: 'users', label: 'Cán bộ CBNV' },
+                      { key: 'departments', label: 'Đơn vị / Phòng' },
+                      { key: 'standard_tasks', label: 'CV Chuẩn' },
+                      { key: 'assigned_tasks', label: 'Nhiệm vụ giao' },
+                      { key: 'evaluations', label: 'Phiếu KPI' },
+                      { key: 'documents', label: 'Hồ sơ văn bản' },
+                    ].map(item => {
+                      const localCount = supabaseStatus.sqliteCounts?.[item.key] || 0;
+                      const cloudCount = supabaseStatus.supabaseCounts?.[item.key] || 0;
+                      const isMatch = localCount === cloudCount;
+                      return (
+                        <div key={item.key} className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
+                          <div className="text-[11px] text-slate-500 font-medium truncate">{item.label}</div>
+                          <div className="mt-1 flex items-baseline justify-between font-mono text-xs">
+                            <span className="font-bold text-slate-900" title="Máy chủ cục bộ">{localCount}</span>
+                            <span className="text-slate-400">/</span>
+                            <span className={`font-bold ${isMatch ? 'text-emerald-700' : 'text-sky-700'}`} title="Supabase Cloud">
+                              {cloudCount}
+                            </span>
+                          </div>
+                          <div className="text-[9px] text-slate-400 mt-0.5 flex justify-between">
+                            <span>Máy chủ</span>
+                            <span>Cloud</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Các nút hành động: Push / Pull */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
+              <div className="text-xs text-slate-500 leading-tight">
+                * <strong>Sao lưu lên Supabase (Push):</strong> Tải an toàn dữ liệu từ máy chủ lên Cloud (Cập nhật không làm mất dữ liệu).<br/>
+                * <strong>Khôi phục từ Supabase (Pull):</strong> Tải dữ liệu từ Cloud về máy chủ (Tự động tạo snapshot an toàn trước khi khôi phục).
+              </div>
+
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={handlePushToSupabase}
+                  disabled={supabaseActionLoading || !supabaseStatus?.configured}
+                  className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  title="Sao lưu toàn bộ dữ liệu máy chủ lên Supabase Cloud"
+                >
+                  <UploadCloud className={`w-4 h-4 ${supabaseActionLoading ? 'animate-bounce' : ''}`} />
+                  <span>{supabaseActionLoading ? 'Đang đồng bộ...' : '☁️ Sao lưu lên Supabase (Push)'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePullFromSupabase}
+                  disabled={supabaseActionLoading || !supabaseStatus?.configured}
+                  className="flex-1 sm:flex-initial px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  title="Khôi phục toàn bộ dữ liệu từ Supabase Cloud về máy chủ này"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Khôi phục từ Supabase (Pull)</span>
+                </button>
+              </div>
             </div>
           </div>
 

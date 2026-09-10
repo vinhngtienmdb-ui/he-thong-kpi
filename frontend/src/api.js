@@ -512,4 +512,9 @@ export const api = {
       return res.json();
     });
   },
+
+  // Supabase Cloud Sync
+  getSupabaseStatus: () => fetchApi('/system/supabase/status'),
+  pushToSupabase: () => fetchApi('/system/supabase/push', { method: 'POST' }),
+  pullFromSupabase: () => fetchApi('/system/supabase/pull', { method: 'POST' }),
 };

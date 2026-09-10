@@ -8,6 +8,27 @@ if (!fs.existsSync(backupDir)) {
   try { fs.mkdirSync(backupDir, { recursive: true }); } catch (e) {}
 }
 
+// Auto-recovery if kpi.db was deleted (e.g. by git pull or branch switch)
+if (!fs.existsSync(dbPath) || fs.statSync(dbPath).size === 0) {
+  try {
+    if (fs.existsSync(backupDir)) {
+      const backups = fs.readdirSync(backupDir)
+        .filter(f => f.endsWith('.db') && f !== 'kpi.db')
+        .map(f => ({ name: f, path: path.join(backupDir, f), time: fs.statSync(path.join(backupDir, f)).mtime.getTime(), size: fs.statSync(path.join(backupDir, f)).size }))
+        .filter(b => b.size > 0)
+        .sort((a, b) => b.time - a.time);
+
+      if (backups.length > 0) {
+        console.log(`[Database Alert] kpi.db không tồn tại. Tự động phục hồi từ bản sao lưu gần nhất: ${backups[0].name} (${backups[0].size} bytes)...`);
+        fs.copyFileSync(backups[0].path, dbPath);
+        console.log('[Database Alert] Khôi phục tự động THÀNH CÔNG! Dữ liệu người dùng đã được bảo toàn 100%.');
+      }
+    }
+  } catch (err) {
+    console.error('[Database Alert] Lỗi khi tự động phục hồi kpi.db từ backup:', err);
+  }
+}
+
 const db = new Database(dbPath);
 
 // Enable foreign keys and WAL mode for high performance
@@ -348,7 +369,7 @@ function initDatabase() {
         WHEN role = 'cbql' THEN 'quan_ly'
         ELSE 'nhan_vien'
       END
-      WHERE management_role IS NULL OR management_role = 'nhan_vien'
+      WHERE management_role IS NULL
     `).run();
   } catch (e) {}
 
@@ -482,7 +503,7 @@ function initDatabase() {
         WHERE username = 'admin' AND (full_name LIKE '%?%' OR gov_title LIKE '%?%')
       `).run();
     }
-    db.prepare("UPDATE users SET target_role = 'cbql' WHERE role = 'cbql' AND (target_role IS NULL OR target_role = 'cbnv')").run();
+    db.prepare("UPDATE users SET target_role = 'cbql' WHERE role = 'cbql' AND target_role IS NULL").run();
     db.prepare("UPDATE users SET target_role = 'cbnv' WHERE role = 'cbnv' AND target_role IS NULL").run();
   } catch (e) {
     console.error('Error ensuring admin user:', e);

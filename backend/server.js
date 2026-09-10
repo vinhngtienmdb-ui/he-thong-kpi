@@ -22,6 +22,12 @@ const {
   exportCBQLWorkbook, 
   exportMau02Workbook 
 } = require('./excelService');
+const { 
+  getSupabaseStatus, 
+  pushToSupabase, 
+  pullFromSupabase, 
+  isSupabaseConfigured 
+} = require('./supabaseSync');
 
 // Initialize database
 initDatabase();
@@ -3572,6 +3578,43 @@ app.post('/api/system/backup/restore', upload.single('backup_file'), (req, res) 
   } catch (err) {
     console.error('Error restoring database:', err);
     res.status(500).json({ error: 'Lỗi phục hồi dữ liệu: ' + err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// 10. Supabase Cloud Sync (Tách biệt hoàn toàn khỏi việc update code)
+// -------------------------------------------------------------
+
+// Lấy trạng thái kết nối Supabase và so sánh số lượng bản ghi SQLite vs Supabase
+app.get('/api/system/supabase/status', async (req, res) => {
+  try {
+    const status = await getSupabaseStatus();
+    res.json(status);
+  } catch (err) {
+    console.error('Error getting Supabase status:', err);
+    res.status(500).json({ error: 'Lỗi kiểm tra trạng thái Supabase: ' + err.message });
+  }
+});
+
+// Sao lưu chủ động từ SQLite lên Supabase Cloud
+app.post('/api/system/supabase/push', async (req, res) => {
+  try {
+    const result = await pushToSupabase();
+    res.json(result);
+  } catch (err) {
+    console.error('Error pushing to Supabase:', err);
+    res.status(500).json({ error: 'Lỗi sao lưu lên Supabase: ' + err.message });
+  }
+});
+
+// Khôi phục chủ động từ Supabase Cloud về SQLite máy chủ
+app.post('/api/system/supabase/pull', async (req, res) => {
+  try {
+    const result = await pullFromSupabase();
+    res.json(result);
+  } catch (err) {
+    console.error('Error pulling from Supabase:', err);
+    res.status(500).json({ error: 'Lỗi khôi phục từ Supabase: ' + err.message });
   }
 });
 

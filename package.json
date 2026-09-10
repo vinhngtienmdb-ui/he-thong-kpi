@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node backend/server.js",
     "backend": "node backend/server.js",
-    "frontend": "npm --prefix frontend run dev"
+    "frontend": "npm --prefix frontend run dev",
+    "db:status": "npm --prefix backend run db:status",
+    "db:push-supabase": "npm --prefix backend run db:push-supabase",
+    "db:pull-supabase": "npm --prefix backend run db:pull-supabase"
   },
   "keywords": ["kpi", "quan-ly-cong-viec", "cbql"],
   "author": "",
