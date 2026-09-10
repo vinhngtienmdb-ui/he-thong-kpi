@@ -305,7 +305,7 @@ async function pushToSupabase() {
        'is_bonus_proposed', 'bonus_score', 'bonus_reason', 'return_reason',
        'is_returned', 'document_id'],
       ['id'],
-      ['task_name', 'status', 'execution_score', 'converted_score',
+      ['period_id', 'task_name', 'status', 'execution_score', 'converted_score',
        'evidence_file_url', 'actual_finish_date', 'evidence_text'],
       assignedTasks.map(at => ({
         ...at,
