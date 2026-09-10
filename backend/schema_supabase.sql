@@ -165,7 +165,9 @@ CREATE TABLE IF NOT EXISTS assigned_tasks (
     feedback_reason TEXT,
     feedback_count INTEGER DEFAULT 0,
     reassigned_at TEXT,
-    evaluation_feedback TEXT
+    evaluation_feedback TEXT,
+    inherited_from_task_id TEXT,
+    inherited_from_user_name TEXT
 );
 
 -- 10. Evaluations (Bang tong hop danh gia KPI ca nhan)

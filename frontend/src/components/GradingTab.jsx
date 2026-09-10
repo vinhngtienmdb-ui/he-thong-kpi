@@ -472,6 +472,12 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                     </div>
                   )}
 
+                  {t.inherited_from_user_name && (
+                    <div className="text-[11px] text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 inline-block font-medium">
+                      📥 Kế thừa từ cấp dưới: {t.inherited_from_user_name}
+                    </div>
+                  )}
+
                   {/* Cadre Evaluation Feedback Banner (Bước 4) */}
                   {t.evaluation_feedback && (
                     <div className="text-xs text-purple-900 bg-purple-50 p-2.5 rounded-lg border border-purple-200 space-y-1">
@@ -576,6 +582,11 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                           <a href={t.evidence_file_url} target="_blank" rel="noreferrer" className="underline font-medium">
                             {t.evidence_file_name || 'Xem tệp minh chứng'}
                           </a>
+                        </div>
+                      )}
+                      {t.inherited_from_user_name && (
+                        <div className="text-[11px] text-teal-700 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 inline-block font-medium mt-1">
+                          📥 Kế thừa từ cấp dưới: {t.inherited_from_user_name}
                         </div>
                       )}
                       {t.evaluation_feedback && (
@@ -904,6 +915,11 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                     <a href={gradingTask.evidence_file_url} target="_blank" rel="noreferrer" className="text-blue-700 underline font-semibold">
                       📎 Xem tệp minh chứng ({gradingTask.evidence_file_name})
                     </a>
+                  </div>
+                )}
+                {gradingTask.inherited_from_user_name && (
+                  <div className="text-teal-800 bg-teal-50 px-2 py-1 rounded border border-teal-200 font-medium">
+                    📥 Tệp minh chứng được kế thừa từ cấp dưới: <span className="font-bold">{gradingTask.inherited_from_user_name}</span>
                   </div>
                 )}
               </div>

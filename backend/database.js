@@ -259,7 +259,9 @@ function initDatabase() {
     "ALTER TABLE evaluations ADD COLUMN advisory_comment TEXT;",
     "ALTER TABLE evaluations ADD COLUMN advisory_by TEXT;",
     "ALTER TABLE evaluations ADD COLUMN advisory_submitted_at TEXT;",
-    "ALTER TABLE evaluations ADD COLUMN is_advisory_submitted INTEGER DEFAULT 0;"
+    "ALTER TABLE evaluations ADD COLUMN is_advisory_submitted INTEGER DEFAULT 0;",
+    "ALTER TABLE assigned_tasks ADD COLUMN inherited_from_task_id TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN inherited_from_user_name TEXT;"
   ];
 
   for (const m of migrations) {

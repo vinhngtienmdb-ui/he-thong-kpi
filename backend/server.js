@@ -1350,10 +1350,94 @@ app.put('/api/assigned-tasks/:id/approve', requireManagerOrAdmin, (req, res) => 
   });
 });
 
-// CBNV Cập nhật Kết quả & Minh chứng
+// Lấy danh sách kết quả / tệp minh chứng từ cấp dưới cho cùng nhiệm vụ
+app.get('/api/assigned-tasks/:id/subordinate-evidences', (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentTask = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
+    if (!currentTask) return res.status(404).json({ message: 'Không tìm thấy công việc' });
+
+    const accessibleUserIds = getAccessibleUserIds(currentTask.user_id);
+
+    // Lấy các nhiệm vụ của người khác trong cùng kỳ đã có tệp minh chứng
+    const candidates = db.prepare(`
+      SELECT t.id as task_id, t.task_name, t.user_id, t.status, t.actual_finish_date,
+             t.evidence_text, t.evidence_file_url, t.evidence_file_name,
+             t.standard_score, t.converted_score, t.created_at, t.group_id, t.document_id,
+             t.standard_task_id, t.assigned_by,
+             u.full_name as user_name, u.role as user_role, u.gov_title as user_title,
+             d.name as dept_name
+      FROM assigned_tasks t
+      JOIN users u ON t.user_id = u.id
+      LEFT JOIN departments d ON u.dept_id = d.id
+      WHERE t.period_id = ?
+        AND t.user_id != ?
+        AND t.evidence_file_url IS NOT NULL 
+        AND t.evidence_file_url != ''
+      ORDER BY t.actual_finish_date DESC, t.updated_at DESC
+    `).all(currentTask.period_id, currentTask.user_id);
+
+    const normCurrentName = (currentTask.task_name || '').toLowerCase().trim();
+    const results = [];
+
+    for (const c of candidates) {
+      let matchType = null;
+      let matchPriority = 0;
+
+      if (currentTask.group_id && c.group_id && currentTask.group_id === c.group_id) {
+        matchType = 'Cùng nhóm giao việc';
+        matchPriority = 1;
+      } else if (currentTask.document_id && c.document_id && currentTask.document_id === c.document_id) {
+        matchType = 'Cùng văn bản chỉ đạo';
+        matchPriority = 2;
+      } else if (currentTask.standard_task_id && c.standard_task_id && currentTask.standard_task_id === c.standard_task_id) {
+        matchType = 'Cùng nhiệm vụ chuẩn';
+        matchPriority = 3;
+      } else if (c.task_name && c.task_name.toLowerCase().trim() === normCurrentName) {
+        matchType = 'Cùng tên nhiệm vụ';
+        matchPriority = 4;
+      } else if (c.assigned_by === currentTask.user_id) {
+        matchType = 'Nhiệm vụ do bạn giao cho cấp dưới';
+        matchPriority = 5;
+      } else if (normCurrentName.length > 5 && c.task_name && (c.task_name.toLowerCase().includes(normCurrentName) || normCurrentName.includes(c.task_name.toLowerCase()))) {
+        matchType = 'Nhiệm vụ tương đồng nội dung';
+        matchPriority = 6;
+      } else if (accessibleUserIds !== null && accessibleUserIds.includes(c.user_id)) {
+        matchType = 'Cán bộ trực thuộc cùng phòng/ban';
+        matchPriority = 7;
+      }
+
+      if (matchType) {
+        results.push({
+          ...c,
+          match_type: matchType,
+          match_priority: matchPriority
+        });
+      }
+    }
+
+    results.sort((a, b) => a.match_priority - b.match_priority);
+    res.json(results);
+  } catch (err) {
+    console.error('Error fetching subordinate evidences:', err);
+    res.status(500).json({ error: 'Lỗi lấy kết quả từ cấp dưới: ' + err.message });
+  }
+});
+
+// CBNV Cập nhật Kết quả & Minh chứng (Hỗ trợ nộp file mới hoặc kế thừa từ cấp dưới)
 app.post('/api/assigned-tasks/:id/evidence', upload.single('evidence_file'), async (req, res) => {
   const { id } = req.params;
-  const { actual_finish_date, evidence_text, self_quality_pct, is_bonus_proposed, bonus_reason } = req.body;
+  const { 
+    actual_finish_date, 
+    evidence_text, 
+    self_quality_pct, 
+    is_bonus_proposed, 
+    bonus_reason,
+    existing_file_url,
+    existing_file_name,
+    inherited_from_task_id,
+    inherited_from_user_name
+  } = req.body;
 
   const task = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
   if (!task) return res.status(404).json({ message: 'Không tìm thấy công việc' });
@@ -1363,12 +1447,15 @@ app.post('/api/assigned-tasks/:id/evidence', upload.single('evidence_file'), asy
   if (req.file) {
     const saved = await saveUploadedFile(req.file, 'evidence');
     if (saved) {
-      if (task.evidence_file_url) {
+      if (task.evidence_file_url && task.evidence_file_url !== existing_file_url) {
         await deleteUploadedFile(task.evidence_file_url);
       }
       fileUrl = saved.file_url;
       fileName = saved.file_name;
     }
+  } else if (existing_file_url) {
+    fileUrl = existing_file_url;
+    fileName = existing_file_name || fileName || 'Tep_minh_chung';
   }
 
   // Calculate progress % based on finish date vs deadline
@@ -1384,12 +1471,14 @@ app.post('/api/assigned-tasks/:id/evidence', upload.single('evidence_file'), asy
     SET actual_finish_date = ?, evidence_text = ?, evidence_file_url = ?, evidence_file_name = ?,
         progress_pct = ?, quality_pct = ?, execution_score = ?, converted_score = ?,
         is_bonus_proposed = ?, bonus_reason = ?,
+        inherited_from_task_id = ?, inherited_from_user_name = ?,
         status = 'submitted', updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(
     finishDate, evidence_text || '', fileUrl, fileName,
     progressPct, qualityPct, scores.executionScore, scores.convertedScore,
-    proposeBonus, bonus_reason || '', id
+    proposeBonus, bonus_reason || '',
+    inherited_from_task_id || null, inherited_from_user_name || null, id
   );
 
   res.json({ success: true, message: 'Đã nộp minh chứng thành công, chờ CBQL chấm điểm', ...scores, progressPct });

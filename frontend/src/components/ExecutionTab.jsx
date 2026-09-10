@@ -13,7 +13,9 @@ import {
   Lock,
   RotateCcw,
   MessageSquare,
-  X
+  X,
+  Download,
+  Check
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate, toInputDateFormat, parseDateOnly } from '../constants';
@@ -27,6 +29,11 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
   const [feedbackTask, setFeedbackTask] = useState(null);
   const [evalFeedbackText, setEvalFeedbackText] = useState('');
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
+
+  // Subordinate evidences inheritance (Lấy file kết quả từ cấp dưới cho cùng nhiệm vụ)
+  const [subordinateEvidences, setSubordinateEvidences] = useState([]);
+  const [loadingSubEvidences, setLoadingSubEvidences] = useState(false);
+  const [inheritedEvidence, setInheritedEvidence] = useState(null);
 
   // Modal form state
   const [finishDate, setFinishDate] = useState(new Date().toISOString().split('T')[0]);
@@ -63,6 +70,32 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
     setQuantityPct(task.quantity_pct !== undefined ? task.quantity_pct : 1.0);
     setSelfQualityPct(task.quality_pct !== undefined ? task.quality_pct : 1.0);
     setEvidenceFile(null);
+    setInheritedEvidence(null);
+    loadSubordinateEvidences(task.id);
+  }
+
+  async function loadSubordinateEvidences(taskId) {
+    try {
+      setLoadingSubEvidences(true);
+      const res = await api.getSubordinateEvidences(taskId);
+      setSubordinateEvidences(res || []);
+    } catch (err) {
+      console.error('Error fetching subordinate evidences:', err);
+      setSubordinateEvidences([]);
+    } finally {
+      setLoadingSubEvidences(false);
+    }
+  }
+
+  function handleSelectSubordinateEvidence(sub) {
+    setInheritedEvidence(sub);
+    setEvidenceFile(null);
+    if (sub.actual_finish_date) {
+      setFinishDate(sub.actual_finish_date);
+    }
+    if (!evidenceText.trim()) {
+      setEvidenceText(`Kế thừa sản phẩm / tệp kết quả từ cán bộ ${sub.user_name}: ${sub.evidence_text || sub.task_name}`);
+    }
   }
 
   async function handleSubmitEvidence(e) {
@@ -78,6 +111,11 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
       formData.append('self_quality_pct', selfQualityPct);
       if (evidenceFile) {
         formData.append('evidence_file', evidenceFile);
+      } else if (inheritedEvidence) {
+        formData.append('existing_file_url', inheritedEvidence.evidence_file_url);
+        formData.append('existing_file_name', inheritedEvidence.evidence_file_name);
+        formData.append('inherited_from_task_id', inheritedEvidence.task_id);
+        formData.append('inherited_from_user_name', inheritedEvidence.user_name);
       }
 
       const res = await api.submitEvidence(activeTask.id, formData);
@@ -259,16 +297,21 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
                         </div>
                       )}
                       {task.evidence_file_url && (
-                        <div className="flex items-center space-x-1.5 text-blue-700">
-                          <Paperclip className="w-3.5 h-3.5" />
+                        <div className="flex items-center space-x-1.5 text-blue-700 flex-wrap gap-y-1">
+                          <Paperclip className="w-3.5 h-3.5 shrink-0" />
                           <a 
                             href={task.evidence_file_url} 
                             target="_blank" 
-                            rel="noreferrer"
+                            rel="noreferrer" 
                             className="font-medium hover:underline"
                           >
                             Tệp đính kèm: {task.evidence_file_name || 'Tải file minh chứng'}
                           </a>
+                          {task.inherited_from_user_name && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200 inline-flex items-center gap-1">
+                              📥 Kế thừa từ cấp dưới: {task.inherited_from_user_name}
+                            </span>
+                          )}
                         </div>
                       )}
                       {task.cbql_comment && task.is_returned !== 1 && (
@@ -435,18 +478,148 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
                 ></textarea>
               </div>
 
+              {/* Feature: Lấy tệp kết quả từ cấp dưới cho cùng nhiệm vụ */}
+              <div className="space-y-2 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Download className="w-4 h-4 text-indigo-600" />
+                    <span>Tệp kết quả từ Cấp dưới (cho cùng nhiệm vụ):</span>
+                  </label>
+                  {loadingSubEvidences ? (
+                    <span className="text-[11px] text-slate-400 italic">Đang tìm...</span>
+                  ) : (
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+                      {subordinateEvidences.length} kết quả
+                    </span>
+                  )}
+                </div>
+
+                {loadingSubEvidences ? (
+                  <div className="text-center py-3 text-slate-400 text-xs italic">
+                    Đang quét tìm tệp kết quả của các cán bộ cấp dưới...
+                  </div>
+                ) : subordinateEvidences.length === 0 ? (
+                  <div className="p-2 bg-white rounded-lg border border-slate-200 text-slate-500 text-xs italic text-center">
+                    Chưa có cấp dưới nào nộp tệp kết quả cho nhiệm vụ này.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {subordinateEvidences.map(sub => {
+                      const isSelected = inheritedEvidence?.task_id === sub.task_id;
+                      return (
+                        <div
+                          key={sub.task_id}
+                          className={`p-2.5 rounded-lg border text-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                            isSelected
+                              ? 'bg-indigo-50/90 border-indigo-400 ring-2 ring-indigo-200'
+                              : 'bg-white border-slate-200 hover:border-indigo-300'
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-slate-900">{sub.user_name}</span>
+                              <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                {sub.user_title || sub.dept_name || 'Cán bộ'}
+                              </span>
+                              <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                                {sub.match_type}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-slate-700">
+                              <Paperclip className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                              <a
+                                href={sub.evidence_file_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-semibold text-indigo-700 hover:underline truncate"
+                                title="Bấm để xem tệp trước khi kế thừa"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {sub.evidence_file_name || 'Xem tệp kết quả'}
+                              </a>
+                              {sub.actual_finish_date && (
+                                <span className="text-[11px] text-slate-400 shrink-0">
+                                  • Hoàn thành: {formatDate(sub.actual_finish_date)}
+                                </span>
+                              )}
+                            </div>
+                            {sub.evidence_text && (
+                              <p className="text-[11px] text-slate-500 truncate italic">
+                                "{sub.evidence_text}"
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="shrink-0">
+                            {isSelected ? (
+                              <button
+                                type="button"
+                                onClick={() => setInheritedEvidence(null)}
+                                className="px-2.5 py-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 font-bold text-xs flex items-center gap-1 cursor-pointer"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                                <span>Bỏ chọn</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleSelectSubordinateEvidence(sub)}
+                                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1 shadow-2xs cursor-pointer"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Lấy tệp này</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Status if inherited file is selected */}
+              {inheritedEvidence && (
+                <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between text-xs animate-in fade-in">
+                  <div className="flex items-center gap-2 text-emerald-900">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <div>Đang chọn tệp từ cấp dưới: <b className="text-emerald-950">{inheritedEvidence.user_name}</b></div>
+                      <div className="font-semibold text-indigo-700 underline flex items-center gap-1 mt-0.5">
+                        <Paperclip className="w-3.5 h-3.5" />
+                        <a href={inheritedEvidence.evidence_file_url} target="_blank" rel="noreferrer">
+                          {inheritedEvidence.evidence_file_name}
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setInheritedEvidence(null)}
+                    className="text-xs px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-bold cursor-pointer"
+                  >
+                    Hủy kế thừa
+                  </button>
+                </div>
+              )}
+
               {/* Evidence file upload */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Tệp đính kèm (PDF, Word, Ảnh văn bản có dấu)
+                  Hoặc tự tải lên tệp đính kèm mới (PDF, Word, Ảnh văn bản có dấu)
                 </label>
                 <input
                   type="file"
                   accept=".pdf, .doc, .docx, .png, .jpg, .jpeg, .xlsx"
-                  onChange={(e) => setEvidenceFile(e.target.files[0])}
+                  onChange={(e) => {
+                    setEvidenceFile(e.target.files[0]);
+                    if (e.target.files[0]) {
+                      setInheritedEvidence(null);
+                    }
+                  }}
                   className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
                 />
-                {activeTask.evidence_file_name && !evidenceFile && (
+                {activeTask.evidence_file_name && !evidenceFile && !inheritedEvidence && (
                   <p className="text-[11px] text-slate-500 mt-1">
                     Tệp hiện tại: <b>{activeTask.evidence_file_name}</b> (chọn file mới nếu muốn thay thế)
                   </p>

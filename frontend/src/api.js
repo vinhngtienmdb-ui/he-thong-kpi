@@ -167,6 +167,9 @@ export const api = {
       body: formData,
     }).then(res => res.json());
   },
+  getSubordinateEvidences: (id) => {
+    return fetchApi(`/assigned-tasks/${id}/subordinate-evidences`);
+  },
   gradeTask: (id, data) => {
     return fetchApi(`/assigned-tasks/${id}/grade`, {
       method: 'PUT',
