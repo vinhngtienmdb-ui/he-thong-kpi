@@ -80,14 +80,10 @@ export default function VotingTab({ selectedPeriod, currentUser, users = [], set
       setVotingList((listData || []).filter(item => item.role !== 'admin'));
       setProgressData(progressRes || null);
 
-      // initialize myVotes map
+      // initialize myVotes map: only set if user has already voted
       const votesMap = {};
       (listData || []).forEach(item => {
-        if (item.my_vote) {
-          votesMap[item.user_id] = item.my_vote;
-        } else {
-          votesMap[item.user_id] = item.superior_rank || item.rank_proposed || 'Hoàn thành tốt nhiệm vụ';
-        }
+        votesMap[item.user_id] = item.my_vote || null;
       });
       setMyVotes(votesMap);
     } catch (err) {

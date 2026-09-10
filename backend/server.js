@@ -2007,7 +2007,7 @@ app.get('/api/evaluations', (req, res) => {
     const evalId = uuidv4();
     db.prepare(`
       INSERT INTO evaluations (id, period_id, user_id, part1_score, part2_score, bonus_score, total_score, rank_proposed, status, step)
-      VALUES (?, ?, ?, 30, 0, 0, 30, 'Hoàn thành tốt nhiệm vụ', 'draft', 'step_1_register')
+      VALUES (?, ?, ?, 30, 0, 0, 30, 'Chưa tự đánh giá', 'draft', 'step_1_register')
     `).run(evalId, period_id, user_id);
     evaluation = db.prepare('SELECT * FROM evaluations WHERE id = ?').get(evalId);
   }
@@ -2031,22 +2031,27 @@ app.get('/api/evaluations', (req, res) => {
 
   const approvedTasks = allUserTasks.filter(t => t.status === 'approved');
 
-  // Value A (Kế hoạch đầu kỳ): Tổng điểm quy đổi tối đa của danh mục công việc
+  // Sum tasks for Part 2 calculation
   let planTotalMaxScore = 0;
-  allUserTasks.forEach(t => {
-    planTotalMaxScore += Number((t.max_converted_score || (t.standard_score * t.difficulty_weight)).toFixed(2));
-  });
-  planTotalMaxScore = Number(planTotalMaxScore.toFixed(2));
-
-  // Value B (Thực tế hoàn thành): Tổng điểm quy đổi thực tế của các công việc đã được thẩm định
   let executedTotalConvScore = 0;
   let totalBonusScore = 0;
   let aheadOrOverCount = 0;
 
+  allUserTasks.forEach(t => {
+    const std = t.standard_score || 0;
+    const diff = t.difficulty_weight || 1.0;
+    planTotalMaxScore += (std * diff);
+  });
+  planTotalMaxScore = Number(planTotalMaxScore.toFixed(2));
+
   approvedTasks.forEach(t => {
-    executedTotalConvScore += Number((t.converted_score || 0).toFixed(2));
-    totalBonusScore += Number((t.bonus_score || 0).toFixed(2));
-    if ((t.progress_pct === 1.0 && t.actual_finish_date && t.actual_finish_date < t.deadline) || t.bonus_score > 0) {
+    executedTotalConvScore += (t.converted_score || 0);
+    if (t.is_bonus_approved) {
+      totalBonusScore += (t.bonus_score || ((t.converted_score || 0) * 0.05));
+    }
+    const isAhead = t.actual_finish_date && t.deadline && t.actual_finish_date < t.deadline;
+    const isOver = t.progress_pct > 1.0 || t.quality_pct > 1.0;
+    if (isAhead || isOver) {
       aheadOrOverCount++;
     }
   });
@@ -2057,8 +2062,8 @@ app.get('/api/evaluations', (req, res) => {
   let part2Score = 0;
   if (planTotalMaxScore > 0) {
     part2Score = Number(Math.min(70, (executedTotalConvScore / planTotalMaxScore) * 70).toFixed(2));
-  } else if (allUserTasks.length === 0) {
-    part2Score = 70;
+  } else {
+    part2Score = 0;
   }
 
   // Bonus score: tối đa 7 điểm (10% của 70 điểm)
@@ -2079,8 +2084,12 @@ app.get('/api/evaluations', (req, res) => {
   const allTasksCompleted = totalTasksCount > 0 && approvedTasks.length === totalTasksCount;
 
   // Auto Rank (4 mức theo Hướng dẫn số 06-HD/BTCTU)
-  let autoRank = 'Hoàn thành nhiệm vụ';
-  if (grandTotal >= 90 && allTasksCompleted && aheadSchedulePct >= 0.30) {
+  let autoRank = 'Chưa xếp loại';
+  if (totalTasksCount === 0 || approvedTasks.length === 0) {
+    autoRank = evaluation.rank_proposed && evaluation.rank_proposed !== 'Hoàn thành tốt nhiệm vụ' 
+      ? evaluation.rank_proposed 
+      : 'Chưa tự đánh giá';
+  } else if (grandTotal >= 90 && allTasksCompleted && aheadSchedulePct >= 0.30) {
     autoRank = 'Hoàn thành xuất sắc nhiệm vụ';
   } else if (grandTotal >= 70) {
     autoRank = 'Hoàn thành tốt nhiệm vụ';
@@ -2363,7 +2372,7 @@ app.post('/api/reports/mau-02/save', (req, res) => {
       db.prepare(`
         INSERT INTO evaluations (id, period_id, user_id, part1_score, part2_score, bonus_score, total_score, rank_proposed, superior_rank, summary_reason, cadre_proposal_note, status)
         VALUES (?, ?, ?, 30, 0, 0, 30, 'Chưa tự đánh giá', ?, ?, ?, 'draft')
-      `).run(evalId, period_id, user_id, superior_rank || 'Hoàn thành tốt nhiệm vụ', summary_reason || '', cadre_proposal_note || '');
+      `).run(evalId, period_id, user_id, superior_rank || null, summary_reason || '', cadre_proposal_note || '');
       return res.json({ success: true, message: 'Đã lưu thông tin Báo cáo Mẫu 02 thành công' });
     }
   }

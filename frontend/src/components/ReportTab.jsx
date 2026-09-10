@@ -183,7 +183,7 @@ export default function ReportTab({
   const part2Score = evaluation.part2_score !== undefined && evaluation.part2_score !== null ? evaluation.part2_score : 0;
   const bonusScore = evaluation.bonus_score || 0;
   const grandTotal = Number((part1Score + part2Score + bonusScore).toFixed(2));
-  const rank = evaluation.superior_rank || evaluation.rank_proposed || 'Hoàn thành tốt nhiệm vụ';
+  const rank = evaluation.superior_rank || evaluation.rank_proposed || 'Chưa xếp loại';
 
   // Metrics for execution report
   const assignedTasksCount = userTasks.filter(t => t.origin === 'assigned').length;
@@ -1303,7 +1303,7 @@ export default function ReportTab({
                       const p2 = r.part2_score !== null && r.part2_score !== undefined ? Number(r.part2_score) : 0;
                       const bonus = r.bonus_score !== null && r.bonus_score !== undefined ? Number(r.bonus_score) : 0;
                       const total = r.total_score !== null && r.total_score !== undefined ? Number(r.total_score) : (p1 + p2 + bonus);
-                      const finalRank = r.superior_rank || r.rank_proposed || 'Hoàn thành tốt nhiệm vụ';
+                      const finalRank = r.superior_rank || r.rank_proposed || 'Chưa xếp loại';
 
                       return (
                         <tr key={r.user_id} className="hover:bg-slate-50 transition">

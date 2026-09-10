@@ -610,12 +610,12 @@ async function exportCBQLWorkbook(periodId, userId) {
 
   // Fetch evaluation
   const evaluation = db.prepare('SELECT * FROM evaluations WHERE period_id = ? AND user_id = ?').get(periodId, userId) || {
-    part1_score: 30,
-    part2_score: 70,
+    part1_score: 0,
+    part2_score: 0,
     bonus_score: 0,
-    total_score: 100,
-    rank_proposed: 'Hoàn thành tốt nhiệm vụ',
-    superior_rank: 'Hoàn thành tốt nhiệm vụ',
+    total_score: 0,
+    rank_proposed: 'Chưa tự đánh giá',
+    superior_rank: null,
     superior_comment: ''
   };
 
@@ -645,7 +645,7 @@ async function exportCBQLWorkbook(periodId, userId) {
 
   const part2Score = evaluation.part2_score !== undefined && evaluation.part2_score !== null 
     ? evaluation.part2_score 
-    : (planTotalA > 0 ? Number(Math.min(70.0, 70.0 * (execTotalB / planTotalA)).toFixed(2)) : 70.0);
+    : (planTotalA > 0 ? Number(Math.min(70.0, 70.0 * (execTotalB / planTotalA)).toFixed(2)) : 0);
   const bonusScore = evaluation.bonus_score !== undefined && evaluation.bonus_score !== null 
     ? evaluation.bonus_score 
     : Number(Math.min(7.0, bonusTotal).toFixed(2));
@@ -908,7 +908,7 @@ async function exportCBQLWorkbook(periodId, userId) {
   }
 
   // II. Tự đề xuất xếp loại
-  let rank = evaluation.superior_rank || evaluation.rank_proposed || 'Hoàn thành tốt nhiệm vụ';
+  let rank = evaluation.superior_rank || evaluation.rank_proposed || 'Chưa xếp loại';
   const rProp = ws.addRow(['', `II. Tự đề xuất xếp loại mức chất lượng: ${rank}`]);
   rProp.font = { name: 'Times New Roman', size: 14, bold: true };
   rProp.height = 28;
