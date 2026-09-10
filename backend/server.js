@@ -68,6 +68,32 @@ if (frontendDist) {
   app.use(express.static(frontendDist));
 }
 
+// Health check endpoints (for Render health check, uptime monitors & anti-sleep pings)
+app.get(['/api/health', '/health'], (req, res) => {
+  try {
+    const row = db.prepare('SELECT 1 as alive').get();
+    const uptime = process.uptime();
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptimeSeconds: Math.floor(uptime),
+      uptimeFormatted: `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m ${Math.floor(uptime % 60)}s`,
+      database: row && row.alive === 1 ? 'connected' : 'unknown',
+      memory: {
+        rssMb: Math.round(process.memoryUsage().rss / (1024 * 1024)),
+        heapUsedMb: Math.round(process.memoryUsage().heapUsed / (1024 * 1024))
+      },
+      keepAlive: true,
+      service: 'kpi-crm-system'
+    });
+  } catch (err) {
+    res.status(500).json({
+      status: 'error',
+      message: err.message
+    });
+  }
+});
+
 // Proxy route to view / download files from Cloudflare R2 (when R2_PUBLIC_URL is not set or for private bucket)
 app.get(/^\/api\/storage\/(.+)$/, async (req, res) => {
   const key = req.params[0];
@@ -112,9 +138,28 @@ function getViewer(req) {
   return viewer || null;
 }
 
-// Check if viewer has System Admin permissions
+// Check if user is exempt from KPI evaluation (System Admin, Unit Admin / functional accounts)
+function isExemptFromEvaluation(u) {
+  if (!u) return false;
+  if (u.role === 'admin' || u.role === 'admin_donvi') return true;
+  if (u.role_code === 'admin' || u.role_code === 'admin_donvi' || u.role_id === 'role-admin-donvi') return true;
+  if (u.target_role === 'admin' || u.target_role === 'admin_donvi' || u.target_role === 'none' || u.target_role === 'exempt') return true;
+  try {
+    const perms = typeof u.permissions === 'string' 
+      ? JSON.parse(u.permissions || '{}') 
+      : (u.permissions || {});
+    if (perms.is_exempt_from_evaluation === true || perms.is_functional_admin === true) {
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+// Check if viewer has System Admin permissions (Cấu hình toàn hệ thống)
 function checkIsAdmin(viewer) {
   if (!viewer) return false;
+  // Tài khoản Quản trị đơn vị không phải là Quản trị toàn hệ thống
+  if (viewer.role_code === 'admin_donvi' || viewer.role_id === 'role-admin-donvi') return false;
   if (viewer.role === 'admin' || viewer.role_code === 'admin') return true;
   try {
     const perms = typeof viewer.permissions === 'string' 
@@ -126,9 +171,26 @@ function checkIsAdmin(viewer) {
   }
 }
 
+// Check if viewer has User Management permissions (Quản trị hệ thống HOẶC Quản trị đơn vị)
+function checkCanManageUsers(viewer) {
+  if (!viewer) return false;
+  if (checkIsAdmin(viewer)) return true;
+  if (viewer.role === 'admin' || viewer.role_code === 'admin_donvi' || viewer.role_id === 'role-admin-donvi') return true;
+  try {
+    const perms = typeof viewer.permissions === 'string' 
+      ? JSON.parse(viewer.permissions || '{}') 
+      : (viewer.permissions || {});
+    return perms.can_manage_users === true || perms.can_manage_system === true;
+  } catch (e) {
+    return false;
+  }
+}
+
 // Check if user is a Leader/Manager eligible for management and voting
 function isLeaderUser(u) {
   if (!u) return false;
+  // Quản trị đơn vị là tài khoản chức năng, tuyệt đối không tham gia đánh giá, chấm điểm hay biểu quyết
+  if (u.role_code === 'admin_donvi' || u.role_id === 'role-admin-donvi') return false;
   if (u.role === 'admin' || u.role === 'cbql') return true;
   if (u.target_role === 'cbql') return true;
   if (u.role_code && ['admin', 'cbql_phong', 'ld_coquan', 'to_truong', 'hieu_pho'].includes(u.role_code)) return true;
@@ -156,7 +218,7 @@ function checkIsManagerOrAdmin(viewer) {
   return isLeaderUser(viewer);
 }
 
-// Middleware: Require Admin access (Cấu hình hệ thống, quản lý tài khoản, phòng ban, vai trò)
+// Middleware: Require Admin access (Cấu hình hệ thống, phòng ban, vai trò hệ thống)
 function requireAdmin(req, res, next) {
   const viewer = getViewer(req);
   if (!viewer) {
@@ -166,6 +228,22 @@ function requireAdmin(req, res, next) {
     return res.status(403).json({ 
       success: false, 
       message: 'Từ chối truy cập: Bạn không có quyền cấu hình hệ thống hoặc quản trị phân quyền. Vui lòng liên hệ Quản trị viên.' 
+    });
+  }
+  req.viewer = viewer;
+  next();
+}
+
+// Middleware: Require User Management access (Quản trị viên Hệ thống HOẶC Quản trị đơn vị)
+function requireCanManageUsers(req, res, next) {
+  const viewer = getViewer(req);
+  if (!viewer) {
+    return res.status(401).json({ success: false, message: 'Yêu cầu xác thực tài khoản quản trị (x-viewer-id)' });
+  }
+  if (!checkCanManageUsers(viewer)) {
+    return res.status(403).json({ 
+      success: false, 
+      message: 'Từ chối truy cập: Bạn không có quyền quản lý người dùng/cán bộ. Vui lòng liên hệ Quản trị viên.' 
     });
   }
   req.viewer = viewer;
@@ -580,7 +658,10 @@ app.get('/api/users', (req, res) => {
   `;
   const params = [];
 
-  if (req.query.filter_accessible === 'true' && accessibleUserIds !== null) {
+  const viewer = getViewer(req);
+  const isSysAdmin = checkIsAdmin(viewer);
+
+  if ((req.query.filter_accessible === 'true' || !isSysAdmin) && accessibleUserIds !== null) {
     if (accessibleUserIds.length === 0) {
       return res.json([]);
     }
@@ -594,8 +675,8 @@ app.get('/api/users', (req, res) => {
   res.json(users);
 });
 
-// Admin: Add new user
-app.post('/api/admin/users', requireAdmin, (req, res) => {
+// Admin / Unit Admin: Add new user
+app.post('/api/admin/users', requireCanManageUsers, (req, res) => {
   const { 
     username, password, full_name, role, target_role, role_id, manager_id,
     management_role, final_evaluator_id,
@@ -610,6 +691,18 @@ app.post('/api/admin/users', requireAdmin, (req, res) => {
     return res.status(400).json({ success: false, message: 'Tên đăng nhập đã tồn tại trên hệ thống' });
   }
 
+  const viewer = req.viewer || getViewer(req);
+  const isSysAdmin = checkIsAdmin(viewer);
+  const accessibleUserIds = getAccessibleUserIds(viewer?.id);
+
+  // Phân quyền tạo cán bộ: Quản trị đơn vị chỉ được tạo cán bộ trong đơn vị mình quản lý
+  if (!isSysAdmin && viewer?.dept_id && dept_id) {
+    const allowedDepts = new Set(getDepartmentDescendantIds(viewer.dept_id));
+    if (!allowedDepts.has(dept_id)) {
+      return res.status(403).json({ success: false, message: 'Bạn không có quyền tạo cán bộ thuộc đơn vị ngoài phạm vi quản lý của mình.' });
+    }
+  }
+
   const id = uuidv4();
   
   // Resolve legacy role and target_role from role_id if provided
@@ -620,14 +713,31 @@ app.post('/api/admin/users', requireAdmin, (req, res) => {
   if (effectiveRoleId) {
     const r = db.prepare('SELECT * FROM roles WHERE id = ?').get(effectiveRoleId);
     if (r) {
-      if (r.code === 'admin') { effectiveRole = 'admin'; effectiveTargetRole = 'cbql'; }
-      else if (r.code === 'cbql_phong' || r.code === 'ld_coquan') { effectiveRole = 'cbql'; effectiveTargetRole = 'cbql'; }
-      else { effectiveRole = 'cbnv'; effectiveTargetRole = 'cbnv'; }
+      if (r.code === 'admin' || r.code === 'admin_donvi') {
+        // Quản trị đơn vị không được tự nâng quyền thành Quản trị hệ thống
+        if (!isSysAdmin && r.code === 'admin') {
+          return res.status(403).json({ success: false, message: 'Chỉ Quản trị viên Hệ thống mới có quyền phân quyền Quản trị viên Hệ thống.' });
+        }
+        effectiveRole = 'admin';
+        effectiveTargetRole = 'admin'; // Miễn đánh giá KPI
+      } else if (r.code === 'cbql_phong' || r.code === 'ld_coquan') {
+        effectiveRole = 'cbql';
+        effectiveTargetRole = 'cbql';
+      } else {
+        effectiveRole = 'cbnv';
+        effectiveTargetRole = 'cbnv';
+      }
     }
   } else {
     // find matching role
-    const r = db.prepare('SELECT id FROM roles WHERE code = ?').get(effectiveRole);
-    if (r) effectiveRoleId = r.id;
+    const r = db.prepare('SELECT id, code FROM roles WHERE code = ?').get(effectiveRole);
+    if (r) {
+      effectiveRoleId = r.id;
+      if (r.code === 'admin' || r.code === 'admin_donvi') {
+        effectiveRole = 'admin';
+        effectiveTargetRole = 'admin';
+      }
+    }
   }
 
   // Derive default management_role if not specified
@@ -656,8 +766,8 @@ app.post('/api/admin/users', requireAdmin, (req, res) => {
   triggerBackgroundSupabaseSync();
 });
 
-// Admin: Update user
-app.put('/api/admin/users/:id', requireAdmin, (req, res) => {
+// Admin / Unit Admin: Update user
+app.put('/api/admin/users/:id', requireCanManageUsers, (req, res) => {
   const { id } = req.params;
   const { 
     full_name, role, target_role, role_id, manager_id,
@@ -668,6 +778,15 @@ app.put('/api/admin/users/:id', requireAdmin, (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
 
+  const viewer = req.viewer || getViewer(req);
+  const isSysAdmin = checkIsAdmin(viewer);
+  const accessibleUserIds = getAccessibleUserIds(viewer?.id);
+
+  // Phân quyền quản lý cán bộ: Quản trị đơn vị chỉ được sửa cán bộ trong đơn vị của mình
+  if (!isSysAdmin && accessibleUserIds !== null && !accessibleUserIds.includes(id)) {
+    return res.status(403).json({ success: false, message: 'Bạn không có quyền chỉnh sửa cán bộ ngoài đơn vị quản lý.' });
+  }
+
   let effectiveRole = role || user.role;
   let effectiveTargetRole = target_role !== undefined ? target_role : user.target_role;
   let effectiveRoleId = role_id !== undefined ? role_id : user.role_id;
@@ -675,10 +794,23 @@ app.put('/api/admin/users/:id', requireAdmin, (req, res) => {
   if (role_id && role_id !== user.role_id) {
     const r = db.prepare('SELECT * FROM roles WHERE id = ?').get(role_id);
     if (r) {
-      if (r.code === 'admin') { effectiveRole = 'admin'; effectiveTargetRole = 'cbql'; }
-      else if (r.code === 'cbql_phong' || r.code === 'ld_coquan') { effectiveRole = 'cbql'; effectiveTargetRole = 'cbql'; }
-      else { effectiveRole = 'cbnv'; effectiveTargetRole = 'cbnv'; }
+      if (r.code === 'admin' || r.code === 'admin_donvi') {
+        if (!isSysAdmin && r.code === 'admin') {
+          return res.status(403).json({ success: false, message: 'Chỉ Quản trị viên Hệ thống mới có quyền phân quyền Quản trị viên Hệ thống.' });
+        }
+        effectiveRole = 'admin';
+        effectiveTargetRole = 'admin';
+      } else if (r.code === 'cbql_phong' || r.code === 'ld_coquan') {
+        effectiveRole = 'cbql';
+        effectiveTargetRole = 'cbql';
+      } else {
+        effectiveRole = 'cbnv';
+        effectiveTargetRole = 'cbnv';
+      }
     }
+  } else if (user.role_id === 'role-admin-donvi' || role === 'admin_donvi') {
+    effectiveRole = 'admin';
+    effectiveTargetRole = 'admin';
   }
 
   let updateQuery = `
@@ -712,22 +844,38 @@ app.put('/api/admin/users/:id', requireAdmin, (req, res) => {
   triggerBackgroundSupabaseSync();
 });
 
-// Admin: Delete or deactivate user
-app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
+// Admin / Unit Admin: Delete or deactivate user
+app.delete('/api/admin/users/:id', requireCanManageUsers, (req, res) => {
   const { id } = req.params;
+  const viewer = req.viewer || getViewer(req);
+  const isSysAdmin = checkIsAdmin(viewer);
+  const accessibleUserIds = getAccessibleUserIds(viewer?.id);
+
+  if (!isSysAdmin && accessibleUserIds !== null && !accessibleUserIds.includes(id)) {
+    return res.status(403).json({ success: false, message: 'Bạn không có quyền vô hiệu hoá cán bộ ngoài đơn vị quản lý.' });
+  }
+
   db.prepare('UPDATE users SET is_active = 0 WHERE id = ?').run(id);
   res.json({ success: true, message: 'Đã ngừng kích hoạt tài khoản cán bộ' });
   triggerBackgroundSupabaseSync();
 });
 
-// Admin: Reset / Re-issue user password
-app.post('/api/admin/users/:id/reset-password', requireAdmin, (req, res) => {
+// Admin / Unit Admin: Reset / Re-issue user password
+app.post('/api/admin/users/:id/reset-password', requireCanManageUsers, (req, res) => {
   const { id } = req.params;
   const { new_password } = req.body || {};
   const passwordToSet = new_password && new_password.trim() ? new_password.trim() : '123456';
 
   if (passwordToSet.length < 6) {
     return res.status(400).json({ success: false, message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
+  }
+
+  const viewer = req.viewer || getViewer(req);
+  const isSysAdmin = checkIsAdmin(viewer);
+  const accessibleUserIds = getAccessibleUserIds(viewer?.id);
+
+  if (!isSysAdmin && accessibleUserIds !== null && !accessibleUserIds.includes(id)) {
+    return res.status(403).json({ success: false, message: 'Bạn không có quyền cấp lại mật khẩu cho cán bộ ngoài đơn vị quản lý.' });
   }
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
@@ -743,7 +891,7 @@ app.post('/api/admin/users/:id/reset-password', requireAdmin, (req, res) => {
   });
 });
 
-// Admin: Download Excel template for user import
+// Admin / Unit Admin: Download Excel template for user import
 app.get('/api/admin/users/template', async (req, res) => {
   try {
     const workbook = await generateUserImportTemplate();
@@ -757,8 +905,8 @@ app.get('/api/admin/users/template', async (req, res) => {
   }
 });
 
-// Admin: Import users from Excel
-app.post('/api/admin/users/import', upload.single('file'), requireAdmin, async (req, res) => {
+// Admin / Unit Admin: Import users from Excel
+app.post('/api/admin/users/import', upload.single('file'), requireCanManageUsers, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Vui lòng đính kèm file Excel (.xlsx) danh sách cán bộ' });
@@ -1289,12 +1437,17 @@ app.post('/api/assigned-tasks/assign', requireManagerOrAdmin, (req, res) => {
     return res.status(400).json({ success: false, message: 'Vui lòng chọn ít nhất 1 cán bộ/nhân viên nhận việc' });
   }
 
-  // Guard: Không giao việc KPI cho tài khoản admin nghiệp vụ
-  const adminUsers = db.prepare(`SELECT id, full_name FROM users WHERE id IN (${targetUserIds.map(() => '?').join(',')}) AND role = 'admin'`).all(...targetUserIds);
-  if (adminUsers.length > 0) {
+  // Guard: Không giao việc KPI cho tài khoản admin / quản trị đơn vị nghiệp vụ (miễn đánh giá)
+  const exemptUsers = db.prepare(`
+    SELECT id, full_name, role, target_role, role_id 
+    FROM users 
+    WHERE id IN (${targetUserIds.map(() => '?').join(',')}) 
+      AND (role IN ('admin', 'admin_donvi') OR target_role IN ('admin', 'admin_donvi', 'none', 'exempt') OR role_id = 'role-admin-donvi')
+  `).all(...targetUserIds);
+  if (exemptUsers.length > 0) {
     return res.status(400).json({ 
       success: false, 
-      message: `Tài khoản Quản trị viên (${adminUsers.map(u => u.full_name).join(', ')}) là tài khoản nghiệp vụ, không áp dụng giao việc KPI cá nhân.` 
+      message: `Tài khoản (${exemptUsers.map(u => u.full_name).join(', ')}) là tài khoản quản trị chức năng / miễn đánh giá, không áp dụng giao việc KPI cá nhân.` 
     });
   }
 
@@ -1401,12 +1554,17 @@ app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) =>
     return res.status(400).json({ success: false, message: 'Vui lòng chọn ít nhất 1 cán bộ nhận nhiệm vụ' });
   }
 
-  // Guard: Không giao việc KPI cho tài khoản admin nghiệp vụ
-  const adminUsers = db.prepare(`SELECT id, full_name FROM users WHERE id IN (${targetUserIds.map(() => '?').join(',')}) AND role = 'admin'`).all(...targetUserIds);
-  if (adminUsers.length > 0) {
+  // Guard: Không giao việc KPI cho tài khoản admin / quản trị đơn vị nghiệp vụ (miễn đánh giá)
+  const exemptUsers = db.prepare(`
+    SELECT id, full_name, role, target_role, role_id 
+    FROM users 
+    WHERE id IN (${targetUserIds.map(() => '?').join(',')}) 
+      AND (role IN ('admin', 'admin_donvi') OR target_role IN ('admin', 'admin_donvi', 'none', 'exempt') OR role_id = 'role-admin-donvi')
+  `).all(...targetUserIds);
+  if (exemptUsers.length > 0) {
     return res.status(400).json({ 
       success: false, 
-      message: `Tài khoản Quản trị viên (${adminUsers.map(u => u.full_name).join(', ')}) là tài khoản nghiệp vụ, không áp dụng giao việc KPI cá nhân.` 
+      message: `Tài khoản (${exemptUsers.map(u => u.full_name).join(', ')}) là tài khoản quản trị chức năng / miễn đánh giá, không áp dụng giao việc KPI cá nhân.` 
     });
   }
 
@@ -1541,12 +1699,17 @@ app.post('/api/assigned-tasks/register', (req, res) => {
     deadline, task_type, standard_score, difficulty_weight, axis_code
   } = req.body;
 
-  // Guard: Không áp dụng đăng ký công việc cá nhân cho tài khoản admin
-  const targetUser = db.prepare('SELECT role FROM users WHERE id = ?').get(user_id);
-  if (targetUser?.role === 'admin') {
+  // Guard: Không áp dụng đăng ký công việc cá nhân cho tài khoản admin/chức năng
+  const targetUser = db.prepare(`
+    SELECT u.*, r.code as role_code, r.permissions 
+    FROM users u 
+    LEFT JOIN roles r ON u.role_id = r.id 
+    WHERE u.id = ?
+  `).get(user_id);
+  if (isExemptFromEvaluation(targetUser)) {
     return res.status(400).json({
       success: false,
-      message: 'Tài khoản Quản trị viên là tài khoản nghiệp vụ kỹ thuật, không áp dụng tự đăng ký KPI cá nhân.'
+      message: 'Tài khoản Quản trị viên / Chức năng là tài khoản nghiệp vụ kỹ thuật, không áp dụng tự đăng ký KPI cá nhân.'
     });
   }
 
@@ -1793,12 +1956,17 @@ app.put('/api/assigned-tasks/:id/grade', requireManagerOrAdmin, (req, res) => {
   const task = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
   if (!task) return res.status(404).json({ message: 'Không tìm thấy công việc' });
 
-  // Guard: Không chấm điểm cho tài khoản admin kỹ thuật
-  const taskAssignee = db.prepare('SELECT role FROM users WHERE id = ?').get(task.user_id);
-  if (taskAssignee?.role === 'admin') {
+  // Guard: Không chấm điểm cho tài khoản admin / chức năng kỹ thuật
+  const taskAssignee = db.prepare(`
+    SELECT u.*, r.code as role_code, r.permissions 
+    FROM users u 
+    LEFT JOIN roles r ON u.role_id = r.id 
+    WHERE u.id = ?
+  `).get(task.user_id);
+  if (isExemptFromEvaluation(taskAssignee)) {
     return res.status(400).json({
       success: false,
-      message: 'Tài khoản Quản trị viên là tài khoản nghiệp vụ kỹ thuật, không tham gia đánh giá/chấm điểm KPI cá nhân.'
+      message: 'Tài khoản Quản trị viên / Chức năng là tài khoản nghiệp vụ kỹ thuật, không tham gia đánh giá/chấm điểm KPI cá nhân.'
     });
   }
 
@@ -2048,11 +2216,12 @@ app.get('/api/evaluations', (req, res) => {
   `).get(user_id);
   if (!targetUser) return res.status(404).json({ message: 'Không tìm thấy thông tin cán bộ' });
 
-  // Guard: Tài khoản Admin là tài khoản nghiệp vụ, không áp dụng KPI cá nhân
-  if (targetUser.role === 'admin') {
+  // Guard: Tài khoản Admin / Quản trị đơn vị là tài khoản chức năng, không áp dụng KPI cá nhân
+  if (isExemptFromEvaluation(targetUser)) {
     return res.json({
       is_admin_account: true,
-      message: 'Tài khoản Quản trị viên là tài khoản nghiệp vụ kỹ thuật, không tham gia đánh giá chấm điểm KPI cá nhân.',
+      is_exempt_account: true,
+      message: 'Tài khoản Quản trị chức năng là tài khoản nghiệp vụ kỹ thuật, không tham gia đánh giá chấm điểm KPI cá nhân.',
       user: targetUser,
       evaluation: {
         id: null,
@@ -2062,7 +2231,7 @@ app.get('/api/evaluations', (req, res) => {
         part2_score: 0,
         bonus_score: 0,
         total_score: 0,
-        rank_proposed: 'Tài khoản Quản trị nghiệp vụ',
+        rank_proposed: 'Tài khoản Quản trị chức năng (Miễn đánh giá)',
         step: 'step_1_register'
       },
       criteria: [],
@@ -2419,7 +2588,9 @@ app.get('/api/reports/mau-02', (req, res) => {
     LEFT JOIN departments d ON u.dept_id = d.id
     LEFT JOIN evaluations e ON e.user_id = u.id AND e.period_id = ?
     WHERE (u.is_active IS NULL OR u.is_active = 1)
-      AND u.role != 'admin'
+      AND u.role NOT IN ('admin', 'admin_donvi')
+      AND COALESCE(u.target_role, '') NOT IN ('admin', 'admin_donvi', 'none', 'exempt')
+      AND COALESCE(u.role_id, '') NOT IN ('role-admin', 'role-admin-donvi')
   `;
   const params = [pId, pId, pId, pId];
 
@@ -2605,7 +2776,10 @@ app.get('/api/advisory-summary', (req, res) => {
     LEFT JOIN departments d ON u.dept_id = d.id
     LEFT JOIN evaluations e ON e.user_id = u.id AND e.period_id = ?
     LEFT JOIN users adv_user ON e.advisory_by = adv_user.id
-    WHERE (u.is_active IS NULL OR u.is_active = 1) AND u.role != 'admin' ${userClause}
+    WHERE (u.is_active IS NULL OR u.is_active = 1)
+      AND u.role NOT IN ('admin', 'admin_donvi')
+      AND COALESCE(u.target_role, '') NOT IN ('admin', 'admin_donvi', 'none', 'exempt')
+      AND COALESCE(u.role_id, '') NOT IN ('role-admin', 'role-admin-donvi') ${userClause}
     ORDER BY d.name ASC, u.full_name ASC
   `).all(...params);
 
@@ -2812,7 +2986,10 @@ app.get('/api/voting', (req, res) => {
     FROM users u
     LEFT JOIN departments d ON u.dept_id = d.id
     LEFT JOIN evaluations e ON e.user_id = u.id AND e.period_id = ?
-    WHERE (u.is_active IS NULL OR u.is_active = 1) AND u.role != 'admin' ${userClause}
+    WHERE (u.is_active IS NULL OR u.is_active = 1)
+      AND u.role NOT IN ('admin', 'admin_donvi')
+      AND COALESCE(u.target_role, '') NOT IN ('admin', 'admin_donvi', 'none', 'exempt')
+      AND COALESCE(u.role_id, '') NOT IN ('role-admin', 'role-admin-donvi') ${userClause}
     ORDER BY u.full_name ASC
   `).all(...params);
 
@@ -3695,6 +3872,66 @@ if (frontendDist && fs.existsSync(frontendDist)) {
   });
 }
 
+// -------------------------------------------------------------
+// 11. Anti-Sleep Keep-Alive Daemon & Background Maintenance
+// -------------------------------------------------------------
+
+// Global Process Crash Prevention Guards
+process.on('uncaughtException', (err) => {
+  console.error('[CRITICAL] Uncaught Exception caught by global guard:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[CRITICAL] Unhandled Promise Rejection at:', promise, 'reason:', reason);
+});
+
+// Keep-Alive Pinger to keep Render Web Service running continuously 24/7 without sleeping
+function startKeepAlivePinger() {
+  const externalUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || process.env.SELF_PING_URL;
+  if (!externalUrl) {
+    console.log('[Keep-Alive] RENDER_EXTERNAL_URL is not configured (local development or URL not set). Keep-alive daemon in standby.');
+    return;
+  }
+
+  const pingUrl = externalUrl.replace(/\/+$/, '') + '/api/health';
+  console.log(`[Keep-Alive] 🚀 Keep-Alive Pinger activated for: ${pingUrl} (interval: 8 minutes)`);
+
+  const PING_INTERVAL = 8 * 60 * 1000; // 8 minutes (Render free tier timeout is 15 minutes)
+
+  // Initial ping after 30 seconds to confirm external routing
+  setTimeout(() => {
+    pingTarget();
+    setInterval(pingTarget, PING_INTERVAL);
+  }, 30 * 1000);
+
+  async function pingTarget() {
+    try {
+      const startTime = Date.now();
+      const res = await fetch(pingUrl, {
+        headers: { 'User-Agent': 'KPI-System-KeepAlive-Worker/1.0' }
+      });
+      const duration = Date.now() - startTime;
+      if (res.ok) {
+        console.log(`[Keep-Alive] ❤️ Heartbeat ping successful -> ${pingUrl} (${duration}ms)`);
+      } else {
+        console.warn(`[Keep-Alive] ⚠️ Heartbeat ping returned status ${res.status}`);
+      }
+    } catch (err) {
+      console.error('[Keep-Alive] ❌ Heartbeat ping failed:', err.message);
+    }
+  }
+}
+
+// Periodic database checkpoint and background maintenance every 30 minutes
+setInterval(() => {
+  try {
+    checkpointDatabase();
+  } catch (err) {
+    console.error('[Maintenance] Periodic checkpoint error:', err.message);
+  }
+}, 30 * 60 * 1000);
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Backend server running on http://0.0.0.0:${PORT}`);
+  startKeepAlivePinger();
 });

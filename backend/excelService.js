@@ -770,7 +770,9 @@ async function importUsersFromExcel(fileOrPath, options = {}) {
     const roleInput = String(row.getCell(6).text || '').trim().toLowerCase();
     let matchedRole = roleLookup.get(roleInput);
     if (!matchedRole) {
-      if (roleInput.includes('admin') || roleInput.includes('quản trị')) {
+      if (roleInput.includes('đơn vị') || roleInput.includes('admin_donvi')) {
+        matchedRole = roles.find(r => r.code === 'admin_donvi');
+      } else if (roleInput.includes('admin') || roleInput.includes('quản trị')) {
         matchedRole = roles.find(r => r.code === 'admin');
       } else if (roleInput.includes('ql') || roleInput.includes('lãnh đạo') || roleInput.includes('trưởng') || roleInput.includes('cbql')) {
         matchedRole = roles.find(r => r.code === 'cbql_phong' || r.code === 'cbql');
@@ -779,8 +781,9 @@ async function importUsersFromExcel(fileOrPath, options = {}) {
       }
     }
 
-    const effectiveRole = matchedRole?.code === 'admin' ? 'admin' : (matchedRole?.code.includes('cbql') || matchedRole?.code.includes('ld') ? 'cbql' : 'cbnv');
-    const effectiveTargetRole = effectiveRole === 'cbql' ? 'cbql' : 'cbnv';
+    const isAdm = matchedRole?.code === 'admin' || matchedRole?.code === 'admin_donvi';
+    const effectiveRole = isAdm ? 'admin' : (matchedRole?.code.includes('cbql') || matchedRole?.code.includes('ld') ? 'cbql' : 'cbnv');
+    const effectiveTargetRole = isAdm ? 'admin' : (effectiveRole === 'cbql' ? 'cbql' : 'cbnv');
     const effectiveRoleId = matchedRole?.id || null;
 
     const partyTitle = String(row.getCell(7).text || '').trim() || 'Đảng viên';
@@ -1570,7 +1573,10 @@ async function exportMau02Workbook(periodId) {
     FROM users u
     LEFT JOIN departments d ON u.dept_id = d.id
     LEFT JOIN evaluations e ON e.user_id = u.id AND e.period_id = ?
-    WHERE u.is_active = 1 AND u.role != 'admin'
+    WHERE u.is_active = 1 
+      AND u.role NOT IN ('admin', 'admin_donvi')
+      AND COALESCE(u.target_role, '') NOT IN ('admin', 'admin_donvi', 'none', 'exempt')
+      AND COALESCE(u.role_id, '') NOT IN ('role-admin', 'role-admin-donvi')
     ORDER BY u.role DESC, u.full_name ASC
   `).all(periodId);
 

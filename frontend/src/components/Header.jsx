@@ -1176,12 +1176,41 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 3.4 */}
+              {/* Version 3.5 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.4</span>
-                  <span className="text-xs text-slate-500 font-medium">10/09/2026 (Bản phát hành hiện tại)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.5</span>
+                  <span className="text-xs text-slate-500 font-medium">10/09/2026 (Bản phát hành mới nhất)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Bổ Sung Phân Quyền Quản Trị Đơn Vị (User Chức Năng - Miễn Đánh Giá), Tái Cấu Trúc Bố Cục Chi Tiết Cán Bộ & Hệ Thống Hoạt Động 24/7 Không Sleep
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Phân quyền Quản trị đơn vị (admin_donvi - User chức năng):</strong> Bổ sung vai trò quản trị viên cấp đơn vị/phòng ban. Tài khoản này đóng vai trò tài khoản chức năng chuyên trách quản lý danh sách cán bộ và danh mục công việc của đơn vị trực thuộc, được <em>miễn hoàn toàn việc tự đánh giá, chấm điểm KPI và lấy phiếu tín nhiệm</em> (tương tự như Quản trị hệ thống).</li>
+                  <li><strong>Tái cấu trúc bố cục Chi tiết Người dùng (Modal Add/Edit User):</strong> Tái thiết kế toàn diện modal quản lý cán bộ khoa học, mạch lạc thành 3 khối thẻ chuyên biệt:
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li><em>Tài khoản & Phân quyền Hệ thống:</em> Tên đăng nhập, mật khẩu, vai trò kèm nhãn cảnh báo User chức năng tự động, mẫu phiếu KPI thông minh tự khóa đối với tài khoản miễn đánh giá.</li>
+                      <li><em>Đơn vị công tác & Tuyến Quản lý:</em> Phòng ban trực thuộc, chức vụ quản lý, người quản lý trực tiếp và người đánh giá cuối cùng.</li>
+                      <li><em>Thông tin Cá nhân & Chức danh:</em> Họ và tên, chức vụ chính quyền, chức vụ Đảng, ngày sinh (bộ chọn ngày), giới tính (Nam/Nữ), điện thoại, email.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Cơ chế 24/7 Anti-Sleep & High-Availability (Hệ thống chạy ổn định liên tục, không ngủ):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li><strong>Tự động gửi nhịp tim giữ sóng ngầm (Keep-Alive Heartbeat Daemon):</strong> Tự động gửi ping kiểm tra sức khỏe mỗi 8 phút tới URL công khai của dịch vụ Render (qua endpoint <code>/api/health</code>), liên tục làm mới bộ đếm thời gian, triệt tiêu hoàn toàn độ trễ khởi động lại (cold-start) và hiện tượng máy chủ rơi vào trạng thái ngủ khi vắng người truy cập.</li>
+                      <li><strong>Cấu hình điểm kiểm tra sức khỏe dịch vụ (Health Check Path):</strong> Tích hợp <code>healthCheckPath: /api/health</code> trong <code>render.yaml</code> phục vụ giám sát tình trạng máy chủ tự động.</li>
+                      <li><strong>Lớp màng bảo vệ tiến trình & Dọn dẹp bộ đệm định kỳ:</strong> Tích hợp bộ bắt lỗi toàn cục <code>uncaughtException</code> và <code>unhandledRejection</code> ngăn ngừa crash tiến trình Node.js; tự động checkpoint cơ sở dữ liệu SQLite WAL mỗi 30 phút duy trì hiệu năng tối đa.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 3.4 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-400 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-bold">Phiên bản 3.4</span>
+                  <span className="text-xs text-slate-500 font-medium">10/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Tự Động Đồng Bộ & Khôi Phục CSDL Supabase Cloud, Bảo Toàn Tuyệt Đối Dữ Liệu Cán Bộ Sau Khi Update Code

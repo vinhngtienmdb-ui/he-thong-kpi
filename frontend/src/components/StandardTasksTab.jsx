@@ -39,7 +39,7 @@ export default function StandardTasksTab({
     currentUser?.role === 'cbql' || 
     currentUser?.role === 'admin' || 
     currentUser?.target_role === 'cbql' ||
-    ['admin', 'cbql_phong', 'ld_coquan', 'to_truong', 'hieu_pho'].includes(currentUser?.role_code) ||
+    ['admin', 'admin_donvi', 'cbql_phong', 'ld_coquan', 'to_truong', 'hieu_pho'].includes(currentUser?.role_code) ||
     (currentUser?.data_scope && currentUser?.data_scope !== 'personal') ||
     currentUser?.management_role
   );

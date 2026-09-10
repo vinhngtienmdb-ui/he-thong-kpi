@@ -227,15 +227,17 @@ export default function Sidebar({
             )}
           </div>
 
-          {/* 8. QUẢN TRỊ HỆ THỐNG - Chỉ hiển thị cho Quản trị viên (Admin) */}
-          {currentUser?.role === 'admin' && (
+          {/* 8. QUẢN TRỊ - Hiển thị cho Quản trị viên hệ thống & Quản trị đơn vị */}
+          {(currentUser?.role === 'admin' || currentUser?.role_code === 'admin_donvi') && (
             <div className="pt-2.5 border-t border-red-400/30 mt-2">
               {!isCollapsed && (
                 <div className="px-3.5 text-xs font-semibold tracking-wider text-amber-300 uppercase mb-1">
-                  QUẢN TRỊ HỆ THỐNG
+                  {currentUser?.role_code === 'admin_donvi' ? 'QUẢN TRỊ ĐƠN VỊ' : 'QUẢN TRỊ HỆ THỐNG'}
                 </div>
               )}
-              {adminModules.map((item) => {
+              {adminModules
+                .filter(item => currentUser?.role_code !== 'admin_donvi' || item.id === 'users_mgmt')
+                .map((item) => {
                 const Icon = item.icon;
                 const isActive = currentTab === item.id;
                 return (

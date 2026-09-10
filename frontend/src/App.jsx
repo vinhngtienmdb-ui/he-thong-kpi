@@ -161,10 +161,18 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  // Bảo vệ: Cán bộ không phải admin không ở lại các tab quản trị
+  // Bảo vệ: Cán bộ không có quyền quản trị không ở lại các tab quản trị
   useEffect(() => {
-    if (currentUser && currentUser.role !== 'admin' && ['users_mgmt', 'system_config'].includes(currentTab)) {
-      setCurrentTab('dashboard');
+    if (currentUser) {
+      const canManageUsers = currentUser.role === 'admin' || currentUser.role_code === 'admin_donvi';
+      const isFullAdmin = currentUser.role === 'admin' && currentUser.role_code !== 'admin_donvi';
+
+      if (!canManageUsers && currentTab === 'users_mgmt') {
+        setCurrentTab('dashboard');
+      }
+      if (!isFullAdmin && currentTab === 'system_config') {
+        setCurrentTab('dashboard');
+      }
     }
   }, [currentUser, currentTab]);
 

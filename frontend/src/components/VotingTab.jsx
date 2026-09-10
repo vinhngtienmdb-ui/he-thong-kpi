@@ -22,6 +22,12 @@ import { api } from '../api';
 
 function checkIsLeader(user) {
   if (!user) return false;
+  // Quản trị đơn vị là tài khoản chức năng kỹ thuật, tuyệt đối không tham gia biểu quyết hay đánh giá
+  if (user.role_code === 'admin_donvi' || user.role_id === 'role-admin-donvi') return false;
+  try {
+    const perms = typeof user.permissions === 'string' ? JSON.parse(user.permissions || '{}') : (user.permissions || {});
+    if (perms.is_exempt_from_evaluation || perms.is_functional_admin) return false;
+  } catch (e) {}
   if (user.role === 'admin' || user.role === 'cbql') return true;
   if (user.target_role === 'cbql') return true;
   if (user.role_code && ['admin', 'cbql_phong', 'ld_coquan', 'to_truong', 'hieu_pho'].includes(user.role_code)) return true;

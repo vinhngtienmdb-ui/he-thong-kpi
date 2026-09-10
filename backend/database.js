@@ -430,6 +430,24 @@ function ensureDefaultRoles() {
         is_system: 1
       },
       {
+        id: 'role-admin-donvi',
+        code: 'admin_donvi',
+        name: 'Quản trị đơn vị (User chức năng)',
+        description: 'Tài khoản chức năng quản trị kỹ thuật tại đơn vị/phòng ban. Quản lý danh sách cán bộ, danh mục công việc đơn vị. Không tham gia đánh giá, chấm điểm KPI hay biểu quyết.',
+        data_scope: 'dept_tree',
+        permissions: JSON.stringify({
+          can_manage_system: false,
+          can_manage_users: true,
+          can_assign_tasks: false,
+          can_grade_tasks: false,
+          can_conclude_evaluation: false,
+          can_view_all_reports: true,
+          is_functional_admin: true,
+          is_exempt_from_evaluation: true
+        }),
+        is_system: 1
+      },
+      {
         id: 'role-ld-coquan',
         code: 'ld_coquan',
         name: 'Lãnh đạo Cơ quan / Thường vụ',
@@ -496,8 +514,15 @@ function ensureDefaultRoles() {
     ];
 
     const insertRoleStmt = db.prepare(`
-      INSERT OR IGNORE INTO roles (id, code, name, description, data_scope, permissions, is_system)
+      INSERT INTO roles (id, code, name, description, data_scope, permissions, is_system)
       VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        code = excluded.code,
+        name = excluded.name,
+        description = excluded.description,
+        data_scope = excluded.data_scope,
+        permissions = excluded.permissions,
+        is_system = excluded.is_system
     `);
 
     for (const r of defaultRoles) {
@@ -641,6 +666,7 @@ function ensureAdminUser() {
     db.prepare("UPDATE users SET role_id = 'role-admin' WHERE (role = 'admin' OR username = 'admin') AND role_id IS NULL").run();
     db.prepare("UPDATE users SET role_id = 'role-cbql-phong' WHERE role = 'cbql' AND role_id IS NULL").run();
     db.prepare("UPDATE users SET role_id = 'role-cbnv' WHERE role = 'cbnv' AND role_id IS NULL").run();
+    db.prepare("UPDATE users SET target_role = 'admin' WHERE (role_id = 'role-admin-donvi' OR role = 'admin_donvi')").run();
     db.prepare("UPDATE users SET target_role = 'cbql' WHERE role = 'cbql' AND target_role IS NULL").run();
     db.prepare("UPDATE users SET target_role = 'cbnv' WHERE role = 'cbnv' AND target_role IS NULL").run();
   } catch (e) {
