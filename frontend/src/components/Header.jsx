@@ -1176,12 +1176,45 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 3.7 */}
+              {/* Version 3.8 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.7</span>
-                  <span className="text-xs text-slate-500 font-medium">10/09/2026 (Bản phát hành mới nhất - Trình Lãnh đạo & Phân bổ Văn bản / Giao việc Đa hình thức)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.8</span>
+                  <span className="text-xs text-slate-500 font-medium">10/09/2026 (Bản phát hành mới nhất - Tối ưu hóa Toàn diện Mobile & Tablet)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Thanh Điều Hướng Đáy Tiện Dụng (Bottom Nav Dock) & Hệ Thống Thẻ Cảm Ứng (Card Views) Thay Thế Bảng Ngang Trên Di Động
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Thanh điều hướng đáy tiện dụng (Mobile Bottom Navigation Dock):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Bổ sung thanh điều hướng đáy dạng kính mờ cố định ở cạnh dưới màn hình trên điện thoại và máy tính bảng: Chuyển đổi 1 chạm nhanh giữa <em>Tổng quan</em>, <em>Văn bản</em>, <em>Giao việc</em>, <em>Đánh giá/Nộp việc</em> và <em>Menu mở rộng</em>.</li>
+                      <li>Tự động căn chỉnh khoảng trống an toàn (Safe Area Inset) cho iPhone và thiết bị màn hình tai thỏ/nốt ruồi, triệt tiêu tình trạng che khuất nội dung.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Giao diện Thẻ Cảm ứng (Card Views) thay thế bảng cuộn 1400px:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li><em>Phân hệ Giao việc:</em> Thẻ nhiệm vụ và Thẻ tổng hợp nhân sự trực quan, hiển thị rõ hạn định, điểm chuẩn/quy đổi, tiến độ % và nút nộp minh chứng / duyệt kết quả to rõ, chạm nhẹ bằng ngón tay.</li>
+                      <li><em>Phân hệ Quản lý Cán bộ:</em> Thẻ hồ sơ cán bộ hiển thị đầy đủ chức danh, phòng ban, tuyến quản lý và khối nút thao tác nhanh: Sửa, Cấp lại MK, Khóa/Mở, Xóa.</li>
+                      <li><em>Phân hệ Danh mục Chuẩn:</em> Thẻ công việc chuẩn hiển thị mã, đầu ra, điểm quy đổi kèm nút Giao việc và Chỉnh sửa cảm ứng.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Tối ưu hóa Hộp thoại (Modals) & Chống lỗi Auto-Zoom:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Chuẩn hóa kích thước nút bấm tối thiểu 42px - 44px ngăn ngừa bấm nhầm trên màn hình nhỏ.</li>
+                      <li>Cấu hình kích thước ô nhập liệu từ 16px trên mobile, ngăn ngừa hiện tượng màn hình tự động phóng to (auto-zoom) phiền toái trên trình duyệt Safari iOS.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 3.7 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-400 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-bold">Phiên bản 3.7</span>
+                  <span className="text-xs text-slate-500 font-medium">10/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Quy Trình Văn Thư Trình Lãnh Đạo, Phân Bổ Văn Bản Đọc Tham Khảo / Giao Xử Lý & Phân Bổ Theo Nhóm Chức Danh, Nhóm Tự Tạo

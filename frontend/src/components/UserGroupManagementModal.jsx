@@ -169,34 +169,34 @@ export default function UserGroupManagementModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden flex flex-col max-h-[94vh] sm:max-h-[90vh] animate-in fade-in zoom-in duration-200">
         
         {/* Header */}
-        <div className="px-6 py-4 bg-gradient-to-r from-indigo-700 via-indigo-800 to-slate-900 text-white flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-white/10 rounded-lg">
+        <div className="px-4 py-3.5 sm:px-6 sm:py-4 bg-gradient-to-r from-indigo-700 via-indigo-800 to-slate-900 text-white flex items-center justify-between">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="p-1.5 sm:p-2 bg-white/10 rounded-lg shrink-0">
               <Users className="w-5 h-5 text-indigo-300" />
             </div>
             <div>
-              <h2 className="text-base font-bold">Quản lý Nhóm người dùng & Tổ công tác tự tạo</h2>
-              <p className="text-xs text-indigo-200">
-                Tạo các nhóm làm việc (Tổ công tác, Ban chuyên môn) để giao việc hoặc phân bổ văn bản nhanh cho nhiều người
+              <h2 className="text-sm sm:text-base font-bold">Quản lý Nhóm & Tổ công tác tự tạo</h2>
+              <p className="text-[11px] sm:text-xs text-indigo-200 line-clamp-1 sm:line-clamp-none">
+                Tạo các nhóm làm việc để giao việc hoặc phân bổ văn bản nhanh cho nhiều người
               </p>
             </div>
           </div>
           <button 
             onClick={onClose}
-            className="p-1.5 hover:bg-white/10 rounded-lg text-white/80 hover:text-white transition cursor-pointer"
+            className="p-1.5 hover:bg-white/10 rounded-lg text-white/80 hover:text-white transition cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content Body */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-6">
+        <div className="p-3.5 sm:p-6 overflow-y-auto flex-1 space-y-4 sm:space-y-6">
           {errorMsg && (
-            <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2.5 text-rose-700 text-xs font-medium">
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-rose-700 text-xs font-medium">
               <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
               <span>{errorMsg}</span>
             </div>

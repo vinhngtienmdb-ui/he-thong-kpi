@@ -1404,8 +1404,8 @@ export default function AssignmentTab({
                 />
               </div>
 
-              {/* Table for Personnel Summary */}
-              <div className="overflow-x-auto">
+              {/* Table for Personnel Summary (hidden lg:block) */}
+              <div className="hidden lg:block overflow-x-auto">
                 <table className="w-full min-w-[1300px] text-left text-sm text-slate-600">
                   <thead className="bg-slate-50 font-semibold text-slate-700 border-b border-slate-200">
                     <tr>
@@ -1578,33 +1578,25 @@ export default function AssignmentTab({
                                           {p.tasks.map((task, sIdx) => {
                                             const dl = checkDeadlineStatus(task.deadline, task.status);
                                             return (
-                                              <tr key={task.id} className="hover:bg-slate-50">
-                                                <td className="py-2 px-3 text-center text-slate-400 font-medium">
+                                              <tr key={task.id} className="hover:bg-slate-50 transition">
+                                                <td className="py-2 px-3 text-center text-slate-400 font-normal">
                                                   {sIdx + 1}
                                                 </td>
                                                 <td className="py-2 px-3">
-                                                  <div className="font-bold text-slate-900">{task.task_name}</div>
-                                                  <div className="text-[11px] text-slate-500 mt-0.5">
-                                                    Trục: {task.axis_code}
-                                                  </div>
+                                                  <div className="font-semibold text-slate-900">{task.task_name}</div>
+                                                  <div className="text-[11px] text-slate-400 mt-0.5">Trục: {task.axis_code}</div>
                                                 </td>
                                                 <td className="py-2 px-3">
-                                                  <span className={`px-2 py-0.5 rounded-full font-bold text-[11px] ${
-                                                    task.task_type === 'Đột xuất' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
-                                                  }`}>
-                                                    {task.task_type || 'Thường xuyên'}
+                                                  <span className={`text-[11px] font-semibold ${task.task_type === 'Đột xuất' ? 'text-amber-700' : 'text-slate-600'}`}>
+                                                    {task.task_type}
                                                   </span>
                                                 </td>
-                                                <td className="py-2 px-3 text-slate-700">
+                                                <td className="py-2 px-3 text-slate-700 text-[11px]">
                                                   {task.output_result}
                                                 </td>
                                                 <td className="py-2 px-3 whitespace-nowrap">
-                                                  <span className="font-medium text-slate-800">{formatDate(task.deadline)}</span>
-                                                  <div className="text-[10px] mt-0.5">
-                                                    <span className={dl.isOverdue ? 'text-rose-600 font-bold' : dl.isNear ? 'text-amber-600 font-bold' : 'text-slate-400'}>
-                                                      {dl.text}
-                                                    </span>
-                                                  </div>
+                                                  <div className="text-slate-800 font-medium">{formatDate(task.deadline)}</div>
+                                                  <div className="text-[10px] text-slate-400">{dl.text}</div>
                                                 </td>
                                                 <td className="py-2 px-3 text-center">
                                                   <span className="font-bold text-slate-900">{task.standard_score}đ</span>
@@ -1644,7 +1636,7 @@ export default function AssignmentTab({
                                                         type="button"
                                                         onClick={() => openFeedbackModal(task)}
                                                         className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] rounded shadow-2xs"
-                                                        title="Phản hồi công việc chưa hợp lý (tối đa 1 lần)"
+                                                        title="Phản hồi lý do chưa hợp lý"
                                                       >
                                                         Phản hồi
                                                       </button>
@@ -1687,11 +1679,181 @@ export default function AssignmentTab({
                   </tbody>
                 </table>
               </div>
+
+              {/* Mobile & Tablet Cards for Personnel Summary (lg:hidden) */}
+              <div className="lg:hidden space-y-3">
+                {personnelSummary.length === 0 ? (
+                  <div className="text-center py-10 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 italic text-xs">
+                    Chưa có dữ liệu nhiệm vụ được giao cho nhân sự.
+                  </div>
+                ) : (
+                  personnelSummary.map((p) => {
+                    const isExpanded = expandedUserIds.includes(p.userId);
+                    const initials = p.userName.split(' ').map(n => n[0]).slice(-2).join('');
+                    return (
+                      <div 
+                        key={p.userId}
+                        className={`bg-white rounded-2xl border p-4 shadow-2xs space-y-3 transition-all ${
+                          isExpanded ? 'border-red-300 ring-1 ring-red-200 bg-red-50/10' : 'border-slate-200'
+                        }`}
+                      >
+                        {/* Header: Avatar, Name, Role, Dept */}
+                        <div className="flex items-start justify-between gap-2.5 border-b border-slate-100 pb-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-600 to-red-800 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                              {initials}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5 flex-wrap">
+                                <span>{p.userName}</span>
+                                {currentUser?.id === p.userId && (
+                                  <span className="px-2 py-0.2 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                                    Tôi
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-slate-500 truncate mt-0.5">
+                                {p.deptName} • <span className="font-medium text-slate-600">{p.userRole === 'cbql' ? 'LĐ/QL' : 'CBNV'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-xs font-bold bg-blue-100 text-blue-900 border border-blue-200 shrink-0">
+                            {p.total} việc
+                          </span>
+                        </div>
+
+                        {/* Metrics Grid */}
+                        <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                          <div>
+                            <span className="text-[10px] text-slate-400 block font-medium">Tình trạng:</span>
+                            <div className="space-y-0.5 mt-0.5">
+                              <div className="text-[11px] text-slate-700 font-semibold">● Đang làm: {p.inProgress}</div>
+                              <div className="text-[11px] text-blue-700 font-semibold">⏳ Đã nộp: {p.submitted}</div>
+                              <div className="text-[11px] text-emerald-700 font-bold">✓ Đã duyệt: {p.approved}</div>
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block font-medium">Hạn định & Điểm:</span>
+                            <div className="mt-0.5">
+                              {p.overdue > 0 ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                  ⚠️ {p.overdue} trễ hạn
+                                </span>
+                              ) : p.nearDeadline > 0 ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                  🕒 {p.nearDeadline} cận hạn
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-emerald-700 font-bold">✓ Đúng hạn</span>
+                              )}
+                            </div>
+                            <div className="mt-1 font-bold text-slate-900 text-xs">
+                              {p.totalStandardScore}đ <span className="text-slate-400 font-normal text-[10px]">(QĐ: {p.totalMaxConverted}đ)</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs font-bold text-slate-700">
+                            <span>Tiến độ hoàn thành</span>
+                            <span className="text-red-700">{p.completionRate}% ({p.approved}/{p.total} việc)</span>
+                          </div>
+                          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                p.completionRate >= 80 ? 'bg-emerald-600' : p.completionRate >= 50 ? 'bg-amber-500' : 'bg-red-600'
+                              }`}
+                              style={{ width: `${p.completionRate}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Toggle Expand Button */}
+                        <button
+                          type="button"
+                          onClick={() => toggleExpandUser(p.userId)}
+                          className="w-full py-2 px-3 rounded-xl border border-slate-200 hover:border-red-300 bg-slate-50 hover:bg-red-50 text-xs font-bold text-slate-700 hover:text-red-700 transition flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                        >
+                          <span>{isExpanded ? 'Thu gọn danh sách việc' : `Xem chi tiết ${p.tasks.length} nhiệm vụ`}</span>
+                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+
+                        {/* Expanded Tasks on Mobile */}
+                        {isExpanded && (
+                          <div className="space-y-2 pt-2 border-t border-slate-100 animate-in fade-in">
+                            {p.tasks.map((task, sIdx) => {
+                              const dl = checkDeadlineStatus(task.deadline, task.status);
+                              return (
+                                <div key={task.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2 text-xs">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="font-bold text-slate-900 text-xs leading-snug">
+                                      #{sIdx + 1}. {task.task_name}
+                                    </div>
+                                    <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] shrink-0 ${
+                                      task.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
+                                      task.status === 'submitted' ? 'bg-blue-100 text-blue-800' :
+                                      task.status === 'pending_acceptance' ? 'bg-amber-100 text-amber-900' :
+                                      task.status === 'feedback_submitted' ? 'bg-rose-100 text-rose-800' :
+                                      'bg-slate-200 text-slate-700'
+                                    }`}>
+                                      {task.status === 'approved' ? '✓ Đã duyệt' :
+                                       task.status === 'submitted' ? '⏳ Đã nộp' :
+                                       task.status === 'pending_acceptance' ? '⏳ Chờ nhận' :
+                                       task.status === 'feedback_submitted' ? '⚠️ Phản hồi' : '● Đang làm'}
+                                    </span>
+                                  </div>
+
+                                  <div className="text-[11px] text-slate-500 space-y-0.5">
+                                    <div>Hạn chót: <strong>{formatDate(task.deadline)}</strong> ({dl.text})</div>
+                                    <div>Đầu ra: <strong>{task.output_result}</strong></div>
+                                    <div>Điểm chuẩn: <strong>{task.standard_score}đ</strong> (HS: {task.difficulty_weight})</div>
+                                  </div>
+
+                                  {/* Action */}
+                                  <div className="pt-1 flex items-center justify-end gap-1.5">
+                                    {task.status === 'pending_acceptance' && currentUser?.id === task.user_id ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleAcceptTask(task.id)}
+                                          className="px-2.5 py-1 bg-emerald-600 text-white font-bold text-xs rounded-lg shadow-2xs"
+                                        >
+                                          Nhận việc
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => openFeedbackModal(task)}
+                                          className="px-2.5 py-1 bg-amber-600 text-white font-bold text-xs rounded-lg shadow-2xs"
+                                        >
+                                          Phản hồi
+                                        </button>
+                                      </>
+                                    ) : currentUser?.id === task.user_id ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => { if (setCurrentTab) setCurrentTab('execution'); }}
+                                        className="px-3 py-1 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-lg shadow-2xs"
+                                      >
+                                        Nộp MC →
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           ) : (
             /* ELSE: DETAILED FLAT TABLE & FILTERS */
             <>
-              {/* Filters Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {/* Search Input */}
                 <div className="relative">
@@ -1752,8 +1914,8 @@ export default function AssignmentTab({
                 )}
               </div>
 
-              {/* Detailed Table */}
-              <div className="overflow-x-auto">
+              {/* Detailed Table (hidden lg:block) */}
+              <div className="hidden lg:block overflow-x-auto">
                 <table className="w-full min-w-[1350px] text-left text-sm text-slate-600">
                   <thead className="bg-slate-50 font-bold text-slate-700 border-b border-slate-200">
                     <tr>
@@ -1962,6 +2124,180 @@ export default function AssignmentTab({
                     )}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Mobile & Tablet Card View for Tasks (lg:hidden) */}
+              <div className="lg:hidden space-y-3">
+                {currentViewTasks.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 italic text-xs">
+                    Không tìm thấy công việc nào phù hợp với bộ lọc hiện tại.
+                  </div>
+                ) : (
+                  currentViewTasks.map((t, idx) => {
+                    const dl = checkDeadlineStatus(t.deadline, t.status);
+                    const isPending = t.status === 'pending_approval';
+                    const isApproved = t.status === 'approved';
+                    const isSubmitted = t.status === 'submitted';
+
+                    return (
+                      <div 
+                        key={t.id}
+                        className={`bg-white rounded-2xl border p-4 shadow-2xs space-y-3 transition-all ${
+                          dl.isOverdue ? 'border-rose-300' : 'border-slate-200'
+                        }`}
+                      >
+                        {/* Header: Number, Assignee / Origin, Status */}
+                        <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-slate-400 text-xs">#{idx + 1}</span>
+                              {t.origin === 'assigned' ? (
+                                <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-indigo-100 text-indigo-800">
+                                  LĐ giao {t.assigner_name ? `• ${t.assigner_name}` : ''}
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full font-bold text-[10px] bg-amber-100 text-amber-800">
+                                  Tự đăng ký
+                                </span>
+                              )}
+                              {t.document_id && (
+                                <span className="px-2 py-0.5 rounded bg-red-100 text-red-800 font-bold text-[10px] inline-flex items-center gap-1">
+                                  <FileText className="w-3 h-3 text-red-700" />
+                                  <span>Văn bản</span>
+                                </span>
+                              )}
+                            </div>
+                            {activeView !== 'personal' && activeView !== 'assigned_in' && (
+                              <div className="text-xs font-bold text-slate-800 mt-1">
+                                👤 {t.user_name} <span className="font-normal text-slate-400">({t.dept_name || 'Cơ quan'})</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Status Badge */}
+                          <span className={`px-2.5 py-0.5 rounded-full font-bold text-[11px] shrink-0 ${
+                            isApproved ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
+                            isSubmitted ? 'bg-blue-100 text-blue-800 border border-blue-200' :
+                            isPending ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                            t.status === 'pending_acceptance' ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold' :
+                            t.status === 'feedback_submitted' ? 'bg-rose-100 text-rose-800 border border-rose-300 font-bold' :
+                            t.status === 'rejected' ? 'bg-rose-100 text-rose-800 border border-rose-200' :
+                            'bg-slate-100 text-slate-700'
+                          }`}>
+                            {isApproved ? '✓ Đã duyệt KQ' :
+                             isSubmitted ? '⏳ Đã nộp MC' :
+                             isPending ? '⏳ Chờ duyệt việc' :
+                             t.status === 'pending_acceptance' ? '⏳ Chờ nhận việc' :
+                             t.status === 'feedback_submitted' ? '⚠️ Đã phản hồi' :
+                             t.status === 'rejected' ? '✕ Bị từ chối' : '● Đang làm'}
+                          </span>
+                        </div>
+
+                        {/* Task Title */}
+                        <div>
+                          <h4 className="font-bold text-slate-900 text-sm leading-snug">
+                            {t.task_name}
+                          </h4>
+                          <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                            <span className="px-2 py-0.2 rounded bg-slate-100 text-slate-700 font-semibold text-[11px]">
+                              {t.axis_code}
+                            </span>
+                            <span>•</span>
+                            <span className={t.task_type === 'Đột xuất' ? 'text-amber-700 font-bold text-[11px]' : 'text-slate-600 text-[11px]'}>
+                              {t.task_type}
+                            </span>
+                            <span>•</span>
+                            <span className="text-[11px] text-slate-600">Sản phẩm: <strong>{t.output_result}</strong></span>
+                          </div>
+                          {t.feedback_reason && (
+                            <div className="mt-1.5 p-2 bg-rose-50 rounded-lg border border-rose-200 text-rose-800 text-xs">
+                              <strong>Lý do phản hồi:</strong> "{t.feedback_reason}"
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Metrics Grid */}
+                        <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-xl text-xs border border-slate-100">
+                          <div>
+                            <span className="text-[10px] text-slate-400 block font-medium">Hạn chót:</span>
+                            <span className="font-bold text-slate-800">{formatDate(t.deadline)}</span>
+                            <div className="mt-0.5">
+                              <span className={`text-[10px] font-bold ${
+                                dl.isOverdue ? 'text-rose-600' : dl.isNear ? 'text-amber-600' : 'text-slate-400'
+                              }`}>
+                                {dl.text}
+                              </span>
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 block font-medium">Điểm chuẩn & HS:</span>
+                            <span className="font-bold text-slate-900">{t.standard_score} đ</span>
+                            <span className="text-[10px] text-slate-500 ml-1 font-medium">(HS: {t.difficulty_weight})</span>
+                          </div>
+                        </div>
+
+                        {/* Actions for Mobile Touch */}
+                        <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 flex-wrap">
+                          {t.status === 'pending_acceptance' && currentUser?.id === t.user_id ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleAcceptTask(t.id)}
+                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                              >
+                                Nhận việc
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openFeedbackModal(t)}
+                                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                              >
+                                Phản hồi
+                              </button>
+                            </>
+                          ) : t.status === 'feedback_submitted' && isCBQL ? (
+                            <button
+                              type="button"
+                              onClick={() => openReassignModal(t)}
+                              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                            >
+                              Giao lại
+                            </button>
+                          ) : isPending && isCBQL ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openApprovalModal(t)}
+                                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                              >
+                                Duyệt
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRejectTask(t)}
+                                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                              >
+                                Từ chối
+                              </button>
+                            </>
+                          ) : t.user_id === currentUser?.id ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (setCurrentTab) setCurrentTab('execution');
+                              }}
+                              className="px-4 py-1.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                            >
+                              Nộp MC →
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">Theo dõi</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </>
           )}

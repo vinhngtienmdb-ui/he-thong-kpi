@@ -804,7 +804,8 @@ export default function StandardTasksTab({
 
       {/* 3. Data Table matching exact ICPV layout */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
-        <div className="overflow-x-auto">
+        {/* Desktop Table (hidden lg:block) */}
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-white text-slate-700 font-semibold border-b border-red-200/70">
               <tr>
@@ -1027,11 +1028,169 @@ export default function StandardTasksTab({
             </tbody>
           </table>
         </div>
+
+        {/* Mobile & Tablet Card View for Standard Tasks (lg:hidden) */}
+        <div className="lg:hidden p-3 sm:p-4 space-y-3 bg-slate-50/60">
+          {loading ? (
+            <div className="text-center py-10 text-slate-400 bg-white rounded-xl border border-slate-200">
+              Đang tải danh mục sản phẩm công việc chuẩn...
+            </div>
+          ) : filteredTasks.length === 0 ? (
+            <div className="text-center py-10 text-slate-400 bg-white rounded-xl border border-slate-200">
+              Không tìm thấy công việc nào phù hợp. Bấm "Thêm mới" hoặc "Nhập file" để tạo dữ liệu.
+            </div>
+          ) : (
+            filteredTasks.map((t, idx) => {
+              const isDotXuat = t.task_type === 'Đột xuất';
+              const convScore = Number((t.max_converted_score !== undefined && t.max_converted_score !== null 
+                ? t.max_converted_score 
+                : (t.standard_score * (t.difficulty_weight || 1.0))).toFixed(2));
+              const isSelected = selectedTaskIds.includes(t.id);
+
+              return (
+                <div 
+                  key={t.id}
+                  className={`bg-white rounded-2xl border p-4 shadow-2xs space-y-3 transition-all ${
+                    isSelected ? 'border-red-400 ring-1 ring-red-300 bg-red-50/20' : 'border-slate-200'
+                  }`}
+                >
+                  {/* Top: Checkbox, Code, Type badge, Status badge */}
+                  <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {isCBQL && (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectTask(t.id)}
+                          className="w-4 h-4 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer accent-red-600 shrink-0"
+                        />
+                      )}
+                      <span className="font-mono text-xs font-bold text-red-900 bg-red-50 px-2 py-0.5 rounded border border-red-200 truncate">
+                        {t.code || `CV-${idx + 1}`}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {isDotXuat ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#fff2e8] text-[#e05626]">
+                          ⚡ Đột xuất
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#eef4ff] text-[#3b66d1]">
+                          ● Thường xuyên
+                        </span>
+                      )}
+
+                      {t.status === 'Tạm khóa' ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                          Tạm khóa
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                          Áp dụng
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Task Name */}
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm leading-snug">
+                      {t.task_name}
+                    </h4>
+                    <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[11px] text-slate-600">Đầu ra: <strong>{t.output_result || 'Báo cáo tổng hợp'}</strong></span>
+                    </div>
+                    {t.expected_evidence && (
+                      <div className="text-[11px] text-slate-400 mt-1 italic">
+                        Minh chứng: {t.expected_evidence}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Metrics: Deadline, Scores */}
+                  <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-xl text-xs border border-slate-100">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-medium">Thời hạn:</span>
+                      <span className="font-bold text-slate-800">{formatDate(t.deadline)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block font-medium">Điểm chuẩn & QĐ:</span>
+                      <span className="font-bold text-slate-900">{t.standard_score} đ</span>
+                      <span className="text-[10px] text-slate-500 ml-1 font-medium">(QĐ: {convScore}đ)</span>
+                    </div>
+                  </div>
+
+                  {/* Touch Action Bar */}
+                  <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setViewingTask(t)}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Chi tiết</span>
+                    </button>
+
+                    {isCBQL ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAssign(t)}
+                          className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-2xs transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          <span>Giao việc</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(t)}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                        >
+                          <SquarePen className="w-3.5 h-3.5" />
+                          <span>Sửa</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenLock(t)}
+                          className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs rounded-xl transition active:scale-95 cursor-pointer"
+                          title={t.status === 'Tạm khóa' ? 'Mở khóa' : 'Tạm khóa'}
+                        >
+                          <Ban className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDelete(t)}
+                          className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl transition active:scale-95 cursor-pointer"
+                          title="Xóa công việc"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onAssignTask && onAssignTask(t)}
+                        className="px-3.5 py-1.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-2xs transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                      >
+                        <UserCheck className="w-3.5 h-3.5" />
+                        <span>Đăng ký việc</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
 
       {/* Floating Bulk Action Bar when tasks are selected (Chỉ CBQL & Admin) */}
       {selectedTaskIds.length > 0 && isCBQL && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-4 border border-slate-700 animate-in fade-in slide-in-from-bottom-4">
+        <div className="fixed bottom-20 lg:bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900 text-white px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl shadow-2xl flex items-center gap-2.5 sm:gap-4 border border-slate-700 animate-in fade-in slide-in-from-bottom-4 max-w-[95vw]">
           <div className="flex items-center gap-2">
             <span className="flex items-center justify-center w-6 h-6 rounded-full bg-red-600 text-white font-bold text-xs">
               {selectedTaskIds.length}

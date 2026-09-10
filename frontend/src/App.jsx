@@ -17,7 +17,7 @@ import SystemConfigTab from './components/SystemConfigTab';
 import DirectoryTab from './components/DirectoryTab';
 import LoginScreen from './components/LoginScreen';
 import { api, setViewerId } from './api';
-import { Calendar, CheckCircle2 } from 'lucide-react';
+import { Calendar, CheckCircle2, LayoutDashboard, Files, UserCheck, Award, Menu, Layers } from 'lucide-react';
 
 const VALID_TABS = [
   'dashboard', 'directory', 'standard', 'documents', 'assignment', 'execution',
@@ -424,7 +424,7 @@ export default function App() {
         </div>
 
         {/* Main Tab Content */}
-        <main className="flex-1 w-full px-2 sm:px-4 lg:px-6 py-3 sm:py-5 print:p-0 print:m-0 overflow-x-hidden">
+        <main className="flex-1 w-full px-2 sm:px-4 lg:px-6 py-3 sm:py-5 pb-20 sm:pb-24 lg:pb-6 print:p-0 print:m-0 overflow-x-hidden">
           {currentTab === 'dashboard' && (
             <DashboardTab
               selectedPeriod={selectedPeriod}
@@ -579,9 +579,106 @@ export default function App() {
         </main>
 
         {/* Footer */}
-        <footer className="no-print bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
+        <footer className="no-print bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500 pb-20 lg:pb-4">
           Hệ thống quản lý công việc và chấm điểm hiệu suất • Chuẩn hóa theo Quy định số 366-QĐ/TW & Hướng dẫn số 06-HD/BTCTU Ban Tổ chức Thành ủy
         </footer>
+
+        {/* Mobile & Tablet Quick Bottom Navigation Bar (Hidden on Desktop >= lg) */}
+        <nav 
+          aria-label="Thanh điều hướng di động"
+          className="no-print lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-2 pt-1 pb-[max(env(safe-area-inset-bottom,0px),8px)]"
+        >
+          <div className="flex items-center justify-around max-w-lg mx-auto">
+            {/* 1. Dashboard */}
+            <button
+              type="button"
+              onClick={() => setCurrentTab('dashboard')}
+              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer active:scale-95 ${
+                currentTab === 'dashboard'
+                  ? 'text-red-700 font-bold'
+                  : 'text-slate-500 hover:text-slate-800 font-medium'
+              }`}
+            >
+              <div className={`p-1 rounded-lg transition-colors ${currentTab === 'dashboard' ? 'bg-red-50 text-red-700' : ''}`}>
+                <LayoutDashboard className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] mt-0.5 leading-tight">Tổng quan</span>
+            </button>
+
+            {/* 2. Documents */}
+            <button
+              type="button"
+              onClick={() => setCurrentTab('documents')}
+              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer active:scale-95 ${
+                currentTab === 'documents'
+                  ? 'text-red-700 font-bold'
+                  : 'text-slate-500 hover:text-slate-800 font-medium'
+              }`}
+            >
+              <div className={`p-1 rounded-lg transition-colors ${currentTab === 'documents' ? 'bg-red-50 text-red-700' : ''}`}>
+                <Files className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] mt-0.5 leading-tight">Văn bản</span>
+            </button>
+
+            {/* 3. Assignment */}
+            <button
+              type="button"
+              onClick={() => setCurrentTab('assignment')}
+              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer active:scale-95 ${
+                currentTab === 'assignment'
+                  ? 'text-red-700 font-bold'
+                  : 'text-slate-500 hover:text-slate-800 font-medium'
+              }`}
+            >
+              <div className={`p-1 rounded-lg transition-colors ${currentTab === 'assignment' ? 'bg-red-50 text-red-700' : ''}`}>
+                <UserCheck className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] mt-0.5 leading-tight">Giao việc</span>
+            </button>
+
+            {/* 4. Evaluation (Grading for CBQL, Execution/Self-eval for CBNV) */}
+            {(() => {
+              const isManager = currentUser?.role === 'cbql' || currentUser?.role === 'lanh_dao' || currentUser?.role === 'admin' || currentUser?.management_role === 'lanh_dao' || currentUser?.management_role === 'quan_ly';
+              const evalTab = isManager ? 'grading' : 'execution';
+              const evalLabel = isManager ? 'Chấm điểm' : 'Nộp việc';
+              const isEvalActive = currentTab === 'grading' || currentTab === 'execution' || currentTab === 'self_eval';
+
+              return (
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab(evalTab)}
+                  className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer active:scale-95 ${
+                    isEvalActive
+                      ? 'text-red-700 font-bold'
+                      : 'text-slate-500 hover:text-slate-800 font-medium'
+                  }`}
+                >
+                  <div className={`p-1 rounded-lg transition-colors ${isEvalActive ? 'bg-red-50 text-red-700' : ''}`}>
+                    <Award className="w-5 h-5" />
+                  </div>
+                  <span className="text-[10px] mt-0.5 leading-tight">{evalLabel}</span>
+                </button>
+              );
+            })()}
+
+            {/* 5. Menu Drawer Trigger */}
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all cursor-pointer active:scale-95 ${
+                mobileOpen
+                  ? 'text-red-700 font-bold'
+                  : 'text-slate-500 hover:text-slate-800 font-medium'
+              }`}
+            >
+              <div className={`p-1 rounded-lg transition-colors ${mobileOpen ? 'bg-red-50 text-red-700' : ''}`}>
+                <Menu className="w-5 h-5" />
+              </div>
+              <span className="text-[10px] mt-0.5 leading-tight">Menu</span>
+            </button>
+          </div>
+        </nav>
       </div>
     </div>
   );

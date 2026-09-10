@@ -19,7 +19,8 @@ import {
   Shield,
   Building2,
   User,
-  Sparkles
+  Sparkles,
+  Edit
 } from 'lucide-react';
 import { api } from '../api';
 
@@ -477,9 +478,10 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
         </div>
       </div>
 
-      {/* Users Table */}
+      {/* Users Table & Mobile Cards */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Desktop Table (hidden lg:block) */}
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full min-w-[1450px] text-left text-sm text-slate-600">
             <thead className="bg-slate-50 text-slate-700 text-xs font-semibold uppercase border-b border-slate-200">
               <tr>
@@ -667,6 +669,161 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile & Tablet Card View for Users (lg:hidden) */}
+        <div className="lg:hidden p-3 sm:p-4 space-y-3 bg-slate-50/60">
+          {loading ? (
+            <div className="text-center py-10 text-slate-400 bg-white rounded-xl border border-slate-200">
+              Đang tải danh sách cán bộ...
+            </div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="text-center py-10 text-slate-400 bg-white rounded-xl border border-slate-200">
+              Không tìm thấy cán bộ nào phù hợp
+            </div>
+          ) : (
+            filteredUsers.map((u, idx) => {
+              const initials = u.full_name?.split(' ').map(n => n[0]).slice(-2).join('') || 'CB';
+              return (
+                <div key={u.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
+                  {/* Top: Avatar, Name, Username, Phone, Status badge */}
+                  <div className="flex items-start justify-between gap-2.5 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-700 to-slate-900 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                        {initials}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-slate-900 text-sm truncate">
+                          {u.full_name}
+                        </div>
+                        <div className="text-xs text-slate-400 truncate mt-0.5">
+                          @{u.username} {u.phone ? `• 📞 ${u.phone}` : ''}
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5">
+                          🏢 {u.dept_name || 'Chưa phân bổ'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Status */}
+                    {u.is_active !== 0 ? (
+                      <span className="px-2.5 py-1 text-[11px] font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
+                        Hoạt động
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 text-[11px] font-bold rounded-full bg-slate-100 text-slate-500 border border-slate-200 shrink-0">
+                        Đã khóa
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Badges strip: Role, Management Level, Evaluation Template */}
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                    {u.management_role === 'lanh_dao' ? (
+                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                        👑 Lãnh đạo
+                      </span>
+                    ) : u.management_role === 'quan_ly' ? (
+                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                        ⭐ Cấp phó / Quản lý
+                      </span>
+                    ) : u.management_role === 'to_truong' ? (
+                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-teal-100 text-teal-800 border border-teal-200">
+                        🎖️ Tổ trưởng
+                      </span>
+                    ) : null}
+
+                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700">
+                      {u.role_name || u.role}
+                    </span>
+
+                    {u.target_role === 'cbql' ? (
+                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                        Mẫu 01-A (Lãnh đạo)
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                        Mẫu 01-B (CBNV)
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Management hierarchy */}
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs space-y-1">
+                    <div className="flex items-center gap-1.5 text-slate-700">
+                      <span className="text-slate-400 font-normal">Quản lý trực tiếp:</span>
+                      <span className="font-semibold text-slate-800">
+                        {u.manager_name ? `👔 ${u.manager_name}` : 'Trực thuộc Lãnh đạo cơ quan'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-indigo-700">
+                      <span className="text-slate-400 font-normal">Đánh giá cuối cùng:</span>
+                      <span className="font-semibold text-indigo-900">
+                        {u.final_evaluator_name ? `👑 ${u.final_evaluator_name}` : 'Theo phân cấp Lãnh đạo'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Touch Actions Bar */}
+                  <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-100 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(u)}
+                      className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition active:scale-95"
+                    >
+                      <Edit className="w-3.5 h-3.5" />
+                      <span>Sửa</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => openResetPasswordModal(u)}
+                      className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition active:scale-95"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      <span>Cấp lại MK</span>
+                    </button>
+
+                    {u.id !== currentUser?.id && u.username !== 'admin' && (
+                      <>
+                        {u.is_active !== 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(u, 0)}
+                            className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition active:scale-95"
+                            title="Khóa tài khoản"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Khóa</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(u, 1)}
+                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition active:scale-95"
+                            title="Mở khóa tài khoản"
+                          >
+                            <Unlock className="w-3.5 h-3.5" />
+                            <span>Mở</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => handlePermanentDelete(u)}
+                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition active:scale-95"
+                          title="Xóa cán bộ"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Xóa</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 
