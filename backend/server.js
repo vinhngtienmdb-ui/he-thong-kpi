@@ -943,10 +943,29 @@ app.post('/api/standard-tasks/import', upload.single('file'), requireManagerOrAd
 
     const { period_id } = req.body;
     const result = await importStandardTasksFromExcel(fileSource, period_id);
-    res.json({ success: true, message: `Đã nạp thành công ${result.importedCount} công việc chuẩn`, ...result });
+    if (result.importedCount === 0) {
+      return res.status(400).json({
+        success: false,
+        importedCount: 0,
+        message: `Không tìm thấy dòng công việc hợp lệ nào trong file Excel (Sheet: "${result.sheetName || 'Mặc định'}"). Vui lòng kiểm tra cột "Tên công việc" hoặc tải file mẫu chuẩn để đối chiếu.`
+      });
+    }
+
+    let detailMsg = `Đã nạp thành công ${result.importedCount} công việc chuẩn`;
+    if (result.insertedCount > 0 && result.updatedCount > 0) {
+      detailMsg += ` (${result.insertedCount} công việc mới, cập nhật ${result.updatedCount} công việc có sẵn)`;
+    } else if (result.updatedCount > 0) {
+      detailMsg += ` (đã cập nhật ${result.updatedCount} công việc có sẵn)`;
+    }
+
+    res.json({ success: true, message: detailMsg, ...result });
   } catch (error) {
     console.error('Import error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    let userMsg = error.message;
+    if (error.message && (error.message.includes("Can't find end of central directory") || error.message.includes('invalid zip') || error.message.includes('corrupted'))) {
+      userMsg = 'Định dạng file không hợp lệ hoặc bị lỗi. Vui lòng đảm bảo file có định dạng Excel (.xlsx) chuẩn.';
+    }
+    res.status(500).json({ success: false, message: userMsg });
   }
 });
 

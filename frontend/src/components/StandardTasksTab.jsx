@@ -34,7 +34,14 @@ export default function StandardTasksTab({
   onAssignTask,
   setCurrentTab
 }) {
-  const isCBQL = currentUser?.role === 'cbql' || currentUser?.role === 'admin';
+  const isCBQL = Boolean(
+    currentUser?.role === 'cbql' || 
+    currentUser?.role === 'admin' || 
+    currentUser?.target_role === 'cbql' ||
+    ['admin', 'cbql_phong', 'ld_coquan', 'to_truong', 'hieu_pho'].includes(currentUser?.role_code) ||
+    (currentUser?.data_scope && currentUser?.data_scope !== 'personal') ||
+    currentUser?.management_role
+  );
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -116,7 +123,12 @@ export default function StandardTasksTab({
       setImporting(true);
       setImportMessage(null);
       const formData = new FormData();
-      formData.append('period_id', selectedPeriod);
+      if (selectedPeriod) {
+        formData.append('period_id', selectedPeriod);
+      }
+      if (currentUser?.id) {
+        formData.append('viewer_id', currentUser.id);
+      }
       if (!useDefault && selectedFile) {
         formData.append('file', selectedFile);
       }
@@ -124,7 +136,7 @@ export default function StandardTasksTab({
       if (res.success) {
         setImportMessage({ type: 'success', text: res.message });
         loadTasks();
-        setTimeout(() => setShowImportModal(false), 2000);
+        setTimeout(() => setShowImportModal(false), 2200);
       } else {
         setImportMessage({ type: 'error', text: res.message });
       }
@@ -1039,10 +1051,11 @@ export default function StandardTasksTab({
             <div className="text-xs text-slate-600 space-y-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
               <p className="font-semibold text-slate-800">Quy tắc nạp dữ liệu từ biểu mẫu:</p>
               <ul className="list-disc list-inside space-y-1 text-slate-600">
-                <li>Hệ thống đọc dữ liệu từ sheet <b>01. Mẫu import</b>.</li>
-                <li>Tự động nhận diện Điểm chuẩn (10đ Thường xuyên, 12đ Đột xuất).</li>
-                <li>Tự động tính Điểm quy đổi tối đa = Điểm chuẩn × Hệ số độ khó.</li>
-                <li>Khớp tự động vào 6 Trục kết quả trọng tâm và đơn vị quản lý.</li>
+                <li>Hỗ trợ file Excel <b>.xlsx</b> (mẫu tải về hoặc file tự tạo có cột <i>Tên công việc</i>).</li>
+                <li>Tự động nhận diện sheet và khớp các cột dữ liệu thông minh.</li>
+                <li>Tự động tính Điểm chuẩn (10đ Thường xuyên, 12đ Đột xuất) và Điểm quy đổi tối đa.</li>
+                <li>Hỗ trợ định dạng số thập phân kiểu Việt Nam (<i>1,1</i>) và tỷ lệ phần trăm (<i>110%</i>).</li>
+                <li>Tự động cập nhật công việc đã có, tránh trùng lặp danh mục.</li>
               </ul>
             </div>
 

@@ -2,16 +2,87 @@ const ExcelJS = require('exceljs');
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('./database');
 
+// Normalize Vietnamese string for robust column header / axis matching
+function normalizeStr(s) {
+  if (!s) return '';
+  return String(s)
+    .trim()
+    .toLowerCase()
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'd')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ');
+}
+
+// Extract raw or calculated value from ExcelJS cell
+function extractCellValue(cell) {
+  if (!cell) return null;
+  const val = cell.value;
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'object') {
+    if (val instanceof Date) return val;
+    if (val.result !== undefined && val.result !== null) return val.result;
+    if (val.text !== undefined && val.text !== null) return val.text;
+    if (Array.isArray(val.richText)) {
+      return val.richText.map(t => t.text || '').join('');
+    }
+    if (val.formula) return '';
+  }
+  return val;
+}
+
+// Extract string text from cell
+function extractCellText(cell) {
+  const val = extractCellValue(cell);
+  if (val === null || val === undefined) return '';
+  if (val instanceof Date) return val.toISOString();
+  return String(val).trim();
+}
+
+// Parse number from cell, handling formulas, %, and VN comma decimals
+function parseExcelNumber(cell, fallback = 0) {
+  if (!cell) return fallback;
+  let val = extractCellValue(cell);
+  if (val === null || val === undefined || val === '') return fallback;
+  if (typeof val === 'number') return isNaN(val) ? fallback : val;
+  let str = String(val).trim();
+  const isPercent = str.endsWith('%');
+  if (isPercent) {
+    str = str.slice(0, -1).trim();
+  }
+  str = str.replace(',', '.');
+  let num = parseFloat(str);
+  if (isNaN(num)) return fallback;
+  if (isPercent) {
+    num = num / 100;
+  }
+  return num;
+}
+
+// Normalize task type to DB constraint
+function normalizeTaskType(val) {
+  if (!val) return 'Thường xuyên';
+  const s = normalizeStr(val);
+  if (s.includes('dot xuat') || s === 'dx') return 'Đột xuất';
+  return 'Thường xuyên';
+}
+
 // Helper to normalize axis text to axis_code
 function parseAxisCode(axisText) {
   if (!axisText) return 'TRUC_1';
-  const str = String(axisText).toUpperCase();
-  if (str.includes('TRỤC 1') || str.includes('TRUC 1') || str.includes('(1)')) return 'TRUC_1';
-  if (str.includes('TRỤC 2') || str.includes('TRUC 2') || str.includes('(2)')) return 'TRUC_2';
-  if (str.includes('TRỤC 3') || str.includes('TRUC 3') || str.includes('(3)')) return 'TRUC_3';
-  if (str.includes('TRỤC 4') || str.includes('TRUC 4') || str.includes('(4)')) return 'TRUC_4';
-  if (str.includes('TRỤC 5') || str.includes('TRUC 5') || str.includes('(5)')) return 'TRUC_5';
-  if (str.includes('TRỤC 6') || str.includes('TRUC 6') || str.includes('(6)')) return 'TRUC_6';
+  if (typeof axisText === 'number') {
+    if (axisText >= 1 && axisText <= 6) return `TRUC_${axisText}`;
+  }
+  const str = String(axisText).trim().toUpperCase();
+  const norm = normalizeStr(axisText);
+  if (str.includes('TRỤC 1') || str.includes('TRUC 1') || str.includes('TRỤC I ') || str === 'TRỤC I' || str === '1' || norm.includes('kinh te') || norm.includes('nhiem vu chinh tri') || str.includes('(1)')) return 'TRUC_1';
+  if (str.includes('TRỤC 2') || str.includes('TRUC 2') || str.includes('TRỤC II') || str === '2' || norm.includes('the che') || norm.includes('phan cap') || str.includes('(2)')) return 'TRUC_2';
+  if (str.includes('TRỤC 3') || str.includes('TRUC 3') || str.includes('TRỤC III') || str === '3' || norm.includes('khoa hoc') || norm.includes('cong nghe') || norm.includes('chuyen doi so') || str.includes('(3)')) return 'TRUC_3';
+  if (str.includes('TRỤC 4') || str.includes('TRUC 4') || str.includes('TRỤC IV') || str === '4' || norm.includes('xay dung dang') || norm.includes('tham nhung') || str.includes('(4)')) return 'TRUC_4';
+  if (str.includes('TRỤC 5') || str.includes('TRUC 5') || str.includes('TRỤC V ') || str === 'TRỤC V' || str === '5' || norm.includes('van hoa') || norm.includes('an sinh') || str.includes('(5)')) return 'TRUC_5';
+  if (str.includes('TRỤC 6') || str.includes('TRUC 6') || str.includes('TRỤC VI') || str === '6' || norm.includes('quoc phong') || norm.includes('an ninh') || norm.includes('doi ngoai') || str.includes('(6)')) return 'TRUC_6';
   return 'TRUC_1';
 }
 
@@ -89,6 +160,89 @@ function normalizeOutputResult(val) {
   return str;
 }
 
+// Column matching helper for standard tasks
+function findColumnMapping(rowCells) {
+  const mapping = {};
+  rowCells.forEach((text, colIndex) => {
+    const s = normalizeStr(text);
+    if (!s) return;
+    if (!mapping.task_name && (s.includes('ten cong viec') || s.includes('ten nhiem vu') || s.includes('noi dung cong viec') || s.includes('noi dung cv') || s === 'cong viec' || s === 'nhiem vu' || s === 'ten san pham')) {
+      mapping.task_name = colIndex;
+    } else if (!mapping.dept_code && (s.includes('ma don vi') || s.includes('ma phong') || s.includes('don vi') || s.includes('phong ban'))) {
+      mapping.dept_code = colIndex;
+    } else if (!mapping.output_result && (s.includes('ket qua dau ra') || s.includes('san pham dau ra') || s.includes('ket qua') || s === 'san pham')) {
+      mapping.output_result = colIndex;
+    } else if (!mapping.deadline && (s.includes('thoi han') || s.includes('han hoan thanh') || s.includes('ngay hoan thanh') || s.includes('han chot') || s === 'han')) {
+      mapping.deadline = colIndex;
+    } else if (!mapping.task_type && (s.includes('loai viec') || s.includes('loai cong viec') || s.includes('loai cv') || s.includes('loai nhiem vu') || s === 'loai' || s.includes('phan loai'))) {
+      mapping.task_type = colIndex;
+    } else if (!mapping.standard_score && (s.includes('diem chuan') || s.includes('muc diem') || s.includes('diem dinh muc') || s === 'diem')) {
+      mapping.standard_score = colIndex;
+    } else if (!mapping.difficulty_weight && (s.includes('he so do kho') || s.includes('he so') || s.includes('do kho'))) {
+      mapping.difficulty_weight = colIndex;
+    } else if (!mapping.max_converted_score && (s.includes('diem quy doi') || s.includes('quy doi') || s.includes('toi da'))) {
+      mapping.max_converted_score = colIndex;
+    } else if (!mapping.expected_evidence && (s.includes('minh chung') || s.includes('tai lieu') || s.includes('ho so'))) {
+      mapping.expected_evidence = colIndex;
+    } else if (!mapping.note && (s.includes('ghi chu') || s.includes('luu y'))) {
+      mapping.note = colIndex;
+    } else if (!mapping.axis_code && (s.includes('truc ket qua') || s.includes('truc trong tam') || s.includes('truc'))) {
+      mapping.axis_code = colIndex;
+    } else if (!mapping.status && (s.includes('trang thai') || s.includes('tinh trang'))) {
+      mapping.status = colIndex;
+    } else if (!mapping.period && (s.includes('ky danh gia') || s.includes('ma ky') || s === 'ky')) {
+      mapping.period = colIndex;
+    }
+  });
+  return mapping;
+}
+
+// Find header row and column mapping in sheet
+function findHeaderRowAndMapping(sheet) {
+  let bestRowIndex = -1;
+  let bestMapping = null;
+  let maxMatchedCols = 0;
+
+  for (let r = 1; r <= Math.min(15, sheet.rowCount); r++) {
+    const row = sheet.getRow(r);
+    const cells = [];
+    row.eachCell({ includeEmpty: true }, (c, col) => {
+      cells[col] = extractCellText(c);
+    });
+
+    const m = findColumnMapping(cells);
+    const matchedCount = Object.keys(m).length;
+    // Header row must at least identify task_name
+    if (m.task_name && matchedCount > maxMatchedCols) {
+      maxMatchedCols = matchedCount;
+      bestRowIndex = r;
+      bestMapping = m;
+    }
+  }
+
+  // Fallback to standard template defaults if no named header matched
+  if (!bestMapping || !bestMapping.task_name) {
+    bestMapping = {
+      dept_code: 2,
+      task_name: 3,
+      output_result: 4,
+      deadline: 5,
+      task_type: 6,
+      standard_score: 7,
+      difficulty_weight: 8,
+      max_converted_score: 9,
+      expected_evidence: 10,
+      note: 11,
+      axis_code: 12,
+      status: 13,
+      period: 14
+    };
+    bestRowIndex = 2;
+  }
+
+  return { headerRowIndex: bestRowIndex, mapping: bestMapping };
+}
+
 async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null) {
   const workbook = new ExcelJS.Workbook();
   if (Buffer.isBuffer(fileOrPath)) {
@@ -97,18 +251,90 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null) {
     await workbook.xlsx.readFile(fileOrPath);
   }
 
-  const sheet = workbook.getWorksheet('01. Mẫu import') || workbook.worksheets[0];
-  if (!sheet) {
-    throw new Error('Không tìm thấy sheet dữ liệu danh mục chuẩn');
+  // 1. Intelligent sheet selection
+  let sheet = null;
+  // A. Try exact or fuzzy sheet name match
+  for (const ws of workbook.worksheets) {
+    const nameNorm = normalizeStr(ws.name);
+    if (nameNorm.includes('mau import') || nameNorm.includes('danh muc') || nameNorm.includes('cong viec') || nameNorm.includes('san pham')) {
+      sheet = ws;
+      break;
+    }
   }
 
+  // B. If not found by name, scan all sheets for one containing a task_name header
+  if (!sheet) {
+    for (const ws of workbook.worksheets) {
+      const { headerRowIndex, mapping } = findHeaderRowAndMapping(ws);
+      if (headerRowIndex !== -1 && mapping.task_name && Object.keys(mapping).length >= 2) {
+        sheet = ws;
+        break;
+      }
+    }
+  }
+
+  // C. Fallback to first sheet
+  if (!sheet) {
+    sheet = workbook.worksheets[0];
+  }
+
+  if (!sheet) {
+    throw new Error('Không tìm thấy sheet dữ liệu danh mục công việc chuẩn trong file Excel');
+  }
+
+  // 2. Resolve default period
   let periodId = targetPeriodId;
-  if (!periodId) {
-    const defaultPeriod = db.prepare('SELECT id FROM periods WHERE is_active = 1 LIMIT 1').get();
+  if (!periodId || periodId === 'undefined' || periodId === 'null' || periodId === 'all') {
+    const defaultPeriod = db.prepare('SELECT id FROM periods WHERE is_active = 1 ORDER BY id DESC LIMIT 1').get();
     periodId = defaultPeriod ? defaultPeriod.id : 'p-1';
   }
 
+  // Pre-load periods and departments for row-level resolution
+  const allPeriods = db.prepare('SELECT id, code, name FROM periods').all();
+  const periodLookup = new Map();
+  allPeriods.forEach(p => {
+    periodLookup.set(p.id.toLowerCase(), p.id);
+    if (p.code) periodLookup.set(p.code.toLowerCase().trim(), p.id);
+    if (p.name) periodLookup.set(normalizeStr(p.name), p.id);
+  });
+
+  const allDepts = db.prepare('SELECT id, code, name FROM departments').all();
+  const deptLookup = new Map();
+  allDepts.forEach(d => {
+    if (d.code) deptLookup.set(d.code.toLowerCase().trim(), d.code);
+    if (d.name) deptLookup.set(normalizeStr(d.name), d.code);
+    deptLookup.set(d.id.toLowerCase(), d.code || d.id);
+  });
+
+  // 3. Detect header row and column mapping
+  const { headerRowIndex, mapping } = findHeaderRowAndMapping(sheet);
+
   const tasks = [];
+  let insertedCount = 0;
+  let updatedCount = 0;
+
+  const checkExisting = db.prepare(`
+    SELECT id FROM standard_tasks 
+    WHERE period_id = ? AND LOWER(TRIM(task_name)) = ? 
+    LIMIT 1
+  `);
+
+  const updateTask = db.prepare(`
+    UPDATE standard_tasks SET
+      dept_code = COALESCE(?, dept_code),
+      output_result = ?,
+      deadline = ?,
+      task_type = ?,
+      standard_score = ?,
+      difficulty_weight = ?,
+      max_converted_score = ?,
+      expected_evidence = ?,
+      note = ?,
+      axis_code = ?,
+      status = COALESCE(?, status)
+    WHERE id = ?
+  `);
+
   const insertTask = db.prepare(`
     INSERT INTO standard_tasks (
       id, period_id, dept_code, task_name, output_result, deadline,
@@ -118,38 +344,111 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null) {
   `);
 
   sheet.eachRow((row, rowNumber) => {
-    if (rowNumber < 4) return;
+    // Skip header and title rows
+    if (rowNumber <= headerRowIndex) return;
 
-    const deptCode = row.getCell(2).text?.trim();
-    const taskName = row.getCell(3).text?.trim();
+    // Get task name
+    const taskNameCell = mapping.task_name ? row.getCell(mapping.task_name) : null;
+    const taskName = extractCellText(taskNameCell).trim();
     if (!taskName) return;
 
-    const rawOutputResult = row.getCell(4).text?.trim() || '';
+    // Skip numeric sub-header rows (e.g. Row 3: 1, 2, 3...) or repeated headers
+    if (/^\d+$/.test(taskName)) return;
+    const taskNameNorm = normalizeStr(taskName);
+    if (taskNameNorm.includes('ten cong viec') || taskNameNorm.includes('ten nhiem vu') || taskNameNorm.includes('noi dung cong viec')) return;
+
+    // Resolve row-level period if specified
+    let rowPeriodId = periodId;
+    if (mapping.period) {
+      const periodCellText = extractCellText(row.getCell(mapping.period));
+      if (periodCellText) {
+        const matchedP = periodLookup.get(periodCellText.toLowerCase().trim()) || periodLookup.get(normalizeStr(periodCellText));
+        if (matchedP) rowPeriodId = matchedP;
+      }
+    }
+
+    // Resolve dept_code
+    let deptCode = '';
+    if (mapping.dept_code) {
+      const rawDept = extractCellText(row.getCell(mapping.dept_code)).trim();
+      if (rawDept) {
+        deptCode = deptLookup.get(rawDept.toLowerCase()) || deptLookup.get(normalizeStr(rawDept)) || rawDept;
+      }
+    }
+    if (!deptCode && allDepts.length > 0) {
+      deptCode = allDepts[0].code || 'A29.123.22';
+    }
+
+    // Output result
+    const rawOutputResult = mapping.output_result ? extractCellText(row.getCell(mapping.output_result)).trim() : '';
     const outputResult = normalizeOutputResult(rawOutputResult);
-    const deadlineVal = row.getCell(5).value;
-    const deadline = formatDate(deadlineVal);
-    const taskType = row.getCell(6).text?.trim() || 'Thường xuyên';
-    
-    let standardScore = parseFloat(row.getCell(7).value) || (taskType === 'Đột xuất' ? 12 : 10);
-    let difficultyWeight = parseFloat(row.getCell(8).value) || 1.0;
-    let maxConvertedScore = parseFloat(row.getCell(9).value) || (standardScore * difficultyWeight);
-    const expectedEvidence = row.getCell(10).text?.trim() || '';
-    const note = row.getCell(11).text?.trim() || '';
-    const axisText = row.getCell(12).text?.trim() || '';
+
+    // Deadline
+    const deadlineVal = mapping.deadline ? extractCellValue(row.getCell(mapping.deadline)) : null;
+    const deadline = formatDate(deadlineVal) || '2026-09-30';
+
+    // Task type
+    const rawTaskType = mapping.task_type ? extractCellText(row.getCell(mapping.task_type)).trim() : '';
+    const taskType = normalizeTaskType(rawTaskType);
+
+    // Standard score
+    const stdCell = mapping.standard_score ? row.getCell(mapping.standard_score) : null;
+    let standardScore = parseExcelNumber(stdCell, taskType === 'Đột xuất' ? 12 : 10);
+    if (standardScore <= 0) standardScore = (taskType === 'Đột xuất' ? 12 : 10);
+
+    // Difficulty weight
+    const diffCell = mapping.difficulty_weight ? row.getCell(mapping.difficulty_weight) : null;
+    let difficultyWeight = parseExcelNumber(diffCell, 1.0);
+    if (difficultyWeight > 10 && difficultyWeight <= 200) {
+      difficultyWeight = difficultyWeight / 100;
+    }
+    if (difficultyWeight <= 0) difficultyWeight = 1.0;
+
+    // Max converted score
+    const maxCell = mapping.max_converted_score ? row.getCell(mapping.max_converted_score) : null;
+    let maxConvertedScore = parseExcelNumber(maxCell, 0);
+    if (maxConvertedScore <= 0) {
+      maxConvertedScore = Math.round(standardScore * difficultyWeight * 100) / 100;
+    }
+
+    // Expected evidence, note, axis, status
+    const expectedEvidence = mapping.expected_evidence ? extractCellText(row.getCell(mapping.expected_evidence)).trim() : '';
+    const note = mapping.note ? extractCellText(row.getCell(mapping.note)).trim() : '';
+    const axisCell = mapping.axis_code ? row.getCell(mapping.axis_code) : null;
+    const axisText = extractCellValue(axisCell);
     const axisCode = parseAxisCode(axisText);
-    const status = row.getCell(13).text?.trim() || 'Hoạt động';
+    const rawStatus = mapping.status ? extractCellText(row.getCell(mapping.status)).trim() : '';
+    const status = rawStatus || 'Hoạt động';
 
-    const id = uuidv4();
-    insertTask.run(
-      id, periodId, deptCode, taskName, outputResult, deadline,
-      taskType, standardScore, difficultyWeight, maxConvertedScore,
-      expectedEvidence, note, axisCode, status
-    );
-
-    tasks.push({ id, taskName, standardScore, difficultyWeight, axisCode });
+    // Upsert task: Update if already exists in this period, else Insert
+    const existing = checkExisting.get(rowPeriodId, taskName.toLowerCase());
+    if (existing) {
+      updateTask.run(
+        deptCode, outputResult, deadline, taskType, standardScore,
+        difficultyWeight, maxConvertedScore, expectedEvidence, note,
+        axisCode, status, existing.id
+      );
+      updatedCount++;
+      tasks.push({ id: existing.id, taskName, standardScore, difficultyWeight, axisCode, isUpdated: true });
+    } else {
+      const id = uuidv4();
+      insertTask.run(
+        id, rowPeriodId, deptCode, taskName, outputResult, deadline,
+        taskType, standardScore, difficultyWeight, maxConvertedScore,
+        expectedEvidence, note, axisCode, status
+      );
+      insertedCount++;
+      tasks.push({ id, taskName, standardScore, difficultyWeight, axisCode, isInserted: true });
+    }
   });
 
-  return { importedCount: tasks.length, tasks };
+  return {
+    importedCount: insertedCount + updatedCount,
+    insertedCount,
+    updatedCount,
+    sheetName: sheet.name,
+    tasks
+  };
 }
 
 // Generate Excel template for importing system users
