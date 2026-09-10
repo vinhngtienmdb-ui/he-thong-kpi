@@ -161,7 +161,11 @@ CREATE TABLE IF NOT EXISTS assigned_tasks (
     bonus_reason TEXT,
     return_reason TEXT,
     is_returned INTEGER DEFAULT 0,
-    document_id TEXT REFERENCES documents(id) ON DELETE SET NULL
+    document_id TEXT REFERENCES documents(id) ON DELETE SET NULL,
+    feedback_reason TEXT,
+    feedback_count INTEGER DEFAULT 0,
+    reassigned_at TEXT,
+    evaluation_feedback TEXT
 );
 
 -- 10. Evaluations (Bang tong hop danh gia KPI ca nhan)
@@ -175,6 +179,11 @@ CREATE TABLE IF NOT EXISTS evaluations (
     rank_proposed TEXT,
     superior_rank TEXT,
     superior_comment TEXT,
+    advisory_rank TEXT,
+    advisory_comment TEXT,
+    advisory_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    advisory_submitted_at TEXT,
+    is_advisory_submitted INTEGER DEFAULT 0,
     status TEXT DEFAULT 'draft',
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     step TEXT DEFAULT 'step_1_register',

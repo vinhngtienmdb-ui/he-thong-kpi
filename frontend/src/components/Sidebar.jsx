@@ -18,7 +18,8 @@ import {
   Vote,
   BarChart3,
   X,
-  Files
+  Files,
+  ClipboardCheck
 } from 'lucide-react';
 
 export default function Sidebar({ 
@@ -52,6 +53,7 @@ export default function Sidebar({
     { id: 'execution', label: 'Nộp sản phẩm công việc', icon: CheckSquare },
     { id: 'self_eval', label: 'Tự đánh giá cuối quý', icon: Award },
     { id: 'grading', label: 'Đánh giá, nhận xét', icon: ShieldCheck },
+    { id: 'advisory', label: 'Tổng hợp tham mưu (B6)', icon: ClipboardCheck },
     { id: 'voting', label: 'Biểu quyết xếp loại', icon: Vote },
     { id: 'charts', label: 'Biểu đồ thống kê', icon: BarChart3 },
     { id: 'reports', label: 'Xuất báo cáo & biểu mẫu', icon: FileText }

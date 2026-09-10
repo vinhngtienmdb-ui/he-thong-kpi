@@ -71,6 +71,21 @@ export default function AssignmentTab({
   const [approvalDiffWeight, setApprovalDiffWeight] = useState(1.0);
   const [isApproving, setIsApproving] = useState(false);
 
+  // Acceptance & Feedback Modal State (Bước 1 - Nhánh 2 theo tài liệu V6)
+  const [feedbackModalTask, setFeedbackModalTask] = useState(null);
+  const [feedbackReason, setFeedbackReason] = useState('');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+
+  // Reassign Modal State (Lãnh đạo điều chỉnh giao lại)
+  const [reassignModalTask, setReassignModalTask] = useState(null);
+  const [reassignForm, setReassignForm] = useState({
+    deadline: '',
+    task_name: '',
+    output_result: '',
+    difficulty_weight: 1.0
+  });
+  const [isSubmittingReassign, setIsSubmittingReassign] = useState(false);
+
   // Modal State for Assigning / Registering Tasks
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('assign'); // 'assign' or 'register'
@@ -294,6 +309,75 @@ export default function AssignmentTab({
       loadData();
     } catch (err) {
       alert(err.message);
+    }
+  }
+
+  // Bước 1 - Nhánh 2: Xác nhận tiếp nhận nhiệm vụ
+  async function handleAcceptTask(taskId) {
+    try {
+      await api.acceptTask(taskId);
+      alert('Đã xác nhận tiếp nhận nhiệm vụ thành công! Nhiệm vụ đã chuyển sang trạng thái Đang thực hiện.');
+      loadData();
+    } catch (err) {
+      alert('Lỗi xác nhận: ' + err.message);
+    }
+  }
+
+  // Bước 1 - Nhánh 2: Mở modal phản hồi nhiệm vụ
+  function openFeedbackModal(task) {
+    if ((task.feedback_count || 0) >= 1) {
+      alert('Theo quy định Hướng dẫn số 06-HD/BTCTU, mỗi nhiệm vụ cán bộ chỉ được phản hồi tối đa 1 lần!');
+      return;
+    }
+    setFeedbackModalTask(task);
+    setFeedbackReason('');
+  }
+
+  // Bước 1 - Nhánh 2: Gửi phản hồi nhiệm vụ
+  async function handleSubmitFeedback() {
+    if (!feedbackModalTask) return;
+    if (!feedbackReason.trim()) {
+      alert('Vui lòng nhập lý do phản hồi nhiệm vụ');
+      return;
+    }
+    try {
+      setIsSubmittingFeedback(true);
+      await api.feedbackTask(feedbackModalTask.id, { feedback_reason: feedbackReason.trim() });
+      alert('Đã gửi phản hồi về công việc cho Lãnh đạo xem xét thành công!');
+      setFeedbackModalTask(null);
+      setFeedbackReason('');
+      loadData();
+    } catch (err) {
+      alert('Lỗi gửi phản hồi: ' + err.message);
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  }
+
+  // Bước 1 - Nhánh 2: Lãnh đạo mở form điều chỉnh & giao lại
+  function openReassignModal(task) {
+    setReassignModalTask(task);
+    setReassignForm({
+      deadline: task.deadline ? toInputDateFormat(task.deadline) : '2026-09-30',
+      task_name: task.task_name,
+      output_result: task.output_result || '',
+      difficulty_weight: task.difficulty_weight || 1.0
+    });
+  }
+
+  // Bước 1 - Nhánh 2: Lãnh đạo xác nhận giao lại
+  async function handleSubmitReassign() {
+    if (!reassignModalTask) return;
+    try {
+      setIsSubmittingReassign(true);
+      await api.reassignTask(reassignModalTask.id, reassignForm);
+      alert('Đã điều chỉnh và giao lại nhiệm vụ thành công! Nhiệm vụ đã được chuyển vào danh sách thực hiện của cán bộ.');
+      setReassignModalTask(null);
+      loadData();
+    } catch (err) {
+      alert('Lỗi giao lại: ' + err.message);
+    } finally {
+      setIsSubmittingReassign(false);
     }
   }
 
@@ -1385,13 +1469,51 @@ export default function AssignmentTab({
                                                   <span className={`inline-block px-2 py-0.5 rounded-full font-semibold text-[11px] ${
                                                     task.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
                                                     task.status === 'submitted' ? 'bg-blue-100 text-blue-800' :
+                                                    task.status === 'pending_acceptance' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
+                                                    task.status === 'feedback_submitted' ? 'bg-rose-100 text-rose-800 border border-rose-300' :
                                                     'bg-slate-100 text-slate-700'
                                                   }`}>
-                                                    {task.status === 'approved' ? '✓ Đã duyệt' : task.status === 'submitted' ? '⏳ Đã nộp' : '● Đang làm'}
+                                                    {task.status === 'approved' ? '✓ Đã duyệt' :
+                                                     task.status === 'submitted' ? '⏳ Đã nộp' :
+                                                     task.status === 'pending_acceptance' ? '⏳ Chờ nhận việc' :
+                                                     task.status === 'feedback_submitted' ? '⚠️ Đã phản hồi' : '● Đang làm'}
                                                   </span>
+                                                  {task.feedback_reason && (
+                                                    <div className="text-[10px] text-rose-700 max-w-[120px] truncate mx-auto mt-0.5" title={`Lý do phản hồi: ${task.feedback_reason}`}>
+                                                      "{task.feedback_reason}"
+                                                    </div>
+                                                  )}
                                                 </td>
                                                 <td className="py-2 px-3 text-center whitespace-nowrap">
-                                                  {currentUser?.id === task.user_id ? (
+                                                  {task.status === 'pending_acceptance' && currentUser?.id === task.user_id ? (
+                                                    <div className="flex items-center justify-center gap-1">
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleAcceptTask(task.id)}
+                                                        className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded shadow-2xs"
+                                                        title="Xác nhận tiếp nhận nhiệm vụ"
+                                                      >
+                                                        Nhận việc
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => openFeedbackModal(task)}
+                                                        className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] rounded shadow-2xs"
+                                                        title="Phản hồi công việc chưa hợp lý (tối đa 1 lần)"
+                                                      >
+                                                        Phản hồi
+                                                      </button>
+                                                    </div>
+                                                  ) : task.status === 'feedback_submitted' && isCBQL ? (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => openReassignModal(task)}
+                                                      className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded shadow-2xs"
+                                                      title="Điều chỉnh thông tin và giao lại nhiệm vụ"
+                                                    >
+                                                      Giao lại
+                                                    </button>
+                                                  ) : currentUser?.id === task.user_id ? (
                                                     <button
                                                       type="button"
                                                       onClick={() => { if (setCurrentTab) setCurrentTab('execution'); }}
@@ -1609,19 +1731,56 @@ export default function AssignmentTab({
                                 isApproved ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
                                 isSubmitted ? 'bg-blue-100 text-blue-800 border border-blue-200' :
                                 isPending ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                                t.status === 'pending_acceptance' ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold' :
+                                t.status === 'feedback_submitted' ? 'bg-rose-100 text-rose-800 border border-rose-300 font-bold' :
                                 t.status === 'rejected' ? 'bg-rose-100 text-rose-800 border border-rose-200' :
                                 'bg-slate-100 text-slate-700'
                               }`}>
                                 {isApproved ? '✓ Đã duyệt KQ' :
                                  isSubmitted ? '⏳ Đã nộp MC' :
                                  isPending ? '⏳ Chờ duyệt việc' :
+                                 t.status === 'pending_acceptance' ? '⏳ Chờ nhận việc' :
+                                 t.status === 'feedback_submitted' ? '⚠️ Đã phản hồi' :
                                  t.status === 'rejected' ? '✕ Bị từ chối' : '● Đang làm'}
                               </span>
+                              {t.feedback_reason && (
+                                <div className="text-[10px] text-rose-700 max-w-[140px] truncate mx-auto mt-1" title={`Lý do phản hồi: ${t.feedback_reason}`}>
+                                  "{t.feedback_reason}"
+                                </div>
+                              )}
                             </td>
 
                             {/* Actions */}
                             <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                              {isPending && isCBQL ? (
+                              {t.status === 'pending_acceptance' && currentUser?.id === t.user_id ? (
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAcceptTask(t.id)}
+                                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-2xs"
+                                    title="Xác nhận tiếp nhận nhiệm vụ"
+                                  >
+                                    Nhận việc
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openFeedbackModal(t)}
+                                    className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg shadow-2xs"
+                                    title="Phản hồi chưa hợp lý (tối đa 1 lần)"
+                                  >
+                                    Phản hồi
+                                  </button>
+                                </div>
+                              ) : t.status === 'feedback_submitted' && isCBQL ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openReassignModal(t)}
+                                  className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs"
+                                  title="Điều chỉnh thông tin và giao lại nhiệm vụ"
+                                >
+                                  Giao lại
+                                </button>
+                              ) : isPending && isCBQL ? (
                                 <div className="flex items-center justify-center gap-1.5">
                                   <button
                                     type="button"
@@ -2245,6 +2404,172 @@ export default function AssignmentTab({
                   <span>{isApproving ? 'Đang xử lý...' : 'Xác nhận Phê duyệt'}</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PHẢN HỒI NHIỆM VỤ CHƯA HỢP LÝ (BƯỚC 1 - NHÁNH 2 THEO V6) */}
+      {feedbackModalTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-amber-50/50">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+                <h3 className="text-sm font-bold text-slate-900">Phản hồi nhiệm vụ được giao (Bước 1 - Nhánh 2)</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFeedbackModalTask(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3.5">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1">
+                <div className="font-bold text-slate-800 text-sm">{feedbackModalTask.task_name}</div>
+                <div className="text-slate-500 flex items-center gap-2">
+                  <span>Hạn chót: <strong>{formatDate(feedbackModalTask.deadline)}</strong></span>
+                  <span>•</span>
+                  <span>Người giao: <strong>{feedbackModalTask.assigner_name || 'Lãnh đạo'}</strong></span>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-900">
+                <strong>Lưu ý quy định (Hướng dẫn V6):</strong> Mỗi nhiệm vụ bạn chỉ được phản hồi tối đa 1 lần. Lãnh đạo sẽ xem xét lý do để điều chỉnh hoặc giao lại.
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Lý do phản hồi công việc chưa hợp lý <span className="text-red-500">*</span>:
+                </label>
+                <textarea
+                  rows={3}
+                  value={feedbackReason}
+                  onChange={(e) => setFeedbackReason(e.target.value)}
+                  placeholder="Ví dụ: Nhiệm vụ bị trùng lặp với nội dung đã được giao, hoặc khối lượng quá tải so với thời hạn, hoặc chưa phù hợp với chuyên môn công tác..."
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 p-4 bg-slate-50 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setFeedbackModalTask(null)}
+                className="px-3.5 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-100"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitFeedback}
+                disabled={isSubmittingFeedback || !feedbackReason.trim()}
+                className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition shadow-xs disabled:opacity-50"
+              >
+                {isSubmittingFeedback ? 'Đang gửi...' : 'Gửi phản hồi cho Lãnh đạo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL LÃNH ĐẠO ĐIỀU CHỈNH & GIAO LẠI (BƯỚC 1 - NHÁNH 2 THEO V6) */}
+      {reassignModalTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-indigo-50/50">
+              <div className="flex items-center gap-2">
+                <Send className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-sm font-bold text-slate-900">Điều chỉnh & Giao lại nhiệm vụ (Bước 1 - Nhánh 2)</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReassignModalTask(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3.5">
+              {/* Phản hồi của cán bộ */}
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs space-y-1">
+                <div className="font-bold text-rose-900 flex items-center gap-1">
+                  <span>Ý kiến phản hồi của cán bộ:</span>
+                </div>
+                <div className="text-slate-800 italic bg-white p-2 rounded border border-rose-100">
+                  "{reassignModalTask.feedback_reason || 'Chưa rõ lý do'}"
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Tên nhiệm vụ:</label>
+                <input
+                  type="text"
+                  value={reassignForm.task_name}
+                  onChange={(e) => setReassignForm(prev => ({ ...prev, task_name: e.target.value }))}
+                  className="w-full text-xs p-2 border border-slate-300 rounded-lg font-semibold"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Hạn chót mới:</label>
+                  <input
+                    type="date"
+                    value={reassignForm.deadline}
+                    onChange={(e) => setReassignForm(prev => ({ ...prev, deadline: e.target.value }))}
+                    className="w-full text-xs p-2 border border-slate-300 rounded-lg font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Hệ số độ khó:</label>
+                  <select
+                    value={reassignForm.difficulty_weight}
+                    onChange={(e) => setReassignForm(prev => ({ ...prev, difficulty_weight: parseFloat(e.target.value) || 1.0 }))}
+                    className="w-full text-xs p-2 border border-slate-300 rounded-lg font-bold"
+                  >
+                    <option value="1.0">1.0 (Thông thường)</option>
+                    <option value="1.1">1.1 (Phối hợp)</option>
+                    <option value="1.2">1.2 (Quan trọng / Phức tạp)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Đầu ra yêu cầu:</label>
+                <input
+                  type="text"
+                  value={reassignForm.output_result}
+                  onChange={(e) => setReassignForm(prev => ({ ...prev, output_result: e.target.value }))}
+                  className="w-full text-xs p-2 border border-slate-300 rounded-lg"
+                />
+              </div>
+
+              <p className="text-[11px] text-slate-500 italic">
+                Lưu ý: Sau khi giao lại, nhiệm vụ sẽ tự động chuyển vào danh sách "Đang thực hiện" của cán bộ.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 p-4 bg-slate-50 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setReassignModalTask(null)}
+                className="px-3.5 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-100"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitReassign}
+                disabled={isSubmittingReassign}
+                className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs disabled:opacity-50"
+              >
+                {isSubmittingReassign ? 'Đang lưu...' : 'Xác nhận Giao lại'}
+              </button>
             </div>
           </div>
         </div>

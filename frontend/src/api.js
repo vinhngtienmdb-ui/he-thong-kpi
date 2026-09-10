@@ -174,6 +174,51 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+  acceptTask: (id) => {
+    return fetchApi(`/assigned-tasks/${id}/accept`, {
+      method: 'PUT',
+    });
+  },
+  feedbackTask: (id, data) => {
+    return fetchApi(`/assigned-tasks/${id}/feedback`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  reassignTask: (id, data) => {
+    return fetchApi(`/assigned-tasks/${id}/reassign`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  submitEvaluationFeedback: (id, data) => {
+    return fetchApi(`/assigned-tasks/${id}/evaluation-feedback`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Advisory (Bước 6: Cơ quan Tham mưu Tổng hợp & Trình biểu quyết)
+  getAdvisorySummary: (periodId) => {
+    return fetchApi(`/advisory-summary?period_id=${periodId}`);
+  },
+  saveAdvisoryProposal: (data) => {
+    return fetchApi('/advisory-summary/save', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  submitAdvisoryToVoting: (data) => {
+    return fetchApi('/advisory-summary/submit-voting', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
 
   // Evaluation
   getEvaluation: (periodId, userId) => {

@@ -462,24 +462,25 @@ export default function VotingTab({ selectedPeriod, currentUser, users = [] }) {
             <thead className="bg-slate-50/90 text-slate-700 font-bold border-b border-slate-200">
               <tr>
                 <th className="px-4 py-3.5 w-14 text-center">STT</th>
-                <th className="px-4 py-3.5 min-w-[220px]">Họ và tên cán bộ</th>
-                <th className="px-4 py-3.5 min-w-[200px]">Chức vụ & Đơn vị</th>
-                <th className="px-4 py-3.5 min-w-[140px] w-36 text-center">Điểm KPI (100đ)</th>
+                <th className="px-4 py-3.5 min-w-[200px]">Họ và tên cán bộ</th>
+                <th className="px-4 py-3.5 min-w-[180px]">Chức vụ & Đơn vị</th>
+                <th className="px-4 py-3.5 min-w-[130px] w-32 text-center">Điểm KPI (100đ)</th>
+                <th className="px-4 py-3.5 min-w-[220px]">Căn cứ đề xuất (B4, B5, B6)</th>
                 <th className="px-4 py-3.5 min-w-[340px]">Phiếu biểu quyết của bạn</th>
-                <th className="px-4 py-3.5 min-w-[260px] text-center">Kết quả biểu quyết tập thể</th>
-                <th className="px-4 py-3.5 min-w-[130px] w-32 text-center">Thao tác</th>
+                <th className="px-4 py-3.5 min-w-[240px] text-center">Kết quả biểu quyết tập thể</th>
+                <th className="px-4 py-3.5 min-w-[120px] w-28 text-center">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="text-center py-12 text-slate-400 italic text-sm">
+                  <td colSpan="8" className="text-center py-12 text-slate-400 italic text-sm">
                     Đang tải danh sách biểu quyết...
                   </td>
                 </tr>
               ) : votingList.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="text-center py-12 text-slate-400 italic text-sm">
+                  <td colSpan="8" className="text-center py-12 text-slate-400 italic text-sm">
                     Chưa có cán bộ trong danh sách đánh giá kỳ này.
                   </td>
                 </tr>
@@ -512,6 +513,36 @@ export default function VotingTab({ selectedPeriod, currentUser, users = [] }) {
                         </div>
                         <div className="text-[11px] text-slate-400 mt-0.5">
                           (P1: {u.part1_score || 0}đ • P2: {u.part2_score || 0}đ)
+                        </div>
+                      </td>
+
+                      {/* Căn cứ đề xuất 3 cấp (B4, B5, B6) */}
+                      <td className="px-4 py-3.5 text-xs space-y-1">
+                        <div className="flex items-center justify-between gap-1 text-[11px]">
+                          <span className="text-slate-400">B4 (Tự đề xuất):</span>
+                          <span className="font-semibold text-slate-700 truncate max-w-[130px]" title={u.rank_proposed}>
+                            {u.rank_proposed ? u.rank_proposed.replace(' nhiệm vụ', '') : '--'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-1 text-[11px]">
+                          <span className="text-blue-600 font-medium">B5 (Lãnh đạo):</span>
+                          <span className="font-bold text-blue-700 truncate max-w-[130px]" title={u.superior_rank}>
+                            {u.superior_rank ? u.superior_rank.replace(' nhiệm vụ', '') : '--'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-1 text-[11px] pt-0.5 border-t border-slate-100">
+                          <span className="text-red-600 font-semibold">B6 (Tham mưu):</span>
+                          {u.is_advisory_submitted === 1 ? (
+                            <span className="font-bold text-red-700 truncate max-w-[130px]" title={u.advisory_rank}>
+                              {u.advisory_rank ? u.advisory_rank.replace(' nhiệm vụ', '') : 'Đã thẩm tra'}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-amber-600 font-medium bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                              Chờ B6
+                            </span>
+                          )}
                         </div>
                       </td>
 

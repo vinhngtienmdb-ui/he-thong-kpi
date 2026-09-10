@@ -8,6 +8,7 @@ import AssignmentTab from './components/AssignmentTab';
 import ExecutionTab from './components/ExecutionTab';
 import SelfEvaluationTab from './components/SelfEvaluationTab';
 import GradingTab from './components/GradingTab';
+import AdvisoryTab from './components/AdvisoryTab';
 import VotingTab from './components/VotingTab';
 import ChartsTab from './components/ChartsTab';
 import ReportTab from './components/ReportTab';
@@ -383,6 +384,14 @@ export default function App() {
               axes={axes}
               periods={periods}
               onReloadPeriods={loadInitialData}
+            />
+          )}
+
+          {currentTab === 'advisory' && (
+            <AdvisoryTab
+              selectedPeriod={selectedPeriod}
+              currentUser={currentUser}
+              users={accessibleUsers.length > 0 ? accessibleUsers : (currentUser ? [currentUser] : [])}
             />
           )}
 

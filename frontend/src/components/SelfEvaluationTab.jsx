@@ -13,7 +13,10 @@ import {
   Lock,
   Send,
   AlertTriangle,
-  RotateCcw
+  RotateCcw,
+  MessageSquare,
+  Layers,
+  Paperclip
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate } from '../constants';
@@ -22,10 +25,17 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
   const [selectedUser, setSelectedUser] = useState(currentUser?.id || '');
   const [evalData, setEvalData] = useState(null);
   const [criteriaList, setCriteriaList] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [activePart, setActivePart] = useState('part1'); // 'part1' (Phần I - 30đ) | 'part2' (Phần II - 70đ & Phản hồi Bước 4)
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Step 4 Evaluation Feedback Modal state
+  const [feedbackTask, setFeedbackTask] = useState(null);
+  const [evalFeedbackText, setEvalFeedbackText] = useState('');
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
@@ -45,13 +55,41 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
   async function loadEvaluation() {
     try {
       setLoading(true);
-      const res = await api.getEvaluation(selectedPeriod, selectedUser);
+      const [res, tasksRes] = await Promise.all([
+        api.getEvaluation(selectedPeriod, selectedUser),
+        api.getAssignedTasks({ period_id: selectedPeriod, user_id: selectedUser })
+      ]);
       setEvalData(res);
       setCriteriaList(res.criteria || []);
+      setTasks(tasksRes || []);
     } catch (err) {
       console.error('Error loading self-evaluation:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSubmitEvalFeedback(e) {
+    e.preventDefault();
+    if (!feedbackTask) return;
+    if (!evalFeedbackText.trim()) {
+      alert('Vui lòng nhập nội dung phản hồi đánh giá');
+      return;
+    }
+    try {
+      setSubmittingFeedback(true);
+      await api.submitEvaluationFeedback(feedbackTask.id, {
+        evaluation_feedback: evalFeedbackText.trim()
+      });
+      setSuccessMsg('Đã gửi phản hồi đánh giá đến Lãnh đạo thành công!');
+      setTimeout(() => setSuccessMsg(''), 4000);
+      setFeedbackTask(null);
+      setEvalFeedbackText('');
+      loadEvaluation();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSubmittingFeedback(false);
     }
   }
 
@@ -172,7 +210,9 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
           <div className="flex items-center gap-1 font-semibold truncate">
             <span className="text-slate-500">Trang chủ</span>
             <span className="text-slate-400">&gt;</span>
-            <span className="text-red-700 font-bold">Tự đánh giá cuối quý (Phần I - 30 điểm)</span>
+            <span className="text-red-700 font-bold">
+              {activePart === 'part1' ? 'Tự đánh giá cuối quý (Phần I - 30 điểm)' : 'Nhiệm vụ KPI & Phản hồi Bước 4 (Phần II - 70 điểm)'}
+            </span>
           </div>
         </div>
 
@@ -281,8 +321,50 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
         </div>
       )}
 
-      {/* 2. Top Summary Banner */}
-      <div className="bg-gradient-to-r from-red-800 to-rose-900 rounded-xl p-5 text-white shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      {/* Sub-tab Switcher: Phần I vs Phần II */}
+      <div className="flex border-b border-slate-200 gap-2">
+        <button
+          type="button"
+          onClick={() => setActivePart('part1')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+            activePart === 'part1'
+              ? 'border-red-700 text-red-700 bg-red-50/50 rounded-t-lg'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Star className="w-4 h-4" />
+          <span>Phần I: Tiêu chuẩn chung (30 điểm)</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] bg-red-100 text-red-800">
+            {liveScore}/30đ
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActivePart('part2')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+            activePart === 'part2'
+              ? 'border-indigo-700 text-indigo-800 bg-indigo-50/50 rounded-t-lg'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>Phần II: Nhiệm vụ KPI & Phản hồi Bước 4 (70 điểm)</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] bg-indigo-100 text-indigo-800">
+            {evalData?.evaluation?.part2_score || 0}/70đ
+          </span>
+          {tasks.some(t => t.evaluation_feedback) && (
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+              💬 Có phản hồi
+            </span>
+          )}
+        </button>
+      </div>
+
+      {activePart === 'part1' && (
+        <>
+          {/* 2. Top Summary Banner */}
+          <div className="bg-gradient-to-r from-red-800 to-rose-900 rounded-xl p-5 text-white shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <div className="flex items-center gap-2">
             <span className="bg-white/20 text-white text-[11px] font-medium px-2.5 py-0.5 rounded-full uppercase tracking-wider">
@@ -544,6 +626,246 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
               <Send className="w-3.5 h-3.5 inline mr-1" />
               <span>{submitting ? 'Gửi...' : 'Nộp đánh giá'}</span>
             </button>
+          </div>
+        </div>
+      )}
+        </>
+      )}
+
+      {/* PART II: NHIỆM VỤ KPI & PHẢN HỒI ĐÁNH GIÁ (BƯỚC 4 V6) */}
+      {activePart === 'part2' && (
+        <div className="space-y-4">
+          {/* Top Summary Banner for Part II */}
+          <div className="bg-gradient-to-r from-slate-800 to-indigo-950 rounded-xl p-5 text-white shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="bg-white/20 text-white text-[11px] font-medium px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  Bước 4: Cán bộ xem kết quả đánh giá cuối kỳ
+                </span>
+                <span className="text-xs text-indigo-200">
+                  Phụ lục 5 Hướng dẫn số 06-HD/BTCTU
+                </span>
+              </div>
+              <h2 className="text-lg font-bold mt-1.5">
+                Bảng Thẩm Định Điểm Nhiệm Vụ KPI & Phản Hồi Đánh Giá (Mục B - 70 điểm)
+              </h2>
+              <p className="text-xs text-indigo-100/90 mt-0.5">
+                Cán bộ xem chi tiết điểm số do Lãnh đạo thẩm định. Nếu không đồng ý với kết quả, bấm <b>"Phản hồi đánh giá"</b> để Lãnh đạo xem xét sửa đánh giá.
+              </p>
+            </div>
+
+            <div className="bg-white/10 backdrop-blur-xs rounded-xl p-3.5 border border-white/20 text-center shrink-0 min-w-[160px]">
+              <span className="text-[10px] font-medium text-indigo-200 uppercase tracking-wider block">
+                Tổng điểm Phần II đạt được:
+              </span>
+              <div className="text-3xl font-bold text-amber-300 mt-0.5">
+                {evalData?.evaluation?.part2_score || 0} <span className="text-sm font-normal text-white">/ 70 đ</span>
+              </div>
+              <span className="text-[10px] text-indigo-200 block mt-0.5">
+                {tasks.filter(t => t.status === 'approved').length} / {tasks.length} nhiệm vụ đã duyệt
+              </span>
+            </div>
+          </div>
+
+          {/* Task List Table / Cards */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
+            <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="text-xs font-bold text-slate-700 flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-600"></span>
+                <span>Danh sách nhiệm vụ KPI & Ý kiến nhận xét của Lãnh đạo</span>
+              </div>
+              <span className="text-xs text-slate-500 font-medium">
+                Tổng số: <b className="text-slate-800">{tasks.length}</b> công việc
+              </span>
+            </div>
+
+            {tasks.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 italic text-sm">
+                Chưa có nhiệm vụ nào được ghi nhận trong kỳ đánh giá này.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {tasks.map((task, idx) => {
+                  const isApproved = task.status === 'approved';
+                  return (
+                    <div key={task.id} className="p-4 sm:p-5 hover:bg-slate-50/70 transition-colors space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="space-y-1 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-bold text-slate-400 text-xs">#{idx + 1}</span>
+                            <span className="font-semibold text-slate-900 text-sm">{task.task_name}</span>
+                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                              isApproved ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {isApproved ? '✓ Đã thẩm định' : '● Chờ thẩm định'}
+                            </span>
+                            {task.evaluation_feedback && (
+                              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                                💬 Đã gửi phản hồi
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+                            <span>Hạn chót: <b>{formatDate(task.deadline)}</b></span>
+                            {task.actual_finish_date && (
+                              <span>Hoàn thành: <b>{formatDate(task.actual_finish_date)}</b></span>
+                            )}
+                            <span>Sản phẩm: <b className="text-slate-700">{task.output_result}</b></span>
+                          </div>
+                        </div>
+
+                        {/* Scores badge & Action */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="text-right px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-200">
+                            <span className="text-[10px] text-slate-400 block">Điểm quy đổi</span>
+                            <span className="font-bold text-emerald-700 text-sm">
+                              {Number(Number(task.converted_score || 0).toFixed(2))} <span className="text-xs text-slate-400 font-normal">/ {Number(Number(task.max_converted_score || (task.standard_score * task.difficulty_weight)).toFixed(2))}đ</span>
+                            </span>
+                          </div>
+
+                          {isApproved && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFeedbackTask(task);
+                                setEvalFeedbackText(task.evaluation_feedback || '');
+                              }}
+                              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer ${
+                                task.evaluation_feedback
+                                  ? 'bg-purple-100 hover:bg-purple-200 text-purple-800 border border-purple-300'
+                                  : 'bg-purple-700 hover:bg-purple-800 text-white'
+                              }`}
+                              title="Phản hồi ý kiến về kết quả chấm điểm của Lãnh đạo"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              <span>{task.evaluation_feedback ? 'Sửa phản hồi' : 'Phản hồi đánh giá'}</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Details row: Progress, Quality, Scores */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs pt-1">
+                        <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                          <span className="text-slate-500">Điểm chuẩn:</span> <b>{task.standard_score}đ</b> • <span className="text-slate-500">HSĐK:</span> <b>{task.difficulty_weight}</b>
+                        </div>
+                        <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                          <span className="text-slate-500">Tiến độ:</span> <b>{Math.round((task.progress_pct || 1) * 100)}%</b> • <span className="text-slate-500">Chất lượng:</span> <b>{Math.round((task.quality_pct || 1) * 100)}%</b>
+                        </div>
+                        <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                          <span className="text-slate-500">Điểm thực hiện:</span> <b>{Number(Number(task.execution_score || 0).toFixed(2))}đ</b>
+                        </div>
+                      </div>
+
+                      {task.cbql_comment && (
+                        <div className="p-2.5 bg-amber-50/70 rounded-lg border border-amber-200 text-xs">
+                          <strong className="text-amber-900">Ý kiến nhận xét của Lãnh đạo: </strong>
+                          <span className="text-slate-800 italic">"{task.cbql_comment}"</span>
+                        </div>
+                      )}
+
+                      {task.evaluation_feedback && (
+                        <div className="p-2.5 bg-purple-50 rounded-lg border border-purple-200 text-xs space-y-1">
+                          <div className="font-bold text-purple-800 flex items-center gap-1.5">
+                            <MessageSquare className="w-3.5 h-3.5 text-purple-600" />
+                            <span>Ý kiến phản hồi của Cán bộ (Bước 4):</span>
+                          </div>
+                          <div className="p-2 bg-white rounded-md border border-purple-100 text-slate-800 italic">
+                            "{task.evaluation_feedback}"
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* EVALUATION FEEDBACK MODAL (Bước 4 V6) */}
+      {feedbackTask && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-[95%] sm:w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 my-auto animate-in fade-in zoom-in-95 duration-150">
+            
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div className="min-w-0 flex-1 pr-2">
+                <div className="flex items-center gap-1.5 text-purple-700 text-xs font-bold uppercase tracking-wider mb-1">
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Bước 4: Phản hồi kết quả đánh giá cuối kỳ</span>
+                </div>
+                <h3 className="text-base font-bold text-slate-900 truncate">
+                  Phản hồi kết quả chấm điểm của Lãnh đạo
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5 truncate">{feedbackTask.task_name}</p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setFeedbackTask(null)}
+                className="w-8 h-8 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Manager's current grade summary */}
+            <div className="bg-purple-50/70 p-3.5 rounded-xl border border-purple-200 text-xs space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-600">Điểm quy đổi đạt được:</span>
+                <span className="font-bold text-purple-900 text-sm">
+                  {Number(Number(feedbackTask.converted_score || 0).toFixed(2))} / {Number(Number(feedbackTask.max_converted_score || (feedbackTask.standard_score * feedbackTask.difficulty_weight)).toFixed(2))} đ
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 pt-1 border-t border-purple-100">
+                <div>Tiến độ: <b>{Math.round((feedbackTask.progress_pct || 1) * 100)}%</b></div>
+                <div>Chất lượng: <b>{Math.round((feedbackTask.quality_pct || 1) * 100)}%</b></div>
+              </div>
+              {feedbackTask.cbql_comment && (
+                <div className="pt-1 border-t border-purple-100">
+                  <span className="font-semibold text-slate-700">Nhận xét của Lãnh đạo: </span>
+                  <span className="text-slate-900 italic">"{feedbackTask.cbql_comment}"</span>
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleSubmitEvalFeedback} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Nội dung phản hồi / kiến nghị giải trình của Cán bộ *
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={evalFeedbackText}
+                  onChange={(e) => setEvalFeedbackText(e.target.value)}
+                  placeholder="Nhập lý do không đồng tình hoặc căn cứ thực tế giải trình để Lãnh đạo xem xét điều chỉnh điểm đánh giá..."
+                  className="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  💡 Sau khi bạn gửi phản hồi, Lãnh đạo sẽ nhận được thông báo tại màn hình thẩm định để xem xét và thực hiện <strong>"Sửa đánh giá"</strong> theo quy định.
+                </p>
+              </div>
+
+              <div className="pt-3 flex justify-end space-x-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setFeedbackTask(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingFeedback}
+                  className="px-5 py-2 text-xs font-bold bg-purple-700 hover:bg-purple-800 text-white rounded-lg shadow-xs flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{submittingFeedback ? 'Đang gửi...' : 'Gửi phản hồi đánh giá'}</span>
+                </button>
+              </div>
+            </form>
+
           </div>
         </div>
       )}

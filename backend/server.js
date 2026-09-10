@@ -1121,16 +1121,17 @@ app.post('/api/assigned-tasks/assign', requireManagerOrAdmin, (req, res) => {
       id, period_id, user_id, standard_task_id, task_name, output_result,
       deadline, task_type, standard_score, difficulty_weight, max_converted_score,
       axis_code, origin, status, assigned_by, group_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'assigned', 'in_progress', ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'assigned', ?, ?, ?)
   `);
 
   const createdIds = [];
   const runTransaction = db.transaction(() => {
     for (const uid of targetUserIds) {
       const id = uuidv4();
+      const initialStatus = (uid === (assigned_by || viewerId)) ? 'in_progress' : 'pending_acceptance';
       insertStmt.run(
         id, period_id, uid, standard_task_id || null, task_name, output_result,
-        deadline, task_type, stdScore, diffWeight, maxConv, axis_code, assigned_by, groupId
+        deadline, task_type, stdScore, diffWeight, maxConv, axis_code, initialStatus, assigned_by, groupId
       );
       createdIds.push(id);
     }
@@ -1203,7 +1204,7 @@ app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) =>
       id, period_id, user_id, standard_task_id, task_name, output_result,
       deadline, task_type, standard_score, difficulty_weight, max_converted_score,
       axis_code, origin, status, assigned_by, group_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'assigned', 'in_progress', ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'assigned', ?, ?, ?)
   `);
 
   const createdIds = [];
@@ -1217,6 +1218,7 @@ app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) =>
 
       for (const uid of targetUserIds) {
         const id = uuidv4();
+        const initialStatus = (uid === (assigned_by || viewerId)) ? 'in_progress' : 'pending_acceptance';
         insertStmt.run(
           id,
           period_id,
@@ -1230,6 +1232,7 @@ app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) =>
           diffWeight,
           maxConv,
           t.axis_code || 'TRUC_1',
+          initialStatus,
           assigned_by || viewerId,
           groupId
         );
@@ -1487,6 +1490,140 @@ app.post('/api/assigned-tasks/:id/return', requireManagerOrAdmin, (req, res) => 
     success: true, 
     message: `Đã trả về công việc "${task.task_name}" yêu cầu cán bộ nộp lại minh chứng!` 
   });
+});
+
+// Cán bộ Xác nhận tiếp nhận nhiệm vụ (Bước 1 - Nhánh 2 theo tài liệu V6)
+app.put('/api/assigned-tasks/:id/accept', (req, res) => {
+  const { id } = req.params;
+  const viewerId = getViewerId(req);
+  const task = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
+  if (!task) return res.status(404).json({ success: false, message: 'Không tìm thấy công việc' });
+
+  if (viewerId && task.user_id !== viewerId) {
+    const viewer = db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId);
+    if (viewer?.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Bạn không có quyền xác nhận nhiệm vụ của cán bộ khác' });
+    }
+  }
+
+  db.prepare(`
+    UPDATE assigned_tasks 
+    SET status = 'in_progress', updated_at = CURRENT_TIMESTAMP 
+    WHERE id = ?
+  `).run(id);
+
+  res.json({ success: true, message: 'Đã xác nhận tiếp nhận nhiệm vụ thành công!' });
+});
+
+// Cán bộ Phản hồi công việc chưa hợp lý (Bước 1 - Nhánh 2 theo tài liệu V6)
+app.put('/api/assigned-tasks/:id/feedback', (req, res) => {
+  const { id } = req.params;
+  const { feedback_reason } = req.body;
+  const viewerId = getViewerId(req);
+
+  if (!feedback_reason || !feedback_reason.trim()) {
+    return res.status(400).json({ success: false, message: 'Vui lòng nhập lý do phản hồi công việc' });
+  }
+
+  const task = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
+  if (!task) return res.status(404).json({ success: false, message: 'Không tìm thấy công việc' });
+
+  if (viewerId && task.user_id !== viewerId) {
+    const viewer = db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId);
+    if (viewer?.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Bạn không có quyền phản hồi nhiệm vụ của cán bộ khác' });
+    }
+  }
+
+  // Ràng buộc quy định tài liệu V6: Mỗi nhiệm vụ cán bộ chỉ được phản hồi tối đa 1 lần
+  const currentFeedbackCount = task.feedback_count || 0;
+  if (currentFeedbackCount >= 1) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'Theo quy định Hướng dẫn V6, mỗi nhiệm vụ cán bộ chỉ được phản hồi tối đa 1 lần!' 
+    });
+  }
+
+  db.prepare(`
+    UPDATE assigned_tasks 
+    SET status = 'feedback_submitted', 
+        feedback_reason = ?, 
+        feedback_count = COALESCE(feedback_count, 0) + 1,
+        updated_at = CURRENT_TIMESTAMP 
+    WHERE id = ?
+  `).run(feedback_reason.trim(), id);
+
+  res.json({ success: true, message: 'Đã gửi phản hồi về công việc cho Lãnh đạo xem xét thành công!' });
+});
+
+// Lãnh đạo Giao lại nhiệm vụ sau khi cấp dưới phản hồi (Bước 1 - Nhánh 2 theo tài liệu V6)
+app.put('/api/assigned-tasks/:id/reassign', requireManagerOrAdmin, (req, res) => {
+  const { id } = req.params;
+  const { deadline, task_name, output_result, standard_score, difficulty_weight } = req.body;
+
+  const task = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
+  if (!task) return res.status(404).json({ success: false, message: 'Không tìm thấy công việc' });
+
+  // Theo tài liệu V6: Khi lãnh đạo giao lại thì nhiệm vụ tự chuyển vào "Đã xác nhận" (in_progress) của cán bộ
+  const stdScore = standard_score ? parseFloat(standard_score) : task.standard_score;
+  const diffWeight = difficulty_weight ? parseFloat(difficulty_weight) : task.difficulty_weight;
+  const maxConv = Number((stdScore * diffWeight).toFixed(2));
+
+  db.prepare(`
+    UPDATE assigned_tasks 
+    SET status = 'in_progress',
+        task_name = COALESCE(?, task_name),
+        deadline = COALESCE(?, deadline),
+        output_result = COALESCE(?, output_result),
+        standard_score = ?,
+        difficulty_weight = ?,
+        max_converted_score = ?,
+        reassigned_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(
+    task_name ? task_name.trim() : null,
+    deadline || null,
+    output_result || null,
+    stdScore,
+    diffWeight,
+    maxConv,
+    id
+  );
+
+  res.json({ 
+    success: true, 
+    message: 'Đã điều chỉnh và giao lại nhiệm vụ thành công. Nhiệm vụ đã được chuyển vào danh sách thực hiện của cán bộ!' 
+  });
+});
+
+// Cán bộ Phản hồi đánh giá nhiệm vụ cuối kỳ (Bước 4 theo tài liệu V6)
+app.put('/api/assigned-tasks/:id/evaluation-feedback', (req, res) => {
+  const { id } = req.params;
+  const { evaluation_feedback } = req.body;
+  const viewerId = getViewerId(req);
+
+  if (!evaluation_feedback || !evaluation_feedback.trim()) {
+    return res.status(400).json({ success: false, message: 'Vui lòng nhập nội dung phản hồi đánh giá' });
+  }
+
+  const task = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
+  if (!task) return res.status(404).json({ success: false, message: 'Không tìm thấy công việc' });
+
+  if (viewerId && task.user_id !== viewerId) {
+    const viewer = db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId);
+    if (viewer?.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Bạn không có quyền phản hồi đánh giá của cán bộ khác' });
+    }
+  }
+
+  db.prepare(`
+    UPDATE assigned_tasks 
+    SET evaluation_feedback = ?, updated_at = CURRENT_TIMESTAMP 
+    WHERE id = ?
+  `).run(evaluation_feedback.trim(), id);
+
+  res.json({ success: true, message: 'Đã gửi phản hồi về mức đánh giá của Lãnh đạo thành công!' });
 });
 
 // -------------------------------------------------------------
@@ -1966,6 +2103,125 @@ app.get('/api/stats/dashboard', (req, res) => {
 });
 
 // -------------------------------------------------------------
+// BƯỚC 6: CƠ QUAN THAM MƯU TỔNG HỢP & TRÌNH BIỂU QUYẾT (Theo tài liệu V6)
+// -------------------------------------------------------------
+// 1. Lấy danh sách tổng hợp tham mưu
+app.get('/api/advisory-summary', (req, res) => {
+  const { period_id } = req.query;
+  const pId = period_id || 'p-1';
+  const viewerId = getViewerId(req);
+  const accessibleUserIds = getAccessibleUserIds(viewerId);
+
+  let userClause = '';
+  const params = [pId, pId, pId];
+  if (accessibleUserIds !== null) {
+    if (accessibleUserIds.length === 0) return res.json([]);
+    const placeholders = accessibleUserIds.map(() => '?').join(',');
+    userClause = ` AND u.id IN (${placeholders})`;
+    params.push(...accessibleUserIds);
+  }
+
+  const list = db.prepare(`
+    SELECT u.id as user_id, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.dept_id, d.name as dept_name,
+           e.id as evaluation_id, e.step, e.part1_score, e.part2_score, e.bonus_score, e.total_score,
+           e.rank_proposed, e.superior_rank, e.superior_comment, e.status as eval_status,
+           e.advisory_rank, e.advisory_comment, e.is_advisory_submitted, e.advisory_submitted_at,
+           adv_user.full_name as advisory_by_name,
+           (SELECT COUNT(*) FROM assigned_tasks t WHERE t.user_id = u.id AND t.period_id = ? AND t.status != 'rejected') as total_tasks,
+           (SELECT COUNT(*) FROM assigned_tasks t WHERE t.user_id = u.id AND t.period_id = ? AND t.evaluation_feedback IS NOT NULL AND t.evaluation_feedback != '') as task_feedback_count
+    FROM users u
+    LEFT JOIN departments d ON u.dept_id = d.id
+    LEFT JOIN evaluations e ON e.user_id = u.id AND e.period_id = ?
+    LEFT JOIN users adv_user ON e.advisory_by = adv_user.id
+    WHERE (u.is_active IS NULL OR u.is_active = 1) ${userClause}
+    ORDER BY d.name ASC, u.full_name ASC
+  `).all(...params);
+
+  res.json(list);
+});
+
+// 2. Lưu ý kiến & đề xuất của Cơ quan tham mưu
+app.put('/api/advisory-summary/save', (req, res) => {
+  const { evaluation_id, user_id, period_id, advisory_rank, advisory_comment } = req.body;
+  const viewerId = getViewerId(req);
+
+  let evalId = evaluation_id;
+  if (!evalId && user_id && period_id) {
+    let evalRec = db.prepare('SELECT id FROM evaluations WHERE period_id = ? AND user_id = ?').get(period_id, user_id);
+    if (evalRec) {
+      evalId = evalRec.id;
+    } else {
+      evalId = uuidv4();
+      db.prepare(`
+        INSERT INTO evaluations (id, period_id, user_id, part1_score, part2_score, bonus_score, total_score, rank_proposed, status, step)
+        VALUES (?, ?, ?, 30, 0, 0, 30, 'Chưa tự đánh giá', 'draft', 'step_6_advisory')
+      `).run(evalId, period_id, user_id);
+    }
+  }
+
+  if (!evalId) return res.status(400).json({ success: false, message: 'Thiếu evaluation_id hoặc user_id & period_id' });
+
+  db.prepare(`
+    UPDATE evaluations 
+    SET advisory_rank = ?, advisory_comment = ?, advisory_by = ?, updated_at = CURRENT_TIMESTAMP 
+    WHERE id = ?
+  `).run(advisory_rank || null, advisory_comment || null, viewerId || null, evalId);
+
+  res.json({ success: true, message: 'Đã lưu ý kiến và đề xuất của Cơ quan tham mưu thành công!', evaluation_id: evalId });
+});
+
+// 3. Trình biểu quyết (chuyển sang Bước 7)
+app.post('/api/advisory-summary/submit-voting', (req, res) => {
+  const { evaluation_ids, items, period_id } = req.body;
+  const viewerId = getViewerId(req);
+
+  let targetEvalIds = [];
+  if (Array.isArray(evaluation_ids) && evaluation_ids.length > 0) {
+    targetEvalIds = [...evaluation_ids];
+  } else if (Array.isArray(items) && items.length > 0) {
+    // items: array of { user_id, evaluation_id }
+    for (const it of items) {
+      if (it.evaluation_id) {
+        targetEvalIds.push(it.evaluation_id);
+      } else if (it.user_id && period_id) {
+        let evalRec = db.prepare('SELECT id FROM evaluations WHERE period_id = ? AND user_id = ?').get(period_id, it.user_id);
+        if (evalRec) {
+          targetEvalIds.push(evalRec.id);
+        } else {
+          const newId = uuidv4();
+          db.prepare(`
+            INSERT INTO evaluations (id, period_id, user_id, part1_score, part2_score, bonus_score, total_score, rank_proposed, status, step)
+            VALUES (?, ?, ?, 30, 0, 0, 30, 'Chưa tự đánh giá', 'draft', 'step_6_advisory')
+          `).run(newId, period_id, it.user_id);
+          targetEvalIds.push(newId);
+        }
+      }
+    }
+  }
+
+  if (targetEvalIds.length === 0) {
+    return res.status(400).json({ success: false, message: 'Vui lòng chọn ít nhất 1 hồ sơ để trình biểu quyết' });
+  }
+
+  const placeholders = targetEvalIds.map(() => '?').join(',');
+  db.prepare(`
+    UPDATE evaluations 
+    SET is_advisory_submitted = 1,
+        advisory_submitted_at = CURRENT_TIMESTAMP,
+        advisory_by = COALESCE(?, advisory_by),
+        step = 'step_7_voting',
+        updated_at = CURRENT_TIMESTAMP 
+    WHERE id IN (${placeholders})
+  `).run(viewerId || null, ...targetEvalIds);
+
+  res.json({ 
+    success: true, 
+    count: targetEvalIds.length, 
+    message: `Đã trình biểu quyết thành công ${targetEvalIds.length} hồ sơ cho Tập thể Lãnh đạo!` 
+  });
+});
+
+// -------------------------------------------------------------
 // Voting (Biểu quyết xếp loại)
 // -------------------------------------------------------------
 // 1. Voting Progress & Council of Leaders stats
@@ -2073,7 +2329,8 @@ app.get('/api/voting', (req, res) => {
 
   const users = db.prepare(`
     SELECT u.id as user_id, u.full_name, u.role, u.target_role, u.gov_title, u.party_title, d.name as dept_name,
-           e.total_score, e.part1_score, e.part2_score, e.bonus_score, e.superior_rank, e.rank_proposed,
+           e.total_score, e.part1_score, e.part2_score, e.bonus_score, e.superior_rank, e.superior_comment, e.rank_proposed,
+           e.advisory_rank, e.advisory_comment, e.is_advisory_submitted, e.advisory_submitted_at,
            (SELECT vote_rank FROM votes v WHERE v.period_id = ? AND v.user_id = u.id AND v.voter_id = ?) as my_vote,
            (SELECT COUNT(*) FROM votes v WHERE v.period_id = ? AND v.user_id = u.id) as total_votes,
            (SELECT COUNT(*) FROM votes v WHERE v.period_id = ? AND v.user_id = u.id AND v.vote_rank = 'Hoàn thành xuất sắc nhiệm vụ') as votes_xuat_sac,

@@ -250,7 +250,16 @@ function initDatabase() {
     "ALTER TABLE assigned_tasks ADD COLUMN return_reason TEXT;",
     "ALTER TABLE assigned_tasks ADD COLUMN is_returned INTEGER DEFAULT 0;",
     "ALTER TABLE departments ADD COLUMN parent_agency TEXT;",
-    "ALTER TABLE departments ADD COLUMN location_name TEXT;"
+    "ALTER TABLE departments ADD COLUMN location_name TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN feedback_reason TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN feedback_count INTEGER DEFAULT 0;",
+    "ALTER TABLE assigned_tasks ADD COLUMN reassigned_at TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN evaluation_feedback TEXT;",
+    "ALTER TABLE evaluations ADD COLUMN advisory_rank TEXT;",
+    "ALTER TABLE evaluations ADD COLUMN advisory_comment TEXT;",
+    "ALTER TABLE evaluations ADD COLUMN advisory_by TEXT;",
+    "ALTER TABLE evaluations ADD COLUMN advisory_submitted_at TEXT;",
+    "ALTER TABLE evaluations ADD COLUMN is_advisory_submitted INTEGER DEFAULT 0;"
   ];
 
   for (const m of migrations) {

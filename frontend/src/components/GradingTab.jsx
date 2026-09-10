@@ -472,6 +472,19 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                     </div>
                   )}
 
+                  {/* Cadre Evaluation Feedback Banner (Bước 4) */}
+                  {t.evaluation_feedback && (
+                    <div className="text-xs text-purple-900 bg-purple-50 p-2.5 rounded-lg border border-purple-200 space-y-1">
+                      <div className="font-bold text-purple-800 flex items-center gap-1.5">
+                        <MessageSquare className="w-3.5 h-3.5 text-purple-600" />
+                        <span>Ý kiến phản hồi đánh giá của cán bộ (Bước 4):</span>
+                      </div>
+                      <div className="p-2 bg-white rounded-md border border-purple-100 text-slate-800 font-medium italic">
+                        "{t.evaluation_feedback}"
+                      </div>
+                    </div>
+                  )}
+
                   {/* Metrics pills */}
                   <div className="grid grid-cols-3 gap-1.5 text-center text-xs">
                     <div className="p-1.5 bg-slate-50 rounded-lg border border-slate-100">
@@ -493,9 +506,13 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                     <div className="flex items-center gap-2 pt-1">
                       <button
                         onClick={() => openGradeModal(t)}
-                        className="flex-1 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-2xs text-center cursor-pointer"
+                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold shadow-2xs text-center cursor-pointer text-white ${
+                          t.evaluation_feedback 
+                            ? 'bg-purple-700 hover:bg-purple-800 ring-2 ring-purple-300' 
+                            : 'bg-indigo-600 hover:bg-indigo-700'
+                        }`}
                       >
-                        {isApproved ? 'Chấm lại' : 'Chấm điểm'}
+                        {t.evaluation_feedback ? 'Sửa đánh giá' : (isApproved ? 'Chấm lại' : 'Chấm điểm')}
                       </button>
                       <button
                         type="button"
@@ -561,6 +578,17 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                           </a>
                         </div>
                       )}
+                      {t.evaluation_feedback && (
+                        <div className="text-xs text-purple-900 bg-purple-50 p-2 rounded-lg border border-purple-200 mt-1.5 space-y-0.5">
+                          <div className="font-bold text-purple-800 flex items-center gap-1">
+                            <MessageSquare className="w-3.5 h-3.5 text-purple-600" />
+                            <span>Phản hồi của cán bộ (Bước 4):</span>
+                          </div>
+                          <div className="text-slate-800 pl-4 italic">
+                            "{t.evaluation_feedback}"
+                          </div>
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 text-center font-normal text-slate-800">{t.standard_score}</td>
                     <td className="px-4 py-3.5 text-center">{t.difficulty_weight}</td>
@@ -577,14 +605,19 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                       {Number(Number(t.converted_score || 0).toFixed(2))}
                     </td>
                     <td className="px-4 py-3.5 text-center">
-                      <div className="flex items-center justify-center space-x-1">
+                      <div className="flex flex-col items-center justify-center space-y-1">
                         {canGrade ? (
                           <>
                             <button
                               onClick={() => openGradeModal(t)}
-                              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold px-2.5 py-1.5 rounded-lg text-xs transition-colors"
+                              className={`font-semibold px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer w-full text-center ${
+                                t.evaluation_feedback
+                                  ? 'bg-purple-100 hover:bg-purple-200 text-purple-800 border border-purple-300 font-bold'
+                                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200'
+                              }`}
+                              title={t.evaluation_feedback ? 'Cán bộ có ý kiến phản hồi đánh giá, xem và điều chỉnh điểm' : (isApproved ? 'Chấm lại điểm công việc' : 'Thẩm định và chấm điểm')}
                             >
-                              {isApproved ? 'Chấm lại' : 'Chấm điểm'}
+                              {t.evaluation_feedback ? 'Sửa đánh giá' : (isApproved ? 'Chấm lại' : 'Chấm điểm')}
                             </button>
                             <button
                               type="button"
@@ -593,19 +626,26 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                                 setReturnTaskReason('');
                               }}
                               title="Trả về yêu cầu cán bộ bổ sung hoặc làm lại minh chứng"
-                              className="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 font-semibold px-2 py-1.5 rounded-lg text-xs transition-colors"
+                              className="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 font-semibold px-2 py-1 rounded-lg text-xs transition-colors cursor-pointer w-full text-center"
                             >
                               ↩️ Trả về
                             </button>
                           </>
                         ) : (
-                          <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-semibold ${
-                            isApproved 
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                              : (t.is_returned === 1 ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-slate-100 text-slate-500')
-                          }`}>
-                            {isApproved ? 'Đã duyệt' : (t.is_returned === 1 ? '⚠️ Bị trả về' : 'Chờ CBQL chấm')}
-                          </span>
+                          <div className="space-y-1">
+                            <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-semibold ${
+                              isApproved 
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                                : (t.is_returned === 1 ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-slate-100 text-slate-500')
+                            }`}>
+                              {isApproved ? 'Đã duyệt' : (t.is_returned === 1 ? '⚠️ Bị trả về' : 'Chờ CBQL chấm')}
+                            </span>
+                            {t.evaluation_feedback && (
+                              <span className="block px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                                💬 Đã phản hồi
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </td>
@@ -838,6 +878,22 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
 
             <form onSubmit={handleSaveGrade} className="space-y-3.5">
               
+              {/* Cadre Evaluation Feedback (Bước 4) */}
+              {gradingTask.evaluation_feedback && (
+                <div className="p-3 bg-purple-50 border border-purple-300 rounded-xl text-xs space-y-1.5 animate-in fade-in">
+                  <div className="font-bold text-purple-900 flex items-center gap-1.5">
+                    <MessageSquare className="w-4 h-4 text-purple-700 shrink-0" />
+                    <span>Ý kiến phản hồi đánh giá của cán bộ (Bước 4):</span>
+                  </div>
+                  <div className="p-2.5 bg-white rounded-lg border border-purple-200 text-slate-800 font-medium italic">
+                    "{gradingTask.evaluation_feedback}"
+                  </div>
+                  <p className="text-[11px] text-purple-700">
+                    💡 Cán bộ đã gửi phản hồi đề nghị xem xét lại. Lãnh đạo có thể điều chỉnh tỷ lệ tiến độ, chất lượng hoặc cập nhật nhận xét dưới đây để hoàn tất <strong>Sửa đánh giá</strong>.
+                  </p>
+                </div>
+              )}
+
               {/* Evidence preview box */}
               <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs space-y-1">
                 <div><span className="font-semibold text-slate-700">Thời hạn:</span> {formatDate(gradingTask.deadline)}</div>

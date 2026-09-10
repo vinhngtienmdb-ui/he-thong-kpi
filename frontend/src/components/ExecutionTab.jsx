@@ -11,7 +11,9 @@ import {
   AlertTriangle,
   Send,
   Lock,
-  RotateCcw
+  RotateCcw,
+  MessageSquare,
+  X
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate, toInputDateFormat, parseDateOnly } from '../constants';
@@ -20,6 +22,11 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTask, setActiveTask] = useState(null); // Task currently opening evidence modal
+
+  // Evaluation feedback modal state (Bước 4 V6)
+  const [feedbackTask, setFeedbackTask] = useState(null);
+  const [evalFeedbackText, setEvalFeedbackText] = useState('');
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
   // Modal form state
   const [finishDate, setFinishDate] = useState(new Date().toISOString().split('T')[0]);
@@ -81,6 +88,29 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
       alert(err.message);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleSubmitEvalFeedback(e) {
+    e.preventDefault();
+    if (!feedbackTask) return;
+    if (!evalFeedbackText.trim()) {
+      alert('Vui lòng nhập nội dung phản hồi đánh giá');
+      return;
+    }
+    try {
+      setSubmittingFeedback(true);
+      await api.submitEvaluationFeedback(feedbackTask.id, {
+        evaluation_feedback: evalFeedbackText.trim()
+      });
+      alert('Đã gửi ý kiến phản hồi đánh giá đến Lãnh đạo thành công!');
+      setFeedbackTask(null);
+      setEvalFeedbackText('');
+      loadMyTasks();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSubmittingFeedback(false);
     }
   }
 
@@ -248,6 +278,19 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
                       )}
                     </div>
                   )}
+
+                  {/* Cadre Evaluation Feedback Banner (Bước 4) */}
+                  {task.evaluation_feedback && (
+                    <div className="p-2.5 bg-purple-50 rounded-lg border border-purple-200 text-xs space-y-1">
+                      <div className="font-bold text-purple-800 flex items-center gap-1.5">
+                        <MessageSquare className="w-3.5 h-3.5 text-purple-600" />
+                        <span>Ý kiến phản hồi đánh giá của bạn (Bước 4):</span>
+                      </div>
+                      <div className="p-2 bg-white rounded-md border border-purple-100 text-slate-800 italic">
+                        "{task.evaluation_feedback}"
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Right score / action */}
@@ -280,9 +323,27 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
                         <span>Đã nộp (Khóa)</span>
                       </div>
                     ) : isApproved ? (
-                      <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        <span>Đã duyệt (Khóa)</span>
+                      <div className="flex flex-col sm:flex-row lg:flex-col items-end gap-2">
+                        <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>Đã duyệt (Khóa)</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFeedbackTask(task);
+                            setEvalFeedbackText(task.evaluation_feedback || '');
+                          }}
+                          className={`flex items-center space-x-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors cursor-pointer ${
+                            task.evaluation_feedback
+                              ? 'bg-purple-100 border-purple-300 text-purple-800 hover:bg-purple-200'
+                              : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100'
+                          }`}
+                          title="Gửi ý kiến phản hồi về kết quả chấm điểm của Lãnh đạo (Bước 4)"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 text-purple-600" />
+                          <span>{task.evaluation_feedback ? 'Sửa phản hồi đánh giá' : 'Phản hồi đánh giá'}</span>
+                        </button>
                       </div>
                     ) : (
                       <button
@@ -442,6 +503,92 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* EVALUATION FEEDBACK MODAL (Bước 4 V6) */}
+      {feedbackTask && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-[95%] sm:w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 my-auto animate-in fade-in zoom-in-95 duration-150">
+            
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div className="min-w-0 flex-1 pr-2">
+                <div className="flex items-center gap-1.5 text-purple-700 text-xs font-bold uppercase tracking-wider mb-1">
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Bước 4: Phản hồi kết quả đánh giá cuối kỳ</span>
+                </div>
+                <h3 className="text-base font-bold text-slate-900 truncate">
+                  Phản hồi kết quả chấm điểm của Lãnh đạo
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5 truncate">{feedbackTask.task_name}</p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setFeedbackTask(null)}
+                className="w-8 h-8 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition cursor-pointer shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Manager's current grade summary */}
+            <div className="bg-purple-50/70 p-3.5 rounded-xl border border-purple-200 text-xs space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-600">Điểm quy đổi đạt được:</span>
+                <span className="font-bold text-purple-900 text-sm">
+                  {Number(Number(feedbackTask.converted_score || 0).toFixed(2))} / {Number(Number(feedbackTask.max_converted_score || (feedbackTask.standard_score * feedbackTask.difficulty_weight)).toFixed(2))} đ
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 pt-1 border-t border-purple-100">
+                <div>Tiến độ: <b>{Math.round((feedbackTask.progress_pct || 1) * 100)}%</b></div>
+                <div>Chất lượng: <b>{Math.round((feedbackTask.quality_pct || 1) * 100)}%</b></div>
+              </div>
+              {feedbackTask.cbql_comment && (
+                <div className="pt-1 border-t border-purple-100">
+                  <span className="font-semibold text-slate-700">Nhận xét của Lãnh đạo: </span>
+                  <span className="text-slate-900 italic">"{feedbackTask.cbql_comment}"</span>
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleSubmitEvalFeedback} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Nội dung phản hồi / kiến nghị giải trình của Cán bộ *
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={evalFeedbackText}
+                  onChange={(e) => setEvalFeedbackText(e.target.value)}
+                  placeholder="Nhập lý do không đồng tình hoặc căn cứ thực tế giải trình để Lãnh đạo xem xét điều chỉnh điểm đánh giá..."
+                  className="w-full text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  💡 Sau khi bạn gửi phản hồi, Lãnh đạo sẽ nhận được thông báo tại màn hình thẩm định để xem xét và thực hiện <strong>"Sửa đánh giá"</strong> theo quy định.
+                </p>
+              </div>
+
+              <div className="pt-3 flex justify-end space-x-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setFeedbackTask(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingFeedback}
+                  className="px-5 py-2 text-xs font-bold bg-purple-700 hover:bg-purple-800 text-white rounded-lg shadow-xs flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{submittingFeedback ? 'Đang gửi...' : 'Gửi phản hồi đánh giá'}</span>
+                </button>
+              </div>
+            </form>
+
           </div>
         </div>
       )}
