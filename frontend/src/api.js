@@ -168,6 +168,13 @@ export const api = {
       method: 'DELETE',
     });
   },
+  bulkDeleteStandardTasks: (ids) => {
+    return fetchApi('/standard-tasks/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+  },
 
   // Assigned Tasks
   getAssignedTasks: (params = {}, maybeUserId) => {

@@ -641,11 +641,35 @@ async function autoRestoreFromSupabaseIfFresh() {
   }
 }
 
+/**
+ * Xóa danh sách công việc chuẩn khỏi Supabase Cloud
+ */
+async function deleteStandardTasksFromSupabase(ids) {
+  if (!isSupabaseConfigured() || !ids || ids.length === 0) return;
+  const pool = getPool();
+  if (!pool) return;
+  let client;
+  try {
+    client = await pool.connect();
+    for (let i = 0; i < ids.length; i += 100) {
+      const chunk = ids.slice(i, i + 100);
+      const placeholders = chunk.map((_, idx) => `$${idx + 1}`).join(', ');
+      await client.query(`DELETE FROM standard_tasks WHERE id IN (${placeholders})`, chunk);
+    }
+  } catch (err) {
+    console.error('[Supabase Delete] Lỗi xóa công việc chuẩn trên Supabase:', err.message);
+  } finally {
+    if (client) client.release();
+    if (pool) await pool.end();
+  }
+}
+
 module.exports = {
   isSupabaseConfigured,
   getSupabaseStatus,
   pushToSupabase,
   pullFromSupabase,
   triggerBackgroundSupabaseSync,
-  autoRestoreFromSupabaseIfFresh
+  autoRestoreFromSupabaseIfFresh,
+  deleteStandardTasksFromSupabase
 };

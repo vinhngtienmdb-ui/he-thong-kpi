@@ -28,7 +28,8 @@ const {
   pullFromSupabase, 
   isSupabaseConfigured,
   triggerBackgroundSupabaseSync,
-  autoRestoreFromSupabaseIfFresh 
+  autoRestoreFromSupabaseIfFresh,
+  deleteStandardTasksFromSupabase
 } = require('./supabaseSync');
 
 // Initialize database
@@ -1284,7 +1285,36 @@ app.delete('/api/standard-tasks/:id', requireManagerOrAdmin, (req, res) => {
   }
 
   db.prepare('DELETE FROM standard_tasks WHERE id = ?').run(id);
+  deleteStandardTasksFromSupabase([id]);
+  triggerBackgroundSupabaseSync();
   res.json({ success: true, message: 'Đã xóa công việc chuẩn khỏi danh mục thành công' });
+});
+
+// Bulk delete standard tasks (Xóa nhiều công việc chuẩn cùng lúc)
+app.post('/api/standard-tasks/bulk-delete', requireManagerOrAdmin, (req, res) => {
+  const { ids } = req.body || {};
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ success: false, message: 'Vui lòng chọn ít nhất một công việc chuẩn để xóa' });
+  }
+
+  // Transactionally delete from SQLite
+  const runBulkDelete = db.transaction(() => {
+    const placeholders = ids.map(() => '?').join(', ');
+    const stmt = db.prepare(`DELETE FROM standard_tasks WHERE id IN (${placeholders})`);
+    return stmt.run(...ids);
+  });
+
+  const result = runBulkDelete();
+
+  // Async delete from Supabase Cloud and trigger background sync
+  deleteStandardTasksFromSupabase(ids);
+  triggerBackgroundSupabaseSync();
+
+  res.json({ 
+    success: true, 
+    deletedCount: result.changes, 
+    message: `Đã xóa thành công ${result.changes} công việc chuẩn khỏi danh mục` 
+  });
 });
 
 // -------------------------------------------------------------
