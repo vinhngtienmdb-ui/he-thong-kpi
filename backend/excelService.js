@@ -323,7 +323,7 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null, o
 
   const checkExisting = db.prepare(`
     SELECT id FROM standard_tasks 
-    WHERE period_id = ? AND LOWER(TRIM(task_name)) = ? 
+    WHERE period_id = ? AND LOWER(TRIM(task_name)) = ? AND (deadline = ? OR (deadline IS NULL AND ? IS NULL))
     LIMIT 1
   `);
 
@@ -432,8 +432,8 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null, o
       const rawStatus = mapping.status ? extractCellText(row.getCell(mapping.status)).trim() : '';
       const status = rawStatus || 'Hoạt động';
 
-      // Upsert task: Update if already exists in this period, else Insert
-      const existing = checkExisting.get(rowPeriodId, taskName.toLowerCase());
+      // Upsert task: Update if already exists in this period with same deadline, else Insert
+      const existing = checkExisting.get(rowPeriodId, taskName.toLowerCase(), deadline, deadline);
       if (existing) {
         if (updateExisting) {
           updateTask.run(
