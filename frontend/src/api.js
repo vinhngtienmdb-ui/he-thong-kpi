@@ -552,10 +552,32 @@ export const api = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   }),
+  submitDocumentToLeader: (id, data) => fetchApi(`/documents/${id}/submit-to-leader`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
   completeDocumentDispatch: (dispatchId, data) => fetchApi(`/documents/dispatches/${dispatchId}/complete`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
+  }),
+
+  // User Groups (Nhóm người dùng tự tạo)
+  getUserGroups: () => fetchApi('/user-groups'),
+  getUserGroup: (id) => fetchApi(`/user-groups/${id}`),
+  createUserGroup: (data) => fetchApi('/user-groups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
+  updateUserGroup: (id, data) => fetchApi(`/user-groups/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
+  deleteUserGroup: (id) => fetchApi(`/user-groups/${id}`, {
+    method: 'DELETE',
   }),
 
   // Database Backup & Restore

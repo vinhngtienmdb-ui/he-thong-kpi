@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FileText, 
   Send, 
@@ -23,10 +23,17 @@ import {
   ChevronRight,
   Check,
   Layers,
-  ArrowRight
+  ArrowRight,
+  Users,
+  UserCheck,
+  BookOpen,
+  Briefcase,
+  Share2,
+  Info
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate, toInputDateFormat } from '../constants';
+import UserGroupManagementModal from './UserGroupManagementModal';
 
 // Document Classifications (Phân loại văn bản chuẩn hành chính)
 const DOC_TYPES = [
@@ -72,11 +79,21 @@ export default function DocumentManagementTab({
   const [stats, setStats] = useState({
     total: 0,
     pending_dispatch: 0,
+    submitted_to_leader: 0,
     in_progress: 0,
     completed: 0,
     overdue: 0
   });
   const [loading, setLoading] = useState(true);
+
+  // User Groups state
+  const [userGroups, setUserGroups] = useState([]);
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+
+  // Submit to Leader Modal state
+  const [submitModalDoc, setSubmitModalDoc] = useState(null);
+  const [submitLeaderId, setSubmitLeaderId] = useState('');
+  const [submitLeaderNote, setSubmitLeaderNote] = useState('');
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -106,9 +123,14 @@ export default function DocumentManagementTab({
   // Dispatch Modal state
   const [dispatchModalDoc, setDispatchModalDoc] = useState(null);
   const [dispatchFormData, setDispatchFormData] = useState({
+    dispatch_type: 'process', // 'process' | 'reference'
+    target_type: 'users', // 'users' | 'job_title' | 'user_group'
     department_id: '',
     assigned_to_user_id: '',
     coordinating_user_ids: [],
+    job_titles: [],
+    group_id: '',
+    leader_instruction: '',
     instruction: '',
     deadline: '',
     create_kpi_task: true,
@@ -132,6 +154,48 @@ export default function DocumentManagementTab({
 
   // Check if current user is manager or admin
   const isCBQL = currentUser?.role === 'admin' || currentUser?.role === 'cbql' || currentUser?.role_code === 'admin' || currentUser?.role_code === 'cbql_phong' || currentUser?.role_code === 'ld_coquan';
+
+  // Leaders list for submitting documents
+  const leaders = useMemo(() => {
+    return users.filter(u => 
+      u.role === 'admin' || 
+      u.role === 'cbql' || 
+      u.management_role === 'lanh_dao' || 
+      u.management_role === 'quan_ly' || 
+      ['ld_coquan', 'cbql_phong', 'admin', 'hieu_pho'].includes(u.role_code) ||
+      (u.gov_title && (
+        u.gov_title.toLowerCase().includes('hiệu trưởng') || 
+        u.gov_title.toLowerCase().includes('phó hiệu trưởng') || 
+        u.gov_title.toLowerCase().includes('trưởng phòng')
+      ))
+    );
+  }, [users]);
+
+  // Distinct job titles
+  const distinctJobTitles = useMemo(() => {
+    const titles = new Set();
+    users.forEach(u => {
+      if (u.gov_title && u.gov_title.trim()) titles.add(u.gov_title.trim());
+      if (u.party_title && u.party_title.trim()) titles.add(u.party_title.trim());
+    });
+    if (titles.size === 0) {
+      return ['Giáo viên', 'Chuyên viên', 'Nhân viên', 'Hiệu trưởng', 'Phó Hiệu trưởng'];
+    }
+    return Array.from(titles);
+  }, [users]);
+
+  const loadUserGroups = async () => {
+    try {
+      const groups = await api.getUserGroups();
+      setUserGroups(groups || []);
+    } catch (e) {
+      console.error('Error loading user groups:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadUserGroups();
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -258,14 +322,52 @@ export default function DocumentManagementTab({
     }
   };
 
-  // Open Dispatch Modal
+  // Open Submit to Leader Modal (Văn thư trình Lãnh đạo)
+  const handleOpenSubmitLeader = (doc) => {
+    setSubmitModalDoc(doc);
+    setSubmitLeaderId(doc.leader_id || leaders[0]?.id || '');
+    setSubmitLeaderNote(doc.leader_instruction || `Kính trình Lãnh đạo xem xét và cho ý kiến chỉ đạo đối với văn bản số ${doc.doc_number}`);
+  };
+
+  // Submit to Leader Handler
+  const handleSubmitToLeader = async (e) => {
+    e.preventDefault();
+    if (!submitModalDoc) return;
+    if (!submitLeaderId) {
+      alert('Vui lòng chọn Lãnh đạo nhận trình duyệt!');
+      return;
+    }
+    try {
+      setSubmitting(true);
+      await api.submitDocumentToLeader(submitModalDoc.id, {
+        leader_id: submitLeaderId,
+        leader_instruction: submitLeaderNote
+      });
+      alert('Đã trình Lãnh đạo xin ý kiến chỉ đạo thành công!');
+      setSubmitModalDoc(null);
+      loadData();
+    } catch (err) {
+      alert('Lỗi: ' + err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Open Dispatch Modal (Lãnh đạo phân bổ văn bản)
   const handleOpenDispatch = (doc) => {
     setDispatchModalDoc(doc);
     setDispatchFormData({
+      dispatch_type: 'process', // 'process' | 'reference'
+      target_type: 'users', // 'users' | 'job_title' | 'user_group'
       department_id: departments[0]?.id || '',
       assigned_to_user_id: users.find(u => u.role !== 'admin')?.id || users[0]?.id || '',
       coordinating_user_ids: [],
-      instruction: `Nghiên cứu, tham mưu và tổ chức triển khai thực hiện theo nội dung văn bản số ${doc.doc_number}`,
+      job_titles: [],
+      group_id: userGroups[0]?.id || '',
+      leader_instruction: doc.leader_instruction || '',
+      instruction: doc.leader_instruction 
+        ? `${doc.leader_instruction} - Triển khai thực hiện theo văn bản số ${doc.doc_number}`
+        : `Nghiên cứu, tham mưu và tổ chức triển khai thực hiện theo nội dung văn bản số ${doc.doc_number}`,
       deadline: toInputDateFormat(doc.deadline) || new Date().toISOString().split('T')[0],
       create_kpi_task: true,
       period_id: selectedPeriod || (periods[0]?.id || ''),
@@ -335,6 +437,7 @@ export default function DocumentManagementTab({
   };
 
   // Status badge helper
+  // Status badge helper
   const renderStatusBadge = (status, isOverdue) => {
     if (isOverdue) {
       return (
@@ -350,6 +453,13 @@ export default function DocumentManagementTab({
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
             <Clock className="w-3 h-3 text-amber-600" />
             <span>Chờ phân bổ</span>
+          </span>
+        );
+      case 'submitted_to_leader':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200 shadow-2xs">
+            <Send className="w-3 h-3 text-purple-600 rotate-[-45deg]" />
+            <span>Chờ LĐ chỉ đạo</span>
           </span>
         );
       case 'in_progress':
@@ -408,29 +518,41 @@ export default function DocumentManagementTab({
                 Quản lý & Phân bổ Văn bản Hành chính
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Tiếp nhận, phân loại văn bản, trích yếu nội dung và phân bổ nhiệm vụ gắn với đánh giá KPI
+                Tiếp nhận, trình Lãnh đạo cho ý kiến, phân bổ nhiệm vụ gắn với đánh giá KPI hoặc chuyển đọc tham khảo
               </p>
             </div>
           </div>
         </div>
 
-        {isCBQL && (
+        <div className="flex items-center gap-2.5 flex-wrap">
           <button
             type="button"
-            onClick={handleOpenAddDoc}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-xl shadow-sm transition active:scale-95 cursor-pointer shrink-0"
+            onClick={() => setIsGroupModalOpen(true)}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 transition active:scale-95 cursor-pointer shrink-0"
+            title="Quản lý các nhóm người dùng tự tạo để giao việc & phân bổ văn bản nhanh"
           >
-            <Plus className="w-4 h-4" />
-            <span>Tiếp nhận Văn bản mới</span>
+            <Users className="w-4 h-4 text-slate-600" />
+            <span>Nhóm tự tạo ({userGroups.length})</span>
           </button>
-        )}
+
+          {isCBQL && (
+            <button
+              type="button"
+              onClick={handleOpenAddDoc}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-xl shadow-sm transition active:scale-95 cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tiếp nhận Văn bản mới</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* 2. Summary Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      {/* 2. Summary Stat Cards (6 Cards) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div 
           onClick={() => setFilterStatus('all')}
-          className={`p-4 rounded-xl border cursor-pointer transition ${
+          className={`p-3.5 rounded-xl border cursor-pointer transition ${
             filterStatus === 'all' ? 'bg-slate-100 border-slate-400 shadow-xs' : 'bg-white border-slate-200 hover:bg-slate-50'
           }`}
         >
@@ -439,12 +561,12 @@ export default function DocumentManagementTab({
             <FileText className="w-4 h-4 text-slate-400" />
           </div>
           <div className="text-2xl font-bold text-slate-900 mt-1">{stats.total}</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Toàn bộ hồ sơ văn bản</div>
+          <div className="text-[11px] text-slate-400 mt-0.5">Toàn bộ hồ sơ</div>
         </div>
 
         <div 
           onClick={() => setFilterStatus('pending_dispatch')}
-          className={`p-4 rounded-xl border cursor-pointer transition ${
+          className={`p-3.5 rounded-xl border cursor-pointer transition ${
             filterStatus === 'pending_dispatch' ? 'bg-amber-100/70 border-amber-400 shadow-xs' : 'bg-amber-50/50 border-amber-200 hover:bg-amber-50'
           }`}
         >
@@ -453,12 +575,26 @@ export default function DocumentManagementTab({
             <Clock className="w-4 h-4 text-amber-600" />
           </div>
           <div className="text-2xl font-bold text-amber-900 mt-1">{stats.pending_dispatch}</div>
-          <div className="text-[11px] text-amber-700 mt-0.5">Chưa giao cán bộ xử lý</div>
+          <div className="text-[11px] text-amber-700 mt-0.5">Chưa phân công</div>
+        </div>
+
+        <div 
+          onClick={() => setFilterStatus('submitted_to_leader')}
+          className={`p-3.5 rounded-xl border cursor-pointer transition ${
+            filterStatus === 'submitted_to_leader' ? 'bg-purple-100/70 border-purple-400 shadow-xs' : 'bg-purple-50/50 border-purple-200 hover:bg-purple-50'
+          }`}
+        >
+          <div className="text-xs text-purple-800 font-semibold flex items-center justify-between">
+            <span>Chờ LĐ chỉ đạo</span>
+            <Send className="w-4 h-4 text-purple-600 rotate-[-45deg]" />
+          </div>
+          <div className="text-2xl font-bold text-purple-900 mt-1">{stats.submitted_to_leader || 0}</div>
+          <div className="text-[11px] text-purple-700 mt-0.5">Đã trình Lãnh đạo</div>
         </div>
 
         <div 
           onClick={() => setFilterStatus('in_progress')}
-          className={`p-4 rounded-xl border cursor-pointer transition ${
+          className={`p-3.5 rounded-xl border cursor-pointer transition ${
             filterStatus === 'in_progress' ? 'bg-blue-100/70 border-blue-400 shadow-xs' : 'bg-blue-50/50 border-blue-200 hover:bg-blue-50'
           }`}
         >
@@ -472,7 +608,7 @@ export default function DocumentManagementTab({
 
         <div 
           onClick={() => setFilterStatus('completed')}
-          className={`p-4 rounded-xl border cursor-pointer transition ${
+          className={`p-3.5 rounded-xl border cursor-pointer transition ${
             filterStatus === 'completed' ? 'bg-emerald-100/70 border-emerald-400 shadow-xs' : 'bg-emerald-50/50 border-emerald-200 hover:bg-emerald-50'
           }`}
         >
@@ -481,12 +617,12 @@ export default function DocumentManagementTab({
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="text-2xl font-bold text-emerald-900 mt-1">{stats.completed}</div>
-          <div className="text-[11px] text-emerald-700 mt-0.5">Đã có kết quả báo cáo</div>
+          <div className="text-[11px] text-emerald-700 mt-0.5">Đã có kết quả</div>
         </div>
 
         <div 
           onClick={() => setFilterStatus('overdue')}
-          className={`p-4 rounded-xl border cursor-pointer transition ${
+          className={`p-3.5 rounded-xl border cursor-pointer transition ${
             filterStatus === 'overdue' ? 'bg-rose-100/70 border-rose-400 shadow-xs' : 'bg-rose-50/50 border-rose-200 hover:bg-rose-50'
           }`}
         >
@@ -558,6 +694,7 @@ export default function DocumentManagementTab({
           >
             <option value="all">-- Tất cả Trạng thái --</option>
             <option value="pending_dispatch">Chờ phân bổ</option>
+            <option value="submitted_to_leader">Chờ Lãnh đạo chỉ đạo</option>
             <option value="in_progress">Đang xử lý</option>
             <option value="completed">Đã hoàn tất</option>
             <option value="overdue">Quá hạn</option>
@@ -716,7 +853,19 @@ export default function DocumentManagementTab({
 
                       {/* Cán bộ xử lý */}
                       <td className="px-3.5 py-3">
-                        {doc.assigned_officers ? (
+                        {doc.status === 'submitted_to_leader' ? (
+                          <div className="space-y-0.5">
+                            <div className="text-[11px] font-bold text-purple-900 bg-purple-50 px-2 py-0.5 rounded border border-purple-200 inline-flex items-center gap-1">
+                              <Send className="w-2.5 h-2.5 rotate-[-45deg] text-purple-600" />
+                              <span>Trình: {doc.leader_name || 'Lãnh đạo'}</span>
+                            </div>
+                            {doc.leader_instruction && (
+                              <div className="text-[10px] text-purple-700 italic line-clamp-2" title={doc.leader_instruction}>
+                                "{doc.leader_instruction}"
+                              </div>
+                            )}
+                          </div>
+                        ) : doc.assigned_officers ? (
                           <div className="font-semibold text-slate-800 line-clamp-2">
                             {doc.assigned_officers}
                           </div>
@@ -727,17 +876,30 @@ export default function DocumentManagementTab({
 
                       {/* Thao tác */}
                       <td className="px-3.5 py-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {/* Phân bổ button */}
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          {/* Trình Lãnh đạo button */}
+                          {doc.status !== 'completed' && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenSubmitLeader(doc)}
+                              className="px-2 py-1 bg-purple-700 hover:bg-purple-800 text-white font-bold text-[11px] rounded-lg shadow-2xs transition flex items-center gap-1 cursor-pointer"
+                              title="Văn thư trình Lãnh đạo xin ý kiến chỉ đạo"
+                            >
+                              <Send className="w-3 h-3 rotate-[-45deg]" />
+                              <span>Trình LĐ</span>
+                            </button>
+                          )}
+
+                          {/* Phân bổ / Chỉ đạo button */}
                           {isCBQL && doc.status !== 'completed' && (
                             <button
                               type="button"
                               onClick={() => handleOpenDispatch(doc)}
                               className="px-2.5 py-1 bg-red-700 hover:bg-red-800 text-white font-bold text-[11px] rounded-lg shadow-2xs transition flex items-center gap-1 cursor-pointer"
-                              title="Phân bổ xử lý văn bản và giao việc KPI"
+                              title="Lãnh đạo phân bổ xử lý văn bản và giao việc KPI hoặc chuyển đọc tham khảo"
                             >
                               <Send className="w-3 h-3" />
-                              <span>Phân bổ</span>
+                              <span>{doc.status === 'submitted_to_leader' ? 'Chỉ đạo' : 'Phân bổ'}</span>
                             </button>
                           )}
 
@@ -829,7 +991,9 @@ export default function DocumentManagementTab({
                   <div>
                     <span className="text-slate-400 block">Người xử lý:</span>
                     <strong className="text-slate-700 truncate block">
-                      {doc.assigned_officers || 'Chưa phân bổ'}
+                      {doc.status === 'submitted_to_leader' 
+                        ? `Trình LĐ: ${doc.leader_name || 'Lãnh đạo'}` 
+                        : (doc.assigned_officers || 'Chưa phân bổ')}
                     </strong>
                   </div>
                 </div>
@@ -849,24 +1013,35 @@ export default function DocumentManagementTab({
                 )}
 
                 {/* Mobile action buttons */}
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-1.5 flex-wrap">
                   <button
                     type="button"
                     onClick={() => handleOpenDetail(doc.id)}
-                    className="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-lg transition flex items-center justify-center gap-1 cursor-pointer"
+                    className="flex-1 min-w-[75px] py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-lg transition flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <Eye className="w-3.5 h-3.5" />
                     <span>Chi tiết</span>
                   </button>
 
+                  {doc.status !== 'completed' && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSubmitLeader(doc)}
+                      className="flex-1 min-w-[85px] py-2 bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs rounded-lg shadow-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Send className="w-3.5 h-3.5 rotate-[-45deg]" />
+                      <span>Trình LĐ</span>
+                    </button>
+                  )}
+
                   {isCBQL && doc.status !== 'completed' && (
                     <button
                       type="button"
                       onClick={() => handleOpenDispatch(doc)}
-                      className="flex-1 py-2 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-lg shadow-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                      className="flex-1 min-w-[85px] py-2 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-lg shadow-xs transition flex items-center justify-center gap-1 cursor-pointer"
                     >
                       <Send className="w-3.5 h-3.5" />
-                      <span>Phân bổ</span>
+                      <span>{doc.status === 'submitted_to_leader' ? 'Chỉ đạo' : 'Phân bổ'}</span>
                     </button>
                   )}
 
@@ -1109,7 +1284,9 @@ export default function DocumentManagementTab({
                 </div>
                 <div>
                   <h3 className="text-base font-bold">Phân bổ Văn bản & Giao chỉ đạo</h3>
-                  <p className="text-xs text-red-100">Chỉ định cán bộ xử lý và tạo nhiệm vụ công việc</p>
+                  <p className="text-xs text-red-100">
+                    Phân công cán bộ xử lý (hoặc nhóm chức danh/nhóm tự tạo) hoặc chuyển đọc tham khảo
+                  </p>
                 </div>
               </div>
               <button
@@ -1135,61 +1312,322 @@ export default function DocumentManagementTab({
                 <p className="text-xs text-slate-800 font-semibold leading-relaxed">
                   {dispatchModalDoc.summary}
                 </p>
+                {dispatchModalDoc.leader_instruction && (
+                  <div className="pt-1 text-[11px] text-purple-800 font-medium border-t border-red-200/60 flex items-center gap-1">
+                    <Send className="w-3 h-3 text-purple-600 rotate-[-45deg]" />
+                    <span>Ý kiến trình Lãnh đạo trước đó: <em>"{dispatchModalDoc.leader_instruction}"</em></span>
+                  </div>
+                )}
               </div>
 
-              {/* Assigned Officer Selection */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">
-                    Đơn vị / Phòng ban chủ trì *
-                  </label>
-                  <select
-                    value={dispatchFormData.department_id}
-                    onChange={(e) => setDispatchFormData({ ...dispatchFormData, department_id: e.target.value })}
-                    className="w-full text-xs p-2.5 border border-slate-300 rounded-lg font-medium"
+              {/* 1. Dispatch Type (Mục đích / Hình thức phân bổ) */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-800">
+                  Mục đích & Hình thức phân bổ <span className="text-rose-600">*</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div
+                    onClick={() => setDispatchFormData({ ...dispatchFormData, dispatch_type: 'process', create_kpi_task: true })}
+                    className={`p-3 rounded-xl border-2 cursor-pointer transition flex items-start gap-2.5 ${
+                      dispatchFormData.dispatch_type === 'process'
+                        ? 'bg-red-50/70 border-red-600 shadow-xs'
+                        : 'bg-white border-slate-200 hover:bg-slate-50'
+                    }`}
                   >
-                    {departments.map(d => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
-                    ))}
-                  </select>
-                </div>
+                    <div className={`p-1.5 rounded-lg ${dispatchFormData.dispatch_type === 'process' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                      <CheckCircle2 className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1">
+                      <span className="text-xs font-bold text-slate-900 block">Giao nhiệm vụ xử lý</span>
+                      <span className="text-[11px] text-slate-500 block leading-tight mt-0.5">
+                        Phân công cán bộ thực hiện, theo dõi tiến độ và đánh giá điểm KPI
+                      </span>
+                    </div>
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">
-                    Cán bộ phụ trách chính (Xử lý chính) *
-                  </label>
-                  <select
-                    required
-                    value={dispatchFormData.assigned_to_user_id}
-                    onChange={(e) => setDispatchFormData({ ...dispatchFormData, assigned_to_user_id: e.target.value })}
-                    className="w-full text-xs p-2.5 border border-slate-300 rounded-lg font-bold text-slate-900 focus:ring-2 focus:ring-red-500"
+                  <div
+                    onClick={() => setDispatchFormData({ ...dispatchFormData, dispatch_type: 'reference', create_kpi_task: false })}
+                    className={`p-3 rounded-xl border-2 cursor-pointer transition flex items-start gap-2.5 ${
+                      dispatchFormData.dispatch_type === 'reference'
+                        ? 'bg-blue-50/70 border-blue-600 shadow-xs'
+                        : 'bg-white border-slate-200 hover:bg-slate-50'
+                    }`}
                   >
-                    <option value="">-- Chọn cán bộ phụ trách chính --</option>
-                    {users.map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.full_name} ({u.dept_name || 'Cơ quan'} • {u.gov_title || 'Chuyên viên'})
-                      </option>
-                    ))}
-                  </select>
+                    <div className={`p-1.5 rounded-lg ${dispatchFormData.dispatch_type === 'reference' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1">
+                      <span className="text-xs font-bold text-slate-900 block">Chuyển đọc tham khảo</span>
+                      <span className="text-[11px] text-slate-500 block leading-tight mt-0.5">
+                        Phổ biến để nghiên cứu, tra cứu, không giao chỉ tiêu KPI
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Instruction / Direction from Leader */}
+              {/* 2. Target Selection (Đối tượng nhận phân bổ) */}
+              <div className="space-y-2.5 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+                <label className="block text-xs font-bold text-slate-800">
+                  Đối tượng nhận phân bổ <span className="text-rose-600">*</span>
+                </label>
+                <div className="flex border-b border-slate-200 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDispatchFormData({ ...dispatchFormData, target_type: 'users' })}
+                    className={`pb-2 text-xs font-bold border-b-2 transition flex items-center gap-1.5 cursor-pointer ${
+                      dispatchFormData.target_type === 'users'
+                        ? 'border-red-600 text-red-700'
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>Chỉ định cán bộ</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDispatchFormData({ ...dispatchFormData, target_type: 'job_title' })}
+                    className={`pb-2 text-xs font-bold border-b-2 transition flex items-center gap-1.5 cursor-pointer ${
+                      dispatchFormData.target_type === 'job_title'
+                        ? 'border-red-600 text-red-700'
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <Briefcase className="w-3.5 h-3.5" />
+                    <span>Theo nhóm chức danh</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDispatchFormData({ ...dispatchFormData, target_type: 'user_group' })}
+                    className={`pb-2 text-xs font-bold border-b-2 transition flex items-center gap-1.5 cursor-pointer ${
+                      dispatchFormData.target_type === 'user_group'
+                        ? 'border-red-600 text-red-700'
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Theo nhóm tự tạo ({userGroups.length})</span>
+                  </button>
+                </div>
+
+                {/* Sub-tab 1: Individual Assignees */}
+                {dispatchFormData.target_type === 'users' && (
+                  <div className="space-y-3 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Đơn vị / Phòng ban chủ trì
+                        </label>
+                        <select
+                          value={dispatchFormData.department_id}
+                          onChange={(e) => setDispatchFormData({ ...dispatchFormData, department_id: e.target.value })}
+                          className="w-full text-xs p-2.5 bg-white border border-slate-300 rounded-lg font-medium"
+                        >
+                          {departments.map(d => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          {dispatchFormData.dispatch_type === 'process' ? 'Cán bộ phụ trách chính *' : 'Người nhận chính *'}
+                        </label>
+                        <select
+                          required
+                          value={dispatchFormData.assigned_to_user_id}
+                          onChange={(e) => setDispatchFormData({ ...dispatchFormData, assigned_to_user_id: e.target.value })}
+                          className="w-full text-xs p-2.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-900 focus:ring-2 focus:ring-red-500"
+                        >
+                          <option value="">-- Chọn cán bộ --</option>
+                          {users.map(u => (
+                            <option key={u.id} value={u.id}>
+                              {u.full_name} ({u.dept_name || 'Cơ quan'} • {u.gov_title || 'Chuyên viên'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Cán bộ cùng xử lý / phối hợp / nhận cùng (chọn nhiều người):
+                      </label>
+                      <div className="max-h-36 overflow-y-auto border border-slate-200 rounded-lg p-2 bg-white grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {users
+                          .filter(u => u.id !== dispatchFormData.assigned_to_user_id)
+                          .map(u => {
+                            const isChecked = dispatchFormData.coordinating_user_ids.includes(u.id);
+                            return (
+                              <label key={u.id} className="flex items-center gap-2 p-1.5 hover:bg-slate-50 rounded cursor-pointer text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    const current = dispatchFormData.coordinating_user_ids;
+                                    setDispatchFormData({
+                                      ...dispatchFormData,
+                                      coordinating_user_ids: isChecked
+                                        ? current.filter(id => id !== u.id)
+                                        : [...current, u.id]
+                                    });
+                                  }}
+                                  className="rounded text-red-600 focus:ring-red-500 w-3.5 h-3.5"
+                                />
+                                <span className="truncate">{u.full_name} <span className="text-slate-400 text-[10px]">({u.gov_title || 'CB'})</span></span>
+                              </label>
+                            );
+                          })}
+                      </div>
+                      {dispatchFormData.coordinating_user_ids.length > 0 && (
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          Đã chọn <strong>{dispatchFormData.coordinating_user_ids.length}</strong> cán bộ phối hợp / nhận cùng
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sub-tab 2: Job Titles */}
+                {dispatchFormData.target_type === 'job_title' && (
+                  <div className="space-y-2 pt-1">
+                    <p className="text-[11px] text-slate-500">
+                      Tất cả cán bộ, giáo viên, nhân viên giữ chức danh được tích chọn sẽ tự động nhận văn bản này:
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {distinctJobTitles.map(title => {
+                        const count = users.filter(u => u.gov_title === title || u.party_title === title).length;
+                        const isChecked = dispatchFormData.job_titles.includes(title);
+                        return (
+                          <label
+                            key={title}
+                            className={`p-2.5 rounded-lg border flex items-center gap-2 cursor-pointer transition text-xs ${
+                              isChecked
+                                ? 'bg-red-50 border-red-500 font-bold text-red-900'
+                                : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                const current = dispatchFormData.job_titles;
+                                setDispatchFormData({
+                                  ...dispatchFormData,
+                                  job_titles: isChecked
+                                    ? current.filter(t => t !== title)
+                                    : [...current, title]
+                                });
+                              }}
+                              className="rounded text-red-600 focus:ring-red-500 w-3.5 h-3.5"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="truncate">{title}</div>
+                              <div className="text-[10px] text-slate-400 font-normal">{count} cán bộ</div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {dispatchFormData.job_titles.length > 0 && (
+                      <div className="p-2.5 bg-white rounded-lg border border-slate-200 text-[11px] text-slate-700">
+                        ⚡ Ước tính có <strong>{
+                          users.filter(u => dispatchFormData.job_titles.some(t => u.gov_title === t || u.party_title === t)).length
+                        }</strong> cán bộ thuộc các chức danh đã chọn sẽ nhận văn bản này.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Sub-tab 3: Custom User Groups */}
+                {dispatchFormData.target_type === 'user_group' && (
+                  <div className="space-y-2.5 pt-1">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        Chọn nhóm người dùng tự tạo *
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsGroupModalOpen(true)}
+                        className="text-xs font-bold text-red-700 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        <span>Quản lý danh sách nhóm</span>
+                      </button>
+                    </div>
+
+                    {userGroups.length === 0 ? (
+                      <div className="p-4 bg-white rounded-xl border border-slate-200 text-center text-slate-400 italic">
+                        Chưa có nhóm người dùng nào được tạo.
+                        <button
+                          type="button"
+                          onClick={() => setIsGroupModalOpen(true)}
+                          className="block mx-auto mt-2 text-xs font-bold text-red-700 hover:underline cursor-pointer"
+                        >
+                          + Tạo nhóm người dùng mới ngay
+                        </button>
+                      </div>
+                    ) : (
+                      <select
+                        value={dispatchFormData.group_id}
+                        onChange={(e) => setDispatchFormData({ ...dispatchFormData, group_id: e.target.value })}
+                        className="w-full text-xs p-2.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-900 focus:ring-2 focus:ring-red-500"
+                      >
+                        <option value="">-- Chọn nhóm người dùng --</option>
+                        {userGroups.map(g => (
+                          <option key={g.id} value={g.id}>
+                            {g.name} ({g.members?.length || 0} thành viên) {g.description ? ` - ${g.description}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    {dispatchFormData.group_id && (
+                      (() => {
+                        const selectedGroup = userGroups.find(g => g.id === dispatchFormData.group_id);
+                        if (!selectedGroup) return null;
+                        return (
+                          <div className="p-3 bg-white rounded-xl border border-red-200 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <strong className="text-red-900 font-bold">{selectedGroup.name}</strong>
+                              <span className="text-slate-500 font-medium">{selectedGroup.members?.length || 0} thành viên</span>
+                            </div>
+                            {selectedGroup.description && (
+                              <p className="text-[11px] text-slate-600">{selectedGroup.description}</p>
+                            )}
+                            <div className="flex flex-wrap gap-1 pt-1">
+                              {selectedGroup.members?.map(m => (
+                                <span key={m.user_id} className="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-semibold text-slate-700">
+                                  {m.user_name || m.user_id}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Instruction / Direction from Leader */}
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1">
-                  Ý kiến chỉ đạo / Yêu cầu xử lý cụ thể *
+                  Ý kiến chỉ đạo của Lãnh đạo / Yêu cầu cụ thể *
                 </label>
                 <textarea
                   required
                   rows={3}
                   value={dispatchFormData.instruction}
                   onChange={(e) => setDispatchFormData({ ...dispatchFormData, instruction: e.target.value })}
-                  placeholder="Ghi rõ yêu cầu của Lãnh đạo đối với cán bộ: VD: Nghiên cứu tham mưu Kế hoạch..."
+                  placeholder="Ghi rõ ý kiến chỉ đạo của Lãnh đạo đối với cán bộ: VD: Nghiên cứu tham mưu Kế hoạch thực hiện trước ngày..."
                   className="w-full text-xs p-3 border border-slate-300 rounded-lg font-medium focus:ring-2 focus:ring-red-500"
                 />
               </div>
 
-              {/* Deadline */}
+              {/* 4. Deadline */}
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1">
                   Hạn chót xử lý của cán bộ *
@@ -1203,77 +1641,89 @@ export default function DocumentManagementTab({
                 />
               </div>
 
-              {/* Toggle: Automatic KPI Task Creation */}
-              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-                <label className="flex items-center gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={dispatchFormData.create_kpi_task}
-                    onChange={(e) => setDispatchFormData({ ...dispatchFormData, create_kpi_task: e.target.checked })}
-                    className="rounded text-red-600 focus:ring-red-500 w-4 h-4"
-                  />
+              {/* 5. Reference Info Banner or KPI Task Options */}
+              {dispatchFormData.dispatch_type === 'reference' ? (
+                <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-2.5 text-xs text-blue-900">
+                  <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                   <div>
-                    <span className="text-xs font-bold text-slate-900 block">
-                      Đồng thời tạo Nhiệm vụ KPI trong kỳ đánh giá cho cán bộ
-                    </span>
-                    <span className="text-[11px] text-slate-500 block">
-                      Công việc sẽ tự động xuất hiện trong Tab "Quản lý nhiệm vụ" và "Nộp sản phẩm" của cán bộ
+                    <strong className="block font-bold">Hình thức Chuyển đọc tham khảo</strong>
+                    <span className="text-[11px] text-blue-800">
+                      Văn bản sẽ được gửi đến hộp thư tiếp nhận của các cán bộ được chọn để nghiên cứu, tra cứu. Hệ thống không tạo chỉ tiêu KPI bắt buộc đối với hình thức này.
                     </span>
                   </div>
-                </label>
-
-                {dispatchFormData.create_kpi_task && (
-                  <div className="pt-2 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                </div>
+              ) : (
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                  <label className="flex items-center gap-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={dispatchFormData.create_kpi_task}
+                      onChange={(e) => setDispatchFormData({ ...dispatchFormData, create_kpi_task: e.target.checked })}
+                      className="rounded text-red-600 focus:ring-red-500 w-4 h-4"
+                    />
                     <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">Kỳ đánh giá</label>
-                      <select
-                        value={dispatchFormData.period_id}
-                        onChange={(e) => setDispatchFormData({ ...dispatchFormData, period_id: e.target.value })}
-                        className="w-full text-xs p-2 border border-slate-300 rounded-lg font-medium"
-                      >
-                        {periods.map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                      </select>
+                      <span className="text-xs font-bold text-slate-900 block">
+                        Đồng thời tạo Nhiệm vụ KPI trong kỳ đánh giá cho cán bộ
+                      </span>
+                      <span className="text-[11px] text-slate-500 block">
+                        Công việc sẽ tự động xuất hiện trong Tab "Quản lý nhiệm vụ" và "Nộp sản phẩm" của cán bộ
+                      </span>
                     </div>
+                  </label>
 
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">Trục kết quả</label>
-                      <select
-                        value={dispatchFormData.axis_code}
-                        onChange={(e) => setDispatchFormData({ ...dispatchFormData, axis_code: e.target.value })}
-                        className="w-full text-xs p-2 border border-slate-300 rounded-lg font-medium"
-                      >
-                        {axes.map(a => (
-                          <option key={a.code} value={a.code}>{a.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                  {dispatchFormData.create_kpi_task && (
+                    <div className="pt-2 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Kỳ đánh giá</label>
+                        <select
+                          value={dispatchFormData.period_id}
+                          onChange={(e) => setDispatchFormData({ ...dispatchFormData, period_id: e.target.value })}
+                          className="w-full text-xs p-2 border border-slate-300 rounded-lg font-medium"
+                        >
+                          {periods.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                      </div>
 
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-1">Điểm chuẩn & HS</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          value={dispatchFormData.standard_score}
-                          onChange={(e) => setDispatchFormData({ ...dispatchFormData, standard_score: e.target.value })}
-                          className="w-16 text-xs p-2 border border-slate-300 rounded-lg text-center font-bold"
-                          title="Điểm chuẩn"
-                        />
-                        <span className="text-slate-400">×</span>
-                        <input
-                          type="number"
-                          step="0.1"
-                          value={dispatchFormData.difficulty_weight}
-                          onChange={(e) => setDispatchFormData({ ...dispatchFormData, difficulty_weight: e.target.value })}
-                          className="w-16 text-xs p-2 border border-slate-300 rounded-lg text-center font-bold"
-                          title="Hệ số"
-                        />
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Trục kết quả</label>
+                        <select
+                          value={dispatchFormData.axis_code}
+                          onChange={(e) => setDispatchFormData({ ...dispatchFormData, axis_code: e.target.value })}
+                          className="w-full text-xs p-2 border border-slate-300 rounded-lg font-medium"
+                        >
+                          {axes.map(a => (
+                            <option key={a.code} value={a.code}>{a.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-1">Điểm chuẩn & HS</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={dispatchFormData.standard_score}
+                            onChange={(e) => setDispatchFormData({ ...dispatchFormData, standard_score: e.target.value })}
+                            className="w-16 text-xs p-2 border border-slate-300 rounded-lg text-center font-bold"
+                            title="Điểm chuẩn"
+                          />
+                          <span className="text-slate-400">×</span>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={dispatchFormData.difficulty_weight}
+                            onChange={(e) => setDispatchFormData({ ...dispatchFormData, difficulty_weight: e.target.value })}
+                            className="w-16 text-xs p-2 border border-slate-300 rounded-lg text-center font-bold"
+                            title="Hệ số"
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button
@@ -1289,7 +1739,95 @@ export default function DocumentManagementTab({
                   className="px-5 py-2 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-lg shadow-sm transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>Xác nhận Phân bổ</span>
+                  <span>{dispatchFormData.dispatch_type === 'reference' ? 'Chuyển đọc tham khảo' : 'Xác nhận Phân bổ'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* 6.1 MODAL: VĂN THƯ TRÌNH LÃNH ĐẠO (SubmitToLeaderModal)               */}
+      {/* ===================================================================== */}
+      {submitModalDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl w-[95%] sm:max-w-lg shadow-2xl border border-slate-200 overflow-hidden my-4 sm:my-8 animate-in fade-in zoom-in duration-200 flex flex-col">
+            <div className="px-6 py-4 bg-gradient-to-r from-purple-800 via-purple-700 to-indigo-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Send className="w-5 h-5 rotate-[-45deg]" />
+                <div>
+                  <h3 className="text-base font-bold">Văn thư Trình Lãnh đạo</h3>
+                  <p className="text-xs text-purple-200">Xin ý kiến chỉ đạo và phân bổ xử lý văn bản</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSubmitModalDoc(null)}
+                className="p-1 rounded-lg hover:bg-white/20 text-white/80 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitToLeader} className="p-5 sm:p-6 space-y-4 text-xs">
+              <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-bold text-purple-900">Số: {submitModalDoc.doc_number}</span>
+                  <span className="text-slate-500 font-medium">{submitModalDoc.issuer}</span>
+                </div>
+                <p className="font-semibold text-slate-800 line-clamp-2 leading-relaxed">
+                  {submitModalDoc.summary}
+                </p>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Chọn Lãnh đạo nhận trình duyệt <span className="text-rose-600">*</span>
+                </label>
+                <select
+                  required
+                  value={submitLeaderId}
+                  onChange={(e) => setSubmitLeaderId(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg font-bold text-slate-900 focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="">-- Chọn Lãnh đạo nhận trình --</option>
+                  {leaders.map(l => (
+                    <option key={l.id} value={l.id}>
+                      {l.full_name} ({l.gov_title || l.role_title || 'Lãnh đạo'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Ý kiến trình / Ghi chú của Văn thư
+                </label>
+                <textarea
+                  rows={3}
+                  value={submitLeaderNote}
+                  onChange={(e) => setSubmitLeaderNote(e.target.value)}
+                  placeholder="Kính trình Lãnh đạo xem xét và cho ý kiến chỉ đạo..."
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg font-medium focus:ring-2 focus:ring-purple-500 leading-relaxed"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setSubmitModalDoc(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-5 py-2 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold rounded-lg shadow-sm transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5 rotate-[-45deg]" />
+                  <span>Xác nhận Trình Lãnh đạo</span>
                 </button>
               </div>
             </form>
@@ -1381,6 +1919,28 @@ export default function DocumentManagementTab({
                 )}
               </div>
 
+              {/* Leader Submission Info Banner */}
+              {detailModalDoc.leader_name && (
+                <div className="p-3.5 bg-purple-50 rounded-xl border border-purple-200 text-xs space-y-1">
+                  <div className="flex items-center justify-between flex-wrap gap-1">
+                    <span className="font-bold text-purple-900 flex items-center gap-1.5">
+                      <Send className="w-3.5 h-3.5 rotate-[-45deg] text-purple-700" />
+                      <span>Trình Lãnh đạo chỉ đạo: <strong>{detailModalDoc.leader_name}</strong></span>
+                    </span>
+                    {detailModalDoc.submitted_at && (
+                      <span className="text-[11px] text-purple-700 font-medium">
+                        Thời gian trình: {formatDate(detailModalDoc.submitted_at)} {detailModalDoc.submitted_by_name ? `• Bởi: ${detailModalDoc.submitted_by_name}` : ''}
+                      </span>
+                    )}
+                  </div>
+                  {detailModalDoc.leader_instruction && (
+                    <p className="text-purple-950 font-medium italic pt-1 border-t border-purple-200/60">
+                      Ý kiến trình / chỉ đạo: "{detailModalDoc.leader_instruction}"
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Dispatch History Section */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -1417,8 +1977,17 @@ export default function DocumentManagementTab({
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div>
-                            <div className="font-bold text-slate-900 text-xs">
-                              Lần {idx + 1}: Cán bộ phụ trách: <span className="text-red-800">{disp.assigned_user_name}</span> ({disp.department_name || 'Đơn vị'})
+                            <div className="font-bold text-slate-900 text-xs flex items-center gap-2 flex-wrap">
+                              <span>Lần {idx + 1}: Cán bộ phụ trách: <strong className="text-red-800">{disp.assigned_user_name}</strong> ({disp.department_name || 'Đơn vị'})</span>
+                              {disp.dispatch_type === 'reference' ? (
+                                <span className="px-2 py-0.2 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                                  Đọc tham khảo
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.2 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                  Xử lý nhiệm vụ
+                                </span>
+                              )}
                             </div>
                             <div className="text-[11px] text-slate-400 mt-0.5">
                               Phân bổ bởi: {disp.dispatched_by_name || 'Lãnh đạo'} • {formatDate(disp.dispatched_at)}
@@ -1546,6 +2115,17 @@ export default function DocumentManagementTab({
           </div>
         </div>
       )}
+
+      {/* ===================================================================== */}
+      {/* 9. MODAL: QUẢN LÝ NHÓM NGƯỜI DÙNG TỰ TẠO (UserGroupManagementModal)   */}
+      {/* ===================================================================== */}
+      <UserGroupManagementModal
+        isOpen={isGroupModalOpen}
+        onClose={() => setIsGroupModalOpen(false)}
+        users={users}
+        departments={departments}
+        onGroupsUpdated={(g) => setUserGroups(g)}
+      />
     </div>
   );
 }

@@ -299,6 +299,28 @@ function initDatabase() {
       FOREIGN KEY(dispatched_by) REFERENCES users(id),
       FOREIGN KEY(task_id) REFERENCES assigned_tasks(id) ON DELETE SET NULL
     );
+
+    CREATE TABLE IF NOT EXISTS user_groups (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      dept_id TEXT,
+      created_by TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(dept_id) REFERENCES departments(id) ON DELETE SET NULL,
+      FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS user_group_members (
+      id TEXT PRIMARY KEY,
+      group_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(group_id) REFERENCES user_groups(id) ON DELETE CASCADE,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+      UNIQUE(group_id, user_id)
+    );
   `);
 
   const migrations = [
@@ -352,7 +374,14 @@ function initDatabase() {
     "ALTER TABLE assigned_tasks ADD COLUMN inherited_from_task_id TEXT;",
     "ALTER TABLE assigned_tasks ADD COLUMN inherited_from_user_name TEXT;",
     "ALTER TABLE users ADD COLUMN management_role TEXT DEFAULT 'nhan_vien';",
-    "ALTER TABLE users ADD COLUMN final_evaluator_id TEXT;"
+    "ALTER TABLE users ADD COLUMN final_evaluator_id TEXT;",
+    "ALTER TABLE documents ADD COLUMN leader_id TEXT;",
+    "ALTER TABLE documents ADD COLUMN leader_instruction TEXT;",
+    "ALTER TABLE documents ADD COLUMN submitted_at DATETIME;",
+    "ALTER TABLE documents ADD COLUMN submitted_by TEXT;",
+    "ALTER TABLE documents ADD COLUMN is_reference_only INTEGER DEFAULT 0;",
+    "ALTER TABLE document_dispatches ADD COLUMN dispatch_type TEXT DEFAULT 'process';",
+    "ALTER TABLE document_dispatches ADD COLUMN role_in_dispatch TEXT DEFAULT 'main';"
   ];
 
   for (const m of migrations) {

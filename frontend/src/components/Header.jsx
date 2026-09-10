@@ -1176,12 +1176,55 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 3.6 */}
+              {/* Version 3.7 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.6</span>
-                  <span className="text-xs text-slate-500 font-medium">10/09/2026 (Bản phát hành mới nhất - Triển khai vận hành thực tế)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.7</span>
+                  <span className="text-xs text-slate-500 font-medium">10/09/2026 (Bản phát hành mới nhất - Trình Lãnh đạo & Phân bổ Văn bản / Giao việc Đa hình thức)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Quy Trình Văn Thư Trình Lãnh Đạo, Phân Bổ Văn Bản Đọc Tham Khảo / Giao Xử Lý & Phân Bổ Theo Nhóm Chức Danh, Nhóm Tự Tạo
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Quy trình Văn thư trình Lãnh đạo chỉ đạo (Submit to Leader):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Bổ sung tính năng cho phép Văn thư tiếp nhận văn bản và gửi tờ trình / ý kiến trình Lãnh đạo cơ quan/đơn vị xem xét, cho ý kiến chỉ đạo trước khi phân phối.</li>
+                      <li>Trạng thái văn bản chuyển sang <em>"Chờ LĐ chỉ đạo"</em> (thẻ thống kê tím nổi bật), kèm ghi chú tờ trình văn thư, thời gian trình và chỉ đạo của lãnh đạo.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Đa dạng hóa hình thức Phân bổ Văn bản:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li><strong>Giao nhiệm vụ xử lý (Process):</strong> Phân công cán bộ phụ trách chính hoặc phối hợp xử lý, tự động tạo nhiệm vụ gắn KPI trong hệ thống đánh giá.</li>
+                      <li><strong>Chuyển văn bản đọc tham khảo (Reference Only):</strong> Phân phối văn bản để cán bộ nhân viên nghiên cứu, nắm bắt thông tin chỉ đạo mà <em>không bắt buộc tạo KPI</em> hay chấm điểm.</li>
+                    </ul>
+                  </li>
+                  <li><strong>3 Hình thức phân bổ đối tượng thông minh (Cá nhân / Chức danh / Nhóm tự tạo):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li><em>Chỉ định từng cá nhân:</em> Chọn lọc đích danh từng cán bộ thực hiện hoặc phối hợp.</li>
+                      <li><em>Theo nhóm chức danh / chức vụ:</em> Một chạm chọn toàn bộ cán bộ thuộc chức danh (ví dụ: toàn bộ Giáo viên, Nhân viên...).</li>
+                      <li><em>Theo nhóm người dùng tự tạo:</em> Cho phép quản lý và tạo các tổ, ban, hội đồng hoặc nhóm công tác chuyên trách theo nhu cầu thực tế của cơ quan.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Tương thích hoàn toàn với Module Giao việc:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Tại tab <em>Giao việc</em>, người lãnh đạo/quản lý có thể nhanh chóng giao nhiệm vụ cho hàng loạt cán bộ theo nhóm chức danh hoặc nhóm người dùng tự tạo.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Đồng bộ Realtime 100% 16/16 Bảng với Supabase Cloud PostgreSQL:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Bổ sung 2 bảng <code>user_groups</code> và <code>user_group_members</code> cùng các trường dữ liệu chỉ đạo của lãnh đạo vào cơ chế đồng bộ tức thời hai chiều giữa SQLite và Supabase Cloud.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 3.6 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-400 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-bold">Phiên bản 3.6</span>
+                  <span className="text-xs text-slate-500 font-medium">10/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Khắc Phục Triệt Để Phân Quyền Cán Bộ & Kích Hoạt Đồng Bộ Dữ Liệu Tức Thời 100% Lên Supabase Cloud và Cloudflare R2

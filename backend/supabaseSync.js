@@ -48,7 +48,8 @@ async function getSupabaseStatus() {
   const tables = [
     'users', 'departments', 'periods', 'axes', 'common_criteria',
     'standard_tasks', 'assigned_tasks', 'evaluations', 'evaluation_criteria_details',
-    'documents', 'document_dispatches', 'votes', 'roles', 'system_configs'
+    'documents', 'document_dispatches', 'votes', 'roles', 'system_configs',
+    'user_groups', 'user_group_members'
   ];
 
   const sqliteCounts = {};
@@ -282,12 +283,16 @@ async function pushToSupabase() {
       client, 'documents',
       ['id', 'doc_number', 'doc_date', 'arrival_date', 'arrival_number', 'issuer',
        'doc_type', 'field', 'urgency', 'security_level', 'summary', 'file_url',
-       'file_name', 'deadline', 'status', 'created_by', 'created_at', 'updated_at'],
+       'file_name', 'deadline', 'status', 'created_by', 'leader_id', 'leader_instruction',
+       'submitted_at', 'submitted_by', 'is_reference_only', 'created_at', 'updated_at'],
       ['id'],
-      ['doc_number', 'summary', 'status', 'file_url', 'file_name', 'updated_at'],
+      ['doc_number', 'summary', 'status', 'file_url', 'file_name', 'leader_id', 'leader_instruction', 'submitted_at', 'submitted_by', 'is_reference_only', 'updated_at'],
       documents.map(doc => ({
         ...doc,
-        created_by: validUserIds.has(doc.created_by) ? doc.created_by : null
+        created_by: validUserIds.has(doc.created_by) ? doc.created_by : null,
+        leader_id: validUserIds.has(doc.leader_id) ? doc.leader_id : null,
+        submitted_by: validUserIds.has(doc.submitted_by) ? doc.submitted_by : null,
+        is_reference_only: doc.is_reference_only ?? 0
       }))
     );
     stats.documents = documents.length;
@@ -324,11 +329,14 @@ async function pushToSupabase() {
       client, 'document_dispatches',
       ['id', 'document_id', 'department_id', 'assigned_to_user_id',
        'coordinating_user_ids', 'instruction', 'deadline', 'task_id',
-       'status', 'dispatched_by', 'dispatched_at', 'completed_at', 'completion_note'],
+       'status', 'dispatch_type', 'role_in_dispatch', 'dispatched_by',
+       'dispatched_at', 'completed_at', 'completion_note'],
       ['id'],
-      ['status', 'completed_at', 'completion_note'],
+      ['status', 'dispatch_type', 'role_in_dispatch', 'completed_at', 'completion_note'],
       dispatches.map(dd => ({
         ...dd,
+        dispatch_type: dd.dispatch_type || 'process',
+        role_in_dispatch: dd.role_in_dispatch || 'main',
         dispatched_by: validUserIds.has(dd.dispatched_by) ? dd.dispatched_by : null
       }))
     );
@@ -378,6 +386,31 @@ async function pushToSupabase() {
       votes
     );
     stats.votes = votes.length;
+
+    // 15. user_groups
+    const userGroups = db.prepare('SELECT * FROM user_groups').all();
+    await batchUpsert(
+      client, 'user_groups',
+      ['id', 'name', 'description', 'dept_id', 'created_by', 'created_at', 'updated_at'],
+      ['id'],
+      ['name', 'description', 'dept_id', 'updated_at'],
+      userGroups.map(g => ({
+        ...g,
+        created_by: validUserIds.has(g.created_by) ? g.created_by : null
+      }))
+    );
+    stats.user_groups = userGroups.length;
+
+    // 16. user_group_members
+    const groupMembers = db.prepare('SELECT * FROM user_group_members').all();
+    await batchUpsert(
+      client, 'user_group_members',
+      ['id', 'group_id', 'user_id', 'created_at'],
+      ['group_id', 'user_id'],
+      ['created_at'],
+      groupMembers.filter(gm => validUserIds.has(gm.user_id))
+    );
+    stats.user_group_members = groupMembers.length;
 
     return { success: true, stats, message: 'Đã sao lưu thành công toàn bộ dữ liệu lên Supabase Cloud' };
   } finally {
@@ -559,8 +592,9 @@ async function pullFromSupabase() {
       INSERT OR REPLACE INTO documents (
         id, doc_number, doc_date, arrival_date, arrival_number, issuer,
         doc_type, field, urgency, security_level, summary, file_url,
-        file_name, deadline, status, created_by, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        file_name, deadline, status, created_by, leader_id, leader_instruction,
+        submitted_at, submitted_by, is_reference_only, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
       for (const doc of supDocs.rows) {
@@ -570,7 +604,9 @@ async function pullFromSupabase() {
           toSqliteVal(doc.doc_type), toSqliteVal(doc.field), toSqliteVal(doc.urgency),
           toSqliteVal(doc.security_level), toSqliteVal(doc.summary), toSqliteVal(doc.file_url),
           toSqliteVal(doc.file_name), toSqliteVal(doc.deadline), toSqliteVal(doc.status),
-          toSqliteVal(doc.created_by), toSqliteVal(doc.created_at), toSqliteVal(doc.updated_at)
+          toSqliteVal(doc.created_by), toSqliteVal(doc.leader_id), toSqliteVal(doc.leader_instruction),
+          toSqliteVal(doc.submitted_at), toSqliteVal(doc.submitted_by), doc.is_reference_only ? 1 : 0,
+          toSqliteVal(doc.created_at), toSqliteVal(doc.updated_at)
         );
       }
     })();
@@ -613,8 +649,9 @@ async function pullFromSupabase() {
     const insDispatch = db.prepare(`
       INSERT OR REPLACE INTO document_dispatches (
         id, document_id, department_id, assigned_to_user_id, coordinating_user_ids,
-        instruction, deadline, task_id, status, dispatched_by, dispatched_at, completed_at, completion_note
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        instruction, deadline, task_id, status, dispatch_type, role_in_dispatch,
+        dispatched_by, dispatched_at, completed_at, completion_note
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
       for (const d of supDispatches.rows) {
@@ -622,7 +659,8 @@ async function pullFromSupabase() {
           toSqliteVal(d.id), toSqliteVal(d.document_id), toSqliteVal(d.department_id),
           toSqliteVal(d.assigned_to_user_id), toSqliteVal(d.coordinating_user_ids),
           toSqliteVal(d.instruction), toSqliteVal(d.deadline), toSqliteVal(d.task_id),
-          toSqliteVal(d.status), toSqliteVal(d.dispatched_by), toSqliteVal(d.dispatched_at),
+          toSqliteVal(d.status), toSqliteVal(d.dispatch_type || 'process'), toSqliteVal(d.role_in_dispatch || 'main'),
+          toSqliteVal(d.dispatched_by), toSqliteVal(d.dispatched_at),
           toSqliteVal(d.completed_at), toSqliteVal(d.completion_note)
         );
       }
@@ -687,6 +725,47 @@ async function pullFromSupabase() {
       }
     })();
     stats.votes = supVotes.rows.length;
+
+    // 15. user_groups
+    try {
+      const supUserGroups = await client.query('SELECT * FROM user_groups');
+      const insUserGroup = db.prepare(`
+        INSERT OR REPLACE INTO user_groups (id, name, description, dept_id, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      db.transaction(() => {
+        for (const g of supUserGroups.rows) {
+          insUserGroup.run(
+            toSqliteVal(g.id), toSqliteVal(g.name), toSqliteVal(g.description),
+            toSqliteVal(g.dept_id), toSqliteVal(g.created_by),
+            toSqliteVal(g.created_at), toSqliteVal(g.updated_at)
+          );
+        }
+      })();
+      stats.user_groups = supUserGroups.rows.length;
+    } catch (e) {
+      stats.user_groups = 0;
+    }
+
+    // 16. user_group_members
+    try {
+      const supGroupMembers = await client.query('SELECT * FROM user_group_members');
+      const insGroupMember = db.prepare(`
+        INSERT OR REPLACE INTO user_group_members (id, group_id, user_id, created_at)
+        VALUES (?, ?, ?, ?)
+      `);
+      db.transaction(() => {
+        for (const gm of supGroupMembers.rows) {
+          insGroupMember.run(
+            toSqliteVal(gm.id), toSqliteVal(gm.group_id), toSqliteVal(gm.user_id),
+            toSqliteVal(gm.created_at)
+          );
+        }
+      })();
+      stats.user_group_members = supGroupMembers.rows.length;
+    } catch (e) {
+      stats.user_group_members = 0;
+    }
 
     checkpointDatabase();
     return { success: true, stats, message: 'Đã khôi phục thành công CSDL từ Supabase về máy chủ' };

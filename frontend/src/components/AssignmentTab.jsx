@@ -29,10 +29,12 @@ import {
   ChevronUp,
   Paperclip,
   Zap,
-  FolderPlus
+  FolderPlus,
+  Briefcase
 } from 'lucide-react';
 import { api } from '../api';
 import { OUTPUT_RESULT_OPTIONS, formatDate, toInputDateFormat, parseDateOnly } from '../constants';
+import UserGroupManagementModal from './UserGroupManagementModal';
 
 export default function AssignmentTab({ 
   selectedPeriod, 
@@ -90,6 +92,15 @@ export default function AssignmentTab({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('assign'); // 'assign' or 'register'
 
+  // User Groups state
+  const [userGroups, setUserGroups] = useState([]);
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+
+  // Assignment Target Mode: 'users' | 'job_title' | 'user_group'
+  const [assignTargetType, setAssignTargetType] = useState('users');
+  const [selectedJobTitles, setSelectedJobTitles] = useState([]);
+  const [selectedGroupId, setSelectedGroupId] = useState('');
+
   // Form State
   const [formData, setFormData] = useState({
     user_id: '',
@@ -113,6 +124,32 @@ export default function AssignmentTab({
   const assignableUsers = isCBQL 
     ? users.filter(u => u.role !== 'admin') 
     : (currentUser && currentUser.role !== 'admin' ? [currentUser] : []);
+
+  // Distinct job titles
+  const distinctJobTitles = useMemo(() => {
+    const titles = new Set();
+    users.forEach(u => {
+      if (u.gov_title && u.gov_title.trim()) titles.add(u.gov_title.trim());
+      if (u.party_title && u.party_title.trim()) titles.add(u.party_title.trim());
+    });
+    if (titles.size === 0) {
+      return ['Giáo viên', 'Chuyên viên', 'Nhân viên', 'Hiệu trưởng', 'Phó Hiệu trưởng'];
+    }
+    return Array.from(titles);
+  }, [users]);
+
+  const loadUserGroups = async () => {
+    try {
+      const groups = await api.getUserGroups();
+      setUserGroups(groups || []);
+    } catch (e) {
+      console.error('Error loading user groups in AssignmentTab:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadUserGroups();
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -181,6 +218,9 @@ export default function AssignmentTab({
   function closeModal() {
     setIsModalOpen(false);
     setCustomOutputResult('');
+    setAssignTargetType('users');
+    setSelectedJobTitles([]);
+    setSelectedGroupId('');
     setFormData({
       user_id: '',
       task_source: 'standard',
@@ -237,7 +277,38 @@ export default function AssignmentTab({
 
   function clearAllUsers() {
     setSelectedUserIds([]);
+    setSelectedJobTitles([]);
+    setSelectedGroupId('');
   }
+
+  // Auto-select users matching chosen job titles
+  const handleToggleJobTitle = (title) => {
+    const isChecked = selectedJobTitles.includes(title);
+    const nextTitles = isChecked
+      ? selectedJobTitles.filter(t => t !== title)
+      : [...selectedJobTitles, title];
+    setSelectedJobTitles(nextTitles);
+
+    const matchingUsers = assignableUsers.filter(u => 
+      nextTitles.some(t => u.gov_title === t || u.party_title === t)
+    );
+    const nonDupIds = matchingUsers.filter(u => !duplicateUserIds.has(u.id)).map(u => u.id);
+    setSelectedUserIds(nonDupIds);
+  };
+
+  // Auto-select users matching chosen user group
+  const handleSelectGroup = (groupId) => {
+    setSelectedGroupId(groupId);
+    const grp = userGroups.find(g => g.id === groupId);
+    if (grp && grp.members) {
+      const memberUserIds = grp.members.map(m => m.user_id);
+      const matchingUsers = assignableUsers.filter(u => memberUserIds.includes(u.id));
+      const nonDupIds = matchingUsers.filter(u => !duplicateUserIds.has(u.id)).map(u => u.id);
+      setSelectedUserIds(nonDupIds);
+    } else {
+      setSelectedUserIds([]);
+    }
+  };
 
   function handleStandardTaskSelect(stdTaskId) {
     const std = standardTasks.find(s => s.id === stdTaskId);
@@ -288,6 +359,9 @@ export default function AssignmentTab({
           output_result: finalOutput,
           period_id: selectedPeriod,
           user_ids: selectedUserIds,
+          target_type: assignTargetType,
+          job_titles: selectedJobTitles,
+          group_id: selectedGroupId,
           assigned_by: currentUser?.id
         };
 
@@ -307,6 +381,9 @@ export default function AssignmentTab({
 
       // Reset & close
       setCustomOutputResult('');
+      setAssignTargetType('users');
+      setSelectedJobTitles([]);
+      setSelectedGroupId('');
       setFormData(prev => ({
         ...prev,
         task_name: '',
@@ -690,6 +767,18 @@ export default function AssignmentTab({
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-red-600' : ''}`} />
           </button>
+
+          {isCBQL && (
+            <button
+              type="button"
+              onClick={() => setIsGroupModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition"
+              title="Quản lý nhóm người dùng tự tạo để giao việc nhanh"
+            >
+              <Users className="w-4 h-4 text-slate-600" />
+              <span>Nhóm tự tạo ({userGroups.length})</span>
+            </button>
+          )}
 
           {isCBQL && (
             <button
@@ -1916,18 +2005,18 @@ export default function AssignmentTab({
                 </p>
               </div>
 
-              {/* If assigning: Multi-officer selection */}
+              {/* If assigning: Target selection (Cá nhân, Chức danh, hoặc Nhóm tự tạo) */}
               {modalMode === 'assign' && (
-                <div className="space-y-2 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="space-y-3 p-4 bg-slate-50 rounded-xl border border-slate-200">
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-bold text-slate-800">
-                      Chọn cán bộ, nhân viên nhận nhiệm vụ *
+                      Chọn cán bộ / đối tượng nhận nhiệm vụ *
                     </label>
                     <div className="flex items-center gap-2 text-xs">
                       <button
                         type="button"
                         onClick={selectAllUsers}
-                        className="text-red-700 hover:underline font-bold"
+                        className="text-red-700 hover:underline font-bold cursor-pointer"
                       >
                         Chọn tất cả ({assignableUsers.length})
                       </button>
@@ -1935,68 +2024,229 @@ export default function AssignmentTab({
                       <button
                         type="button"
                         onClick={clearAllUsers}
-                        className="text-slate-500 hover:underline font-medium"
+                        className="text-slate-500 hover:underline font-medium cursor-pointer"
                       >
                         Bỏ chọn
                       </button>
                     </div>
                   </div>
 
-                  {/* Search inside modal */}
-                  <input
-                    type="text"
-                    value={modalUserSearch}
-                    onChange={(e) => setModalUserSearch(e.target.value)}
-                    placeholder="Tìm tên cán bộ, phòng ban..."
-                    className="w-full text-xs px-3 py-1.5 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-red-500"
-                  />
+                  {/* 3 Sub-tabs for target selection */}
+                  <div className="flex border-b border-slate-200 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setAssignTargetType('users')}
+                      className={`pb-2 text-xs font-bold border-b-2 transition flex items-center gap-1.5 cursor-pointer ${
+                        assignTargetType === 'users'
+                          ? 'border-red-600 text-red-700'
+                          : 'border-transparent text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      <UserCheck className="w-3.5 h-3.5" />
+                      <span>Chỉ định từng cá nhân</span>
+                    </button>
 
-                  {/* User checkboxes list */}
-                  <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-lg bg-white p-2 space-y-1 divide-y divide-slate-100">
-                    {assignableUsers
-                      .filter(u => !modalUserSearch.trim() || u.full_name?.toLowerCase().includes(modalUserSearch.toLowerCase()) || u.dept_name?.toLowerCase().includes(modalUserSearch.toLowerCase()))
-                      .map(u => {
-                        const isChecked = selectedUserIds.includes(u.id);
-                        const isDup = duplicateUserIds.has(u.id);
-                        return (
-                          <label
-                            key={u.id}
-                            className={`flex items-center gap-2.5 p-2 rounded-lg cursor-pointer transition text-xs ${
-                              isDup
-                                ? 'bg-amber-50/70 border border-amber-200 text-slate-700'
-                                : isChecked ? 'bg-red-50/80 font-bold text-red-900' : 'hover:bg-slate-50 text-slate-700'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              disabled={isDup}
-                              onChange={() => {
-                                if (isDup) {
-                                  alert(`Cán bộ ${u.full_name} đã có đầu việc này trong kỳ đánh giá. Không thể chọn giao trùng!`);
-                                  return;
-                                }
-                                toggleUser(u.id);
-                              }}
-                              className={`rounded w-4 h-4 ${isDup ? 'cursor-not-allowed text-slate-300' : 'text-red-600 focus:ring-red-500'}`}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between">
-                                <span className={`truncate block ${isChecked ? 'font-bold' : 'font-semibold'}`}>{u.full_name}</span>
-                                {isDup && (
-                                  <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.2 rounded font-medium flex items-center gap-1 shrink-0">
-                                    <span>⚠️ Đã có nhiệm vụ này</span>
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-[11px] text-slate-400 truncate block">{u.dept_name || 'Cơ quan'} • {u.gov_title || 'Chuyên viên'}</span>
-                            </div>
-                          </label>
-                        );
-                      })}
+                    <button
+                      type="button"
+                      onClick={() => setAssignTargetType('job_title')}
+                      className={`pb-2 text-xs font-bold border-b-2 transition flex items-center gap-1.5 cursor-pointer ${
+                        assignTargetType === 'job_title'
+                          ? 'border-red-600 text-red-700'
+                          : 'border-transparent text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      <Briefcase className="w-3.5 h-3.5" />
+                      <span>Theo chức danh / chức vụ</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAssignTargetType('user_group')}
+                      className={`pb-2 text-xs font-bold border-b-2 transition flex items-center gap-1.5 cursor-pointer ${
+                        assignTargetType === 'user_group'
+                          ? 'border-red-600 text-red-700'
+                          : 'border-transparent text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Theo nhóm tự tạo ({userGroups.length})</span>
+                    </button>
                   </div>
-                  <div className="text-[11px] text-slate-500 font-medium text-right">
-                    Đã chọn: <strong className="text-red-700">{selectedUserIds.length}</strong> / {assignableUsers.length} cán bộ
+
+                  {/* Tab 1: Users Checklist */}
+                  {assignTargetType === 'users' && (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={modalUserSearch}
+                        onChange={(e) => setModalUserSearch(e.target.value)}
+                        placeholder="Tìm tên cán bộ, phòng ban..."
+                        className="w-full text-xs px-3 py-1.5 bg-white border border-slate-200 rounded-lg focus:ring-1 focus:ring-red-500"
+                      />
+
+                      <div className="max-h-44 overflow-y-auto border border-slate-200 rounded-lg bg-white p-2 space-y-1 divide-y divide-slate-100">
+                        {assignableUsers
+                          .filter(u => !modalUserSearch.trim() || u.full_name?.toLowerCase().includes(modalUserSearch.toLowerCase()) || u.dept_name?.toLowerCase().includes(modalUserSearch.toLowerCase()))
+                          .map(u => {
+                            const isChecked = selectedUserIds.includes(u.id);
+                            const isDup = duplicateUserIds.has(u.id);
+                            return (
+                              <label
+                                key={u.id}
+                                className={`flex items-center gap-2.5 p-2 rounded-lg cursor-pointer transition text-xs ${
+                                  isDup
+                                    ? 'bg-amber-50/70 border border-amber-200 text-slate-700'
+                                    : isChecked ? 'bg-red-50/80 font-bold text-red-900' : 'hover:bg-slate-50 text-slate-700'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  disabled={isDup}
+                                  onChange={() => {
+                                    if (isDup) {
+                                      alert(`Cán bộ ${u.full_name} đã có đầu việc này trong kỳ đánh giá. Không thể chọn giao trùng!`);
+                                      return;
+                                    }
+                                    toggleUser(u.id);
+                                  }}
+                                  className={`rounded w-4 h-4 ${isDup ? 'cursor-not-allowed text-slate-300' : 'text-red-600 focus:ring-red-500'}`}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center justify-between">
+                                    <span className={`truncate block ${isChecked ? 'font-bold' : 'font-semibold'}`}>{u.full_name}</span>
+                                    {isDup && (
+                                      <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.2 rounded font-medium flex items-center gap-1 shrink-0">
+                                        <span>⚠️ Đã có nhiệm vụ này</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] text-slate-400 truncate block">{u.dept_name || 'Cơ quan'} • {u.gov_title || 'Chuyên viên'}</span>
+                                </div>
+                              </label>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tab 2: Job Titles */}
+                  {assignTargetType === 'job_title' && (
+                    <div className="space-y-2">
+                      <p className="text-[11px] text-slate-500">
+                        Tích chọn chức danh bên dưới để tự động chọn nhanh tất cả cán bộ, nhân viên tương ứng:
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {distinctJobTitles.map(title => {
+                          const count = assignableUsers.filter(u => u.gov_title === title || u.party_title === title).length;
+                          const isChecked = selectedJobTitles.includes(title);
+                          return (
+                            <label
+                              key={title}
+                              className={`p-2.5 rounded-lg border flex items-center gap-2 cursor-pointer transition text-xs ${
+                                isChecked
+                                  ? 'bg-red-50 border-red-500 font-bold text-red-900'
+                                  : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => handleToggleJobTitle(title)}
+                                className="rounded text-red-600 focus:ring-red-500 w-3.5 h-3.5"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="truncate">{title}</div>
+                                <div className="text-[10px] text-slate-400 font-normal">{count} cán bộ</div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Tab 3: Custom User Groups */}
+                  {assignTargetType === 'user_group' && (
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-[11px] font-bold text-slate-700">
+                          Chọn nhóm người dùng tự tạo:
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setIsGroupModalOpen(true)}
+                          className="text-xs font-bold text-red-700 hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <Users className="w-3.5 h-3.5" />
+                          <span>Quản lý nhóm tự tạo</span>
+                        </button>
+                      </div>
+
+                      {userGroups.length === 0 ? (
+                        <div className="p-4 bg-white rounded-xl border border-slate-200 text-center text-slate-400 italic">
+                          Chưa có nhóm người dùng nào được tạo.
+                          <button
+                            type="button"
+                            onClick={() => setIsGroupModalOpen(true)}
+                            className="block mx-auto mt-2 text-xs font-bold text-red-700 hover:underline cursor-pointer"
+                          >
+                            + Tạo nhóm người dùng mới ngay
+                          </button>
+                        </div>
+                      ) : (
+                        <select
+                          value={selectedGroupId}
+                          onChange={(e) => handleSelectGroup(e.target.value)}
+                          className="w-full text-xs p-2.5 bg-white border border-slate-300 rounded-lg font-bold text-slate-900 focus:ring-2 focus:ring-red-500"
+                        >
+                          <option value="">-- Chọn nhóm người dùng để nạp danh sách --</option>
+                          {userGroups.map(g => (
+                            <option key={g.id} value={g.id}>
+                              {g.name} ({g.members?.length || 0} thành viên) {g.description ? ` - ${g.description}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+
+                      {selectedGroupId && (
+                        (() => {
+                          const selectedGroup = userGroups.find(g => g.id === selectedGroupId);
+                          if (!selectedGroup) return null;
+                          return (
+                            <div className="p-3 bg-white rounded-xl border border-red-200 space-y-1.5">
+                              <div className="flex items-center justify-between text-xs">
+                                <strong className="text-red-900 font-bold">{selectedGroup.name}</strong>
+                                <span className="text-slate-500 font-medium">{selectedGroup.members?.length || 0} thành viên</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1 pt-1">
+                                {selectedGroup.members?.map(m => (
+                                  <span key={m.user_id} className="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-[10px] font-semibold text-slate-700">
+                                    {m.user_name || m.user_id}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()
+                      )}
+                    </div>
+                  )}
+
+                  {/* Summary of currently selected assignees */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-slate-500 font-medium pt-2 border-t border-slate-200">
+                    <span className="text-slate-600">
+                      {assignTargetType === 'job_title' && selectedJobTitles.length > 0 && (
+                        <span>Nhóm chức danh: <strong>{selectedJobTitles.join(', ')}</strong> • </span>
+                      )}
+                      {assignTargetType === 'user_group' && selectedGroupId && (
+                        <span>Nhóm: <strong>{userGroups.find(g => g.id === selectedGroupId)?.name}</strong> • </span>
+                      )}
+                      Chuyển sang tab "Chỉ định từng cá nhân" để xem hoặc chỉnh sửa danh sách cán bộ được chọn.
+                    </span>
+                    <span className="shrink-0 text-right">
+                      Đã chọn: <strong className="text-red-700 text-xs font-bold">{selectedUserIds.length}</strong> / {assignableUsers.length} cán bộ
+                    </span>
                   </div>
                 </div>
               )}
@@ -2646,6 +2896,15 @@ export default function AssignmentTab({
           </div>
         </div>
       )}
+
+      {/* Modal Quản lý Nhóm người dùng tự tạo */}
+      <UserGroupManagementModal
+        isOpen={isGroupModalOpen}
+        onClose={() => setIsGroupModalOpen(false)}
+        users={users}
+        departments={axes}
+        onGroupsUpdated={(g) => setUserGroups(g)}
+      />
 
     </div>
   );

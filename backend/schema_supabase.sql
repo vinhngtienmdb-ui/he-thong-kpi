@@ -123,6 +123,11 @@ CREATE TABLE IF NOT EXISTS documents (
     deadline TEXT,
     status TEXT DEFAULT 'pending_dispatch',
     created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    leader_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    leader_instruction TEXT,
+    submitted_at TIMESTAMPTZ,
+    submitted_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    is_reference_only INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
@@ -244,10 +249,32 @@ CREATE TABLE IF NOT EXISTS document_dispatches (
     deadline TEXT,
     task_id TEXT REFERENCES assigned_tasks(id) ON DELETE SET NULL,
     status TEXT DEFAULT 'in_progress',
+    dispatch_type TEXT DEFAULT 'process',
+    role_in_dispatch TEXT DEFAULT 'main',
     dispatched_by TEXT REFERENCES users(id) ON DELETE SET NULL,
     dispatched_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMPTZ,
     completion_note TEXT
+);
+
+-- 15. User Groups (Nhom nguoi dung / To cong tac tu tao)
+CREATE TABLE IF NOT EXISTS user_groups (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    dept_id TEXT REFERENCES departments(id) ON DELETE SET NULL,
+    created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 16. User Group Members (Thanh vien nhom nguoi dung tu tao)
+CREATE TABLE IF NOT EXISTS user_group_members (
+    id TEXT PRIMARY KEY,
+    group_id TEXT NOT NULL REFERENCES user_groups(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (group_id, user_id)
 );
 
 -- ==============================================================================

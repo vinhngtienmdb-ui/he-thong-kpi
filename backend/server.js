@@ -1907,9 +1907,17 @@ app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) =>
   let targetUserIds = [];
   if (Array.isArray(user_ids) && user_ids.length > 0) {
     targetUserIds = [...new Set(user_ids.filter(Boolean))];
+  } else if (req.body.group_id) {
+    const groupMembers = db.prepare('SELECT user_id FROM user_group_members WHERE group_id = ?').all(req.body.group_id);
+    targetUserIds = groupMembers.map(gm => gm.user_id);
+  } else if (Array.isArray(req.body.job_titles) && req.body.job_titles.length > 0) {
+    const placeholders = req.body.job_titles.map(() => '?').join(',');
+    const foundUsers = db.prepare(`SELECT id FROM users WHERE (gov_title IN (${placeholders}) OR party_title IN (${placeholders})) AND COALESCE(is_active, 1) = 1`).all(...req.body.job_titles, ...req.body.job_titles);
+    targetUserIds = foundUsers.map(u => u.id);
   }
+
   if (targetUserIds.length === 0) {
-    return res.status(400).json({ success: false, message: 'Vui lòng chọn ít nhất 1 cán bộ nhận nhiệm vụ' });
+    return res.status(400).json({ success: false, message: 'Không tìm thấy cán bộ nào trong nhóm hoặc chức danh đã chọn' });
   }
 
   // Guard: Không giao việc KPI cho tài khoản admin / quản trị đơn vị nghiệp vụ (miễn đánh giá)
@@ -3567,6 +3575,181 @@ app.get('/api/reports/export-mau-02/:periodId', async (req, res) => {
 });
 
 // ============================================================================
+// USER GROUPS MODULE (NHÓM NGƯỜI DÙNG / TỔ CÔNG TÁC TỰ TẠO)
+// ============================================================================
+
+// 1. Get All User Groups
+app.get('/api/user-groups', (req, res) => {
+  try {
+    const groups = db.prepare(`
+      SELECT g.*, 
+             u.full_name as creator_name,
+             d.name as dept_name,
+             (SELECT COUNT(*) FROM user_group_members ugm WHERE ugm.group_id = g.id) as member_count
+      FROM user_groups g
+      LEFT JOIN users u ON g.created_by = u.id
+      LEFT JOIN departments d ON g.dept_id = d.id
+      ORDER BY g.created_at DESC
+    `).all();
+
+    const membersStmt = db.prepare(`
+      SELECT ugm.user_id, u.full_name, u.gov_title, u.party_title, u.role, u.dept_id, dept.name as dept_name
+      FROM user_group_members ugm
+      JOIN users u ON ugm.user_id = u.id
+      LEFT JOIN departments dept ON u.dept_id = dept.id
+      WHERE ugm.group_id = ?
+      ORDER BY u.full_name ASC
+    `);
+
+    for (const g of groups) {
+      g.members = membersStmt.all(g.id);
+    }
+
+    res.json(groups);
+  } catch (err) {
+    console.error('Error fetching user groups:', err);
+    res.status(500).json({ error: 'Lỗi tải danh sách nhóm: ' + err.message });
+  }
+});
+
+// 2. Get Single User Group
+app.get('/api/user-groups/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const group = db.prepare(`
+      SELECT g.*, u.full_name as creator_name, d.name as dept_name
+      FROM user_groups g
+      LEFT JOIN users u ON g.created_by = u.id
+      LEFT JOIN departments d ON g.dept_id = d.id
+      WHERE g.id = ?
+    `).get(id);
+
+    if (!group) return res.status(404).json({ error: 'Không tìm thấy nhóm' });
+
+    const members = db.prepare(`
+      SELECT ugm.id as membership_id, u.id, u.username, u.full_name, u.gov_title, u.party_title, u.role, u.dept_id, d.name as dept_name
+      FROM user_group_members ugm
+      JOIN users u ON ugm.user_id = u.id
+      LEFT JOIN departments d ON u.dept_id = d.id
+      WHERE ugm.group_id = ?
+      ORDER BY u.full_name ASC
+    `).all(id);
+
+    res.json({ ...group, members });
+  } catch (err) {
+    console.error('Error fetching group detail:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 3. Create User Group
+app.post('/api/user-groups', (req, res) => {
+  try {
+    const viewer = getViewer(req);
+    const { name, description, dept_id, member_ids = [] } = req.body || {};
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Vui lòng nhập tên nhóm!' });
+    }
+
+    const groupId = uuidv4();
+    const runTx = db.transaction(() => {
+      db.prepare(`
+        INSERT INTO user_groups (id, name, description, dept_id, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `).run(groupId, name.trim(), description ? description.trim() : null, dept_id || null, viewer?.id || null);
+
+      if (Array.isArray(member_ids) && member_ids.length > 0) {
+        const insMem = db.prepare(`
+          INSERT OR IGNORE INTO user_group_members (id, group_id, user_id)
+          VALUES (?, ?, ?)
+        `);
+        for (const uid of member_ids) {
+          if (uid) insMem.run(uuidv4(), groupId, uid);
+        }
+      }
+    });
+
+    runTx();
+
+    const created = db.prepare('SELECT * FROM user_groups WHERE id = ?').get(groupId);
+    res.status(201).json({ success: true, group: created, message: 'Đã tạo nhóm thành công!' });
+    triggerBackgroundSupabaseSync();
+  } catch (err) {
+    console.error('Error creating user group:', err);
+    res.status(500).json({ error: 'Lỗi tạo nhóm: ' + err.message });
+  }
+});
+
+// 4. Update User Group
+app.put('/api/user-groups/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, dept_id, member_ids } = req.body || {};
+
+    const existing = db.prepare('SELECT * FROM user_groups WHERE id = ?').get(id);
+    if (!existing) return res.status(404).json({ error: 'Không tìm thấy nhóm' });
+
+    const runTx = db.transaction(() => {
+      db.prepare(`
+        UPDATE user_groups 
+        SET name = COALESCE(?, name),
+            description = ?,
+            dept_id = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(
+        name ? name.trim() : existing.name, 
+        description !== undefined ? (description ? description.trim() : null) : existing.description, 
+        dept_id !== undefined ? (dept_id || null) : existing.dept_id, 
+        id
+      );
+
+      if (Array.isArray(member_ids)) {
+        db.prepare('DELETE FROM user_group_members WHERE group_id = ?').run(id);
+        const insMem = db.prepare(`
+          INSERT OR IGNORE INTO user_group_members (id, group_id, user_id)
+          VALUES (?, ?, ?)
+        `);
+        for (const uid of member_ids) {
+          if (uid) insMem.run(uuidv4(), id, uid);
+        }
+      }
+    });
+
+    runTx();
+
+    const updated = db.prepare('SELECT * FROM user_groups WHERE id = ?').get(id);
+    res.json({ success: true, group: updated, message: 'Đã cập nhật nhóm thành công!' });
+    triggerBackgroundSupabaseSync();
+  } catch (err) {
+    console.error('Error updating user group:', err);
+    res.status(500).json({ error: 'Lỗi cập nhật nhóm: ' + err.message });
+  }
+});
+
+// 5. Delete User Group
+app.delete('/api/user-groups/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const existing = db.prepare('SELECT * FROM user_groups WHERE id = ?').get(id);
+    if (!existing) return res.status(404).json({ error: 'Không tìm thấy nhóm' });
+
+    const runTx = db.transaction(() => {
+      db.prepare('DELETE FROM user_group_members WHERE group_id = ?').run(id);
+      db.prepare('DELETE FROM user_groups WHERE id = ?').run(id);
+    });
+    runTx();
+
+    res.json({ success: true, message: 'Đã xóa nhóm thành công!' });
+    triggerBackgroundSupabaseSync();
+  } catch (err) {
+    console.error('Error deleting user group:', err);
+    res.status(500).json({ error: 'Lỗi xóa nhóm: ' + err.message });
+  }
+});
+
+// ============================================================================
 // DOCUMENT MANAGEMENT & DISPATCH MODULE (QUẢN LÝ & PHÂN BỔ VĂN BẢN)
 // ============================================================================
 
@@ -3591,7 +3774,9 @@ app.get('/api/documents/stats', (req, res) => {
 
     const total = db.prepare(`SELECT COUNT(*) as count FROM documents d WHERE ${scopeWhere}`).get(...params).count;
     const pendingDispatch = db.prepare(`SELECT COUNT(*) as count FROM documents d WHERE ${scopeWhere} AND d.status = 'pending_dispatch'`).get(...params).count;
-    const inProgress = db.prepare(`SELECT COUNT(*) as count FROM documents d WHERE ${scopeWhere} AND d.status = 'in_progress'`).get(...params).count;
+    const submittedToLeader = db.prepare(`SELECT COUNT(*) as count FROM documents d WHERE ${scopeWhere} AND d.status = 'submitted_to_leader'`).get(...params).count;
+    const submittedToMe = viewer ? db.prepare(`SELECT COUNT(*) as count FROM documents d WHERE d.leader_id = ? AND d.status = 'submitted_to_leader'`).get(viewer.id)?.count || 0 : 0;
+    const inProgress = db.prepare(`SELECT COUNT(*) as count FROM documents d WHERE ${scopeWhere} AND (d.status = 'in_progress' OR d.status = 'dispatched')`).get(...params).count;
     const completed = db.prepare(`SELECT COUNT(*) as count FROM documents d WHERE ${scopeWhere} AND d.status = 'completed'`).get(...params).count;
     const today = new Date().toISOString().split('T')[0];
     const overdue = db.prepare(`SELECT COUNT(*) as count FROM documents d WHERE ${scopeWhere} AND d.deadline IS NOT NULL AND d.deadline < ? AND d.status != 'completed'`).get(...params, today).count;
@@ -3599,6 +3784,8 @@ app.get('/api/documents/stats', (req, res) => {
     res.json({
       total,
       pending_dispatch: pendingDispatch,
+      submitted_to_leader: submittedToLeader,
+      submitted_to_me: submittedToMe,
       in_progress: inProgress,
       completed,
       overdue
@@ -3614,20 +3801,24 @@ app.get('/api/documents', (req, res) => {
   try {
     const viewer = getViewer(req);
     const isMgr = checkIsManagerOrAdmin(viewer);
-    const { search, doc_type, field, status, urgency, from_date, to_date } = req.query;
+    const { search, doc_type, field, status, urgency, from_date, to_date, filter_leader_me } = req.query;
 
     let conditions = ['1=1'];
     const params = [];
 
-    if (!isMgr && viewer) {
+    if (filter_leader_me === 'true' && viewer) {
+      conditions.push('d.leader_id = ? AND d.status = "submitted_to_leader"');
+      params.push(viewer.id);
+    } else if (!isMgr && viewer) {
       conditions.push(`(
         d.created_by = ? OR 
+        d.leader_id = ? OR
         d.id IN (
           SELECT document_id FROM document_dispatches 
           WHERE assigned_to_user_id = ? OR coordinating_user_ids LIKE ?
         )
       )`);
-      params.push(viewer.id, viewer.id, `%"${viewer.id}"%`);
+      params.push(viewer.id, viewer.id, viewer.id, `%"${viewer.id}"%`);
     }
 
     if (search) {
@@ -3648,6 +3839,8 @@ app.get('/api/documents', (req, res) => {
         const today = new Date().toISOString().split('T')[0];
         conditions.push('d.deadline IS NOT NULL AND d.deadline < ? AND d.status != "completed"');
         params.push(today);
+      } else if (status === 'in_progress') {
+        conditions.push('(d.status = "in_progress" OR d.status = "dispatched")');
       } else {
         conditions.push('d.status = ?');
         params.push(status);
@@ -3670,6 +3863,8 @@ app.get('/api/documents', (req, res) => {
     const query = `
       SELECT d.*, 
              u.full_name as creator_name,
+             leader.full_name as leader_name,
+             sub_u.full_name as submitted_by_name,
              (SELECT COUNT(*) FROM document_dispatches dd WHERE dd.document_id = d.id) as dispatches_count,
              (SELECT GROUP_CONCAT(u2.full_name, ', ') 
               FROM document_dispatches dd2 
@@ -3677,6 +3872,8 @@ app.get('/api/documents', (req, res) => {
               WHERE dd2.document_id = d.id) as assigned_officers
       FROM documents d
       LEFT JOIN users u ON d.created_by = u.id
+      LEFT JOIN users leader ON d.leader_id = leader.id
+      LEFT JOIN users sub_u ON d.submitted_by = sub_u.id
       WHERE ${whereClause}
       ORDER BY d.created_at DESC
     `;
@@ -3705,9 +3902,14 @@ app.get('/api/documents/:id', (req, res) => {
   try {
     const { id } = req.params;
     const doc = db.prepare(`
-      SELECT d.*, u.full_name as creator_name
+      SELECT d.*, 
+             u.full_name as creator_name,
+             leader.full_name as leader_name,
+             sub_u.full_name as submitted_by_name
       FROM documents d
       LEFT JOIN users u ON d.created_by = u.id
+      LEFT JOIN users leader ON d.leader_id = leader.id
+      LEFT JOIN users sub_u ON d.submitted_by = sub_u.id
       WHERE d.id = ?
     `).get(id);
 
@@ -3919,6 +4121,54 @@ app.delete('/api/documents/:id', async (req, res) => {
 });
 
 // 7. Dispatch Document (Phân bổ văn bản cho cán bộ & tùy chọn tạo KPI task)
+// 6.1. Văn thư trình Lãnh đạo cho ý kiến chỉ đạo
+app.post('/api/documents/:id/submit-to-leader', (req, res) => {
+  try {
+    const { id } = req.params;
+    const viewer = getViewer(req);
+    const { leader_id, leader_note } = req.body || {};
+
+    if (!leader_id) {
+      return res.status(400).json({ success: false, error: 'Vui lòng chọn Lãnh đạo để trình văn bản!' });
+    }
+
+    const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
+    if (!doc) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy văn bản!' });
+    }
+
+    db.prepare(`
+      UPDATE documents 
+      SET status = 'submitted_to_leader',
+          leader_id = ?,
+          submitted_by = ?,
+          submitted_at = CURRENT_TIMESTAMP,
+          leader_instruction = COALESCE(?, leader_instruction),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(leader_id, viewer?.id || null, leader_note || null, id);
+
+    const updatedDoc = db.prepare(`
+      SELECT d.*, u.full_name as creator_name, leader.full_name as leader_name
+      FROM documents d
+      LEFT JOIN users u ON d.created_by = u.id
+      LEFT JOIN users leader ON d.leader_id = leader.id
+      WHERE d.id = ?
+    `).get(id);
+
+    res.json({
+      success: true,
+      message: `Đã trình văn bản lên Lãnh đạo (${updatedDoc.leader_name || 'Lãnh đạo'}) thành công!`,
+      document: updatedDoc
+    });
+    triggerBackgroundSupabaseSync();
+  } catch (err) {
+    console.error('Error submitting document to leader:', err);
+    res.status(500).json({ success: false, error: 'Lỗi khi trình Lãnh đạo: ' + err.message });
+  }
+});
+
+// 7. Dispatch Document (Phân bổ văn bản: cá nhân / nhóm chức vụ / nhóm tự tạo / đọc tham khảo)
 app.post('/api/documents/:id/dispatch', (req, res) => {
   try {
     const viewer = getViewer(req);
@@ -3930,9 +4180,15 @@ app.post('/api/documents/:id/dispatch', (req, res) => {
 
     const {
       department_id,
+      target_type = 'users', // 'users' | 'job_title' | 'user_group'
       assigned_to_user_id,
       coordinating_user_ids = [],
+      assigned_user_ids = [],
+      job_titles = [],
+      group_id,
+      dispatch_type = 'process', // 'process' (xử lý) | 'reference' (đọc tham khảo)
       instruction,
+      leader_instruction,
       deadline,
       create_kpi_task,
       period_id,
@@ -3942,81 +4198,176 @@ app.post('/api/documents/:id/dispatch', (req, res) => {
       output_result = 'Báo cáo / Kế hoạch'
     } = req.body;
 
-    if (!assigned_to_user_id || !instruction) {
-      return res.status(400).json({ error: 'Vui lòng chọn cán bộ phụ trách chính và nhập ý kiến chỉ đạo xử lý văn bản!' });
+    const effInstruction = instruction || leader_instruction || 'Xem và xử lý theo nội dung văn bản';
+    const effLeaderInstruction = leader_instruction || instruction || doc.leader_instruction;
+
+    // Resolve target users based on target_type
+    let mainAssigneeIds = [];
+    let coordinatingAssigneeIds = [];
+
+    if (target_type === 'job_title' && Array.isArray(job_titles) && job_titles.length > 0) {
+      const placeholders = job_titles.map(() => '?').join(',');
+      let titleSql = `SELECT id FROM users WHERE (gov_title IN (${placeholders}) OR party_title IN (${placeholders})) AND COALESCE(is_active, 1) = 1`;
+      const titleParams = [...job_titles, ...job_titles];
+      if (department_id) {
+        titleSql += ' AND dept_id = ?';
+        titleParams.push(department_id);
+      }
+      const usersByTitle = db.prepare(titleSql).all(...titleParams);
+      mainAssigneeIds = usersByTitle.map(u => u.id);
+    } else if (target_type === 'user_group' && group_id) {
+      const groupMems = db.prepare('SELECT user_id FROM user_group_members WHERE group_id = ?').all(group_id);
+      mainAssigneeIds = groupMems.map(gm => gm.user_id);
+    } else if (Array.isArray(assigned_user_ids) && assigned_user_ids.length > 0) {
+      mainAssigneeIds = assigned_user_ids;
+      if (Array.isArray(coordinating_user_ids)) {
+        coordinatingAssigneeIds = coordinating_user_ids.filter(uid => !mainAssigneeIds.includes(uid));
+      }
+    } else {
+      if (assigned_to_user_id) mainAssigneeIds = [assigned_to_user_id];
+      if (Array.isArray(coordinating_user_ids)) coordinatingAssigneeIds = coordinating_user_ids;
     }
 
-    const dispatchId = uuidv4();
-    let createdTaskId = null;
+    if (mainAssigneeIds.length === 0 && coordinatingAssigneeIds.length === 0) {
+      return res.status(400).json({ error: 'Vui lòng chọn ít nhất một cán bộ hoặc nhóm để chuyển/phân bổ văn bản!' });
+    }
+
+    const createdDispatches = [];
+    const createdTaskIds = [];
 
     const runTransaction = db.transaction(() => {
-      // 1. If create_kpi_task is true and period_id is provided, create an assigned_task
-      if (create_kpi_task && period_id) {
-        createdTaskId = uuidv4();
+      // 1. Process Reference-only dispatches
+      if (dispatch_type === 'reference') {
+        const allReferenceUserIds = [...new Set([...mainAssigneeIds, ...coordinatingAssigneeIds])];
+        for (const uid of allReferenceUserIds) {
+          const dispatchId = uuidv4();
+          db.prepare(`
+            INSERT INTO document_dispatches (
+              id, document_id, department_id, assigned_to_user_id, coordinating_user_ids,
+              instruction, deadline, task_id, status, dispatch_type, role_in_dispatch, dispatched_by
+            ) VALUES (?, ?, ?, ?, '[]', ?, ?, NULL, 'in_progress', 'reference', 'reference', ?)
+          `).run(
+            dispatchId,
+            doc.id,
+            department_id || null,
+            uid,
+            effInstruction.trim(),
+            deadline || doc.deadline || null,
+            viewer ? viewer.id : null
+          );
+          createdDispatches.push(dispatchId);
+        }
+
+        db.prepare(`
+          UPDATE documents 
+          SET status = 'dispatched',
+              is_reference_only = 1,
+              leader_instruction = COALESCE(?, leader_instruction),
+              updated_at = CURRENT_TIMESTAMP 
+          WHERE id = ?
+        `).run(effLeaderInstruction || null, doc.id);
+      } else {
+        // 2. Process regular task assignment dispatches
         const stdScore = parseFloat(standard_score) || 10;
         const diffWeight = parseFloat(difficulty_weight) || 1.0;
         const maxConv = Number((stdScore * diffWeight).toFixed(2));
-        const taskName = `[VB ${doc.doc_number}] ${instruction.length > 80 ? instruction.slice(0, 80) + '...' : instruction}`;
+        const taskName = `[VB ${doc.doc_number}] ${effInstruction.length > 80 ? effInstruction.slice(0, 80) + '...' : effInstruction}`;
+
+        // Create for main assignees
+        for (const uid of mainAssigneeIds) {
+          const dispatchId = uuidv4();
+          let taskId = null;
+
+          if (create_kpi_task && period_id) {
+            taskId = uuidv4();
+            db.prepare(`
+              INSERT INTO assigned_tasks (
+                id, period_id, user_id, task_name, output_result,
+                deadline, task_type, standard_score, difficulty_weight, max_converted_score,
+                axis_code, origin, status, assigned_by, document_id, group_id
+              ) VALUES (?, ?, ?, ?, ?, ?, 'Đột xuất', ?, ?, ?, ?, 'assigned', 'in_progress', ?, ?, ?)
+            `).run(
+              taskId,
+              period_id,
+              uid,
+              taskName,
+              output_result,
+              deadline || doc.deadline || new Date().toISOString().split('T')[0],
+              stdScore,
+              diffWeight,
+              maxConv,
+              axis_code,
+              viewer ? viewer.id : null,
+              doc.id,
+              group_id || null
+            );
+            createdTaskIds.push(taskId);
+          }
+
+          db.prepare(`
+            INSERT INTO document_dispatches (
+              id, document_id, department_id, assigned_to_user_id, coordinating_user_ids,
+              instruction, deadline, task_id, status, dispatch_type, role_in_dispatch, dispatched_by
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_progress', 'process', 'main', ?)
+          `).run(
+            dispatchId,
+            doc.id,
+            department_id || null,
+            uid,
+            Array.isArray(coordinatingAssigneeIds) ? JSON.stringify(coordinatingAssigneeIds) : '[]',
+            effInstruction.trim(),
+            deadline || doc.deadline || null,
+            taskId,
+            viewer ? viewer.id : null
+          );
+          createdDispatches.push(dispatchId);
+        }
+
+        // Create for coordinating assignees if specified
+        for (const uid of coordinatingAssigneeIds) {
+          const dispatchId = uuidv4();
+          db.prepare(`
+            INSERT INTO document_dispatches (
+              id, document_id, department_id, assigned_to_user_id, coordinating_user_ids,
+              instruction, deadline, task_id, status, dispatch_type, role_in_dispatch, dispatched_by
+            ) VALUES (?, ?, ?, ?, '[]', ?, ?, NULL, 'in_progress', 'process', 'coordinate', ?)
+          `).run(
+            dispatchId,
+            doc.id,
+            department_id || null,
+            uid,
+            `[Phối hợp xử lý] ${effInstruction.trim()}`,
+            deadline || doc.deadline || null,
+            viewer ? viewer.id : null
+          );
+          createdDispatches.push(dispatchId);
+        }
 
         db.prepare(`
-          INSERT INTO assigned_tasks (
-            id, period_id, user_id, task_name, output_result,
-            deadline, task_type, standard_score, difficulty_weight, max_converted_score,
-            axis_code, origin, status, assigned_by, document_id
-          ) VALUES (?, ?, ?, ?, ?, ?, 'Đột xuất', ?, ?, ?, ?, 'assigned', 'in_progress', ?, ?)
-        `).run(
-          createdTaskId,
-          period_id,
-          assigned_to_user_id,
-          taskName,
-          output_result,
-          deadline || doc.deadline || new Date().toISOString().split('T')[0],
-          stdScore,
-          diffWeight,
-          maxConv,
-          axis_code,
-          viewer ? viewer.id : null,
-          doc.id
-        );
+          UPDATE documents 
+          SET status = 'in_progress',
+              leader_instruction = COALESCE(?, leader_instruction),
+              updated_at = CURRENT_TIMESTAMP 
+          WHERE id = ?
+        `).run(effLeaderInstruction || null, doc.id);
       }
-
-      // 2. Insert dispatch record
-      db.prepare(`
-        INSERT INTO document_dispatches (
-          id, document_id, department_id, assigned_to_user_id, coordinating_user_ids,
-          instruction, deadline, task_id, status, dispatched_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'in_progress', ?)
-      `).run(
-        dispatchId,
-        doc.id,
-        department_id || null,
-        assigned_to_user_id,
-        Array.isArray(coordinating_user_ids) ? JSON.stringify(coordinating_user_ids) : '[]',
-        instruction.trim(),
-        deadline || doc.deadline || null,
-        createdTaskId,
-        viewer ? viewer.id : null
-      );
-
-      // 3. Update document status to in_progress
-      db.prepare(`
-        UPDATE documents 
-        SET status = 'in_progress', updated_at = CURRENT_TIMESTAMP 
-        WHERE id = ? AND status = 'pending_dispatch'
-      `).run(doc.id);
     });
 
     runTransaction();
 
-    const dispatch = db.prepare('SELECT * FROM document_dispatches WHERE id = ?').get(dispatchId);
+    const successMsg = dispatch_type === 'reference'
+      ? `Đã chuyển văn bản cho ${createdDispatches.length} cán bộ để đọc tham khảo!`
+      : (createdTaskIds.length > 0 
+          ? `Đã phân bổ văn bản và tự động tạo ${createdTaskIds.length} nhiệm vụ KPI thành công!`
+          : `Đã phân bổ văn bản cho ${createdDispatches.length} cán bộ xử lý thành công!`);
+
     res.status(201).json({
       success: true,
-      dispatch,
-      task_id: createdTaskId,
-      message: createdTaskId 
-        ? 'Đã phân bổ văn bản và tự động tạo Nhiệm vụ KPI thành công!' 
-        : 'Đã phân bổ văn bản cho cán bộ xử lý thành công!'
+      dispatches_count: createdDispatches.length,
+      tasks_count: createdTaskIds.length,
+      message: successMsg
     });
+    triggerBackgroundSupabaseSync();
   } catch (err) {
     console.error('Error dispatching document:', err);
     res.status(500).json({ error: 'Lỗi phân bổ văn bản: ' + err.message });
