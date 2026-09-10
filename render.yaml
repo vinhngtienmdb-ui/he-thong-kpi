@@ -1,4 +1,4 @@
-﻿services:
+services:
   - type: web
     name: kpi-crm-system
     env: node
@@ -8,3 +8,15 @@
     envVars:
       - key: NODE_VERSION
         value: 20
+      - key: DATABASE_URL
+        value: postgresql://postgres.agulljfdttmrqrxsuthj:q47LTnAGaGBs0i8J@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres
+      - key: R2_ACCOUNT_ID
+        value: 61aa28c5ab3cb4b879f03388f47e1a0d
+      - key: R2_ACCESS_KEY_ID
+        value: e887340c72d9befe14858b9d03905ba5
+      - key: R2_SECRET_ACCESS_KEY
+        value: b65cf53b88c9109f94acc528b712038c4b7a9d379126ecfd9c6d46fcebe42060
+      - key: R2_BUCKET_NAME
+        value: kpi-storage
+      - key: R2_PUBLIC_URL
+        value: https://pub-4d4bf6bd5965404abc61975dcb16c02a.r2.dev

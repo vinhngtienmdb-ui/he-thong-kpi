@@ -11,7 +11,9 @@ const { Pool } = require('pg');
 const { db, createBackup, checkpointDatabase } = require('./database');
 
 function getDbUrl() {
-  return process.env.DATABASE_URL || process.env.SUPABASE_DB_URL;
+  return process.env.DATABASE_URL || 
+         process.env.SUPABASE_DB_URL || 
+         'postgresql://postgres.agulljfdttmrqrxsuthj:q47LTnAGaGBs0i8J@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres';
 }
 
 function isSupabaseConfigured() {
@@ -371,6 +373,21 @@ async function pushToSupabase() {
   }
 }
 
+// Helper: Chuyển đổi dữ liệu từ PostgreSQL sang kiểu hợp lệ của SQLite
+function toSqliteVal(val) {
+  if (val === undefined || val === null) return null;
+  if (val instanceof Date) {
+    return val.toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
+  }
+  if (typeof val === 'boolean') {
+    return val ? 1 : 0;
+  }
+  if (typeof val === 'object') {
+    return JSON.stringify(val);
+  }
+  return val;
+}
+
 /**
  * Kéo toàn bộ dữ liệu từ Supabase về SQLite máy chủ (Restore from Cloud)
  * Tự động tạo snapshot backup cục bộ trước khi đồng bộ về.
@@ -400,9 +417,11 @@ async function pullFromSupabase() {
     db.transaction(() => {
       for (const u of supUsers.rows) {
         insUser.run(
-          u.id, u.username, u.password, u.full_name, u.role, u.party_title, u.gov_title, u.dept_id,
-          u.birth_date, u.gender, u.phone, u.email, u.is_active ? 1 : 0, u.target_role, u.role_id, u.manager_id,
-          u.management_role || 'nhan_vien', u.final_evaluator_id
+          toSqliteVal(u.id), toSqliteVal(u.username), toSqliteVal(u.password), toSqliteVal(u.full_name),
+          toSqliteVal(u.role), toSqliteVal(u.party_title), toSqliteVal(u.gov_title), toSqliteVal(u.dept_id),
+          toSqliteVal(u.birth_date), toSqliteVal(u.gender), toSqliteVal(u.phone), toSqliteVal(u.email),
+          u.is_active ? 1 : 0, toSqliteVal(u.target_role), toSqliteVal(u.role_id), toSqliteVal(u.manager_id),
+          toSqliteVal(u.management_role || 'nhan_vien'), toSqliteVal(u.final_evaluator_id)
         );
       }
     })();
@@ -418,8 +437,9 @@ async function pullFromSupabase() {
     db.transaction(() => {
       for (const d of supDepts.rows) {
         insDept.run(
-          d.id, d.code, d.name, d.parent_id, d.leader_id, d.is_active ? 1 : 0, d.description,
-          d.parent_agency, d.location_name
+          toSqliteVal(d.id), toSqliteVal(d.code), toSqliteVal(d.name), toSqliteVal(d.parent_id),
+          toSqliteVal(d.leader_id), d.is_active ? 1 : 0, toSqliteVal(d.description),
+          toSqliteVal(d.parent_agency), toSqliteVal(d.location_name)
         );
       }
     })();
@@ -437,9 +457,11 @@ async function pullFromSupabase() {
     db.transaction(() => {
       for (const t of supStdTasks.rows) {
         insStdTask.run(
-          t.id, t.period_id, t.dept_code, t.task_name, t.output_result, t.deadline,
-          t.task_type, t.standard_score, t.difficulty_weight, t.max_converted_score,
-          t.expected_evidence, t.note, t.axis_code, t.status, t.created_at
+          toSqliteVal(t.id), toSqliteVal(t.period_id), toSqliteVal(t.dept_code), toSqliteVal(t.task_name),
+          toSqliteVal(t.output_result), toSqliteVal(t.deadline), toSqliteVal(t.task_type),
+          toSqliteVal(t.standard_score), toSqliteVal(t.difficulty_weight), toSqliteVal(t.max_converted_score),
+          toSqliteVal(t.expected_evidence), toSqliteVal(t.note), toSqliteVal(t.axis_code),
+          toSqliteVal(t.status), toSqliteVal(t.created_at)
         );
       }
     })();
@@ -462,14 +484,16 @@ async function pullFromSupabase() {
     db.transaction(() => {
       for (const t of supAssigned.rows) {
         insAssigned.run(
-          t.id, t.period_id, t.user_id, t.standard_task_id, t.task_name, t.output_result,
-          t.deadline, t.task_type, t.standard_score, t.difficulty_weight, t.max_converted_score,
-          t.axis_code, t.origin, t.status, t.actual_finish_date, t.evidence_text,
-          t.evidence_file_url, t.evidence_file_name, t.quantity_pct, t.progress_pct,
-          t.quality_pct, t.leadership_pct, t.execution_score, t.converted_score,
-          t.cbql_comment, t.assigned_by, t.created_at, t.updated_at, t.group_id,
-          t.is_bonus_proposed ? 1 : 0, t.bonus_score || 0, t.bonus_reason, t.return_reason,
-          t.is_returned ? 1 : 0, t.document_id
+          toSqliteVal(t.id), toSqliteVal(t.period_id), toSqliteVal(t.user_id), toSqliteVal(t.standard_task_id),
+          toSqliteVal(t.task_name), toSqliteVal(t.output_result), toSqliteVal(t.deadline), toSqliteVal(t.task_type),
+          toSqliteVal(t.standard_score), toSqliteVal(t.difficulty_weight), toSqliteVal(t.max_converted_score),
+          toSqliteVal(t.axis_code), toSqliteVal(t.origin), toSqliteVal(t.status), toSqliteVal(t.actual_finish_date),
+          toSqliteVal(t.evidence_text), toSqliteVal(t.evidence_file_url), toSqliteVal(t.evidence_file_name),
+          toSqliteVal(t.quantity_pct), toSqliteVal(t.progress_pct), toSqliteVal(t.quality_pct),
+          toSqliteVal(t.leadership_pct), toSqliteVal(t.execution_score), toSqliteVal(t.converted_score),
+          toSqliteVal(t.cbql_comment), toSqliteVal(t.assigned_by), toSqliteVal(t.created_at), toSqliteVal(t.updated_at),
+          toSqliteVal(t.group_id), t.is_bonus_proposed ? 1 : 0, toSqliteVal(t.bonus_score || 0),
+          toSqliteVal(t.bonus_reason), toSqliteVal(t.return_reason), t.is_returned ? 1 : 0, toSqliteVal(t.document_id)
         );
       }
     })();
@@ -489,11 +513,13 @@ async function pullFromSupabase() {
     db.transaction(() => {
       for (const e of supEvals.rows) {
         insEval.run(
-          e.id, e.period_id, e.user_id, e.part1_score, e.part2_score, e.total_score,
-          e.rank_proposed, e.superior_rank, e.superior_comment, e.status, e.updated_at,
-          e.step, e.bonus_score, e.bonus_note, e.plan_total_max_score, e.executed_total_conv_score,
-          e.summary_reason, e.cadre_proposal_note, e.return_reason, e.returned_at,
-          e.returned_by, e.submitted_at
+          toSqliteVal(e.id), toSqliteVal(e.period_id), toSqliteVal(e.user_id), toSqliteVal(e.part1_score),
+          toSqliteVal(e.part2_score), toSqliteVal(e.total_score), toSqliteVal(e.rank_proposed),
+          toSqliteVal(e.superior_rank), toSqliteVal(e.superior_comment), toSqliteVal(e.status),
+          toSqliteVal(e.updated_at), toSqliteVal(e.step), toSqliteVal(e.bonus_score), toSqliteVal(e.bonus_note),
+          toSqliteVal(e.plan_total_max_score), toSqliteVal(e.executed_total_conv_score), toSqliteVal(e.summary_reason),
+          toSqliteVal(e.cadre_proposal_note), toSqliteVal(e.return_reason), toSqliteVal(e.returned_at),
+          toSqliteVal(e.returned_by), toSqliteVal(e.submitted_at)
         );
       }
     })();
@@ -511,9 +537,12 @@ async function pullFromSupabase() {
     db.transaction(() => {
       for (const doc of supDocs.rows) {
         insDoc.run(
-          doc.id, doc.doc_number, doc.doc_date, doc.arrival_date, doc.arrival_number, doc.issuer,
-          doc.doc_type, doc.field, doc.urgency, doc.security_level, doc.summary, doc.file_url,
-          doc.file_name, doc.deadline, doc.status, doc.created_by, doc.created_at, doc.updated_at
+          toSqliteVal(doc.id), toSqliteVal(doc.doc_number), toSqliteVal(doc.doc_date),
+          toSqliteVal(doc.arrival_date), toSqliteVal(doc.arrival_number), toSqliteVal(doc.issuer),
+          toSqliteVal(doc.doc_type), toSqliteVal(doc.field), toSqliteVal(doc.urgency),
+          toSqliteVal(doc.security_level), toSqliteVal(doc.summary), toSqliteVal(doc.file_url),
+          toSqliteVal(doc.file_name), toSqliteVal(doc.deadline), toSqliteVal(doc.status),
+          toSqliteVal(doc.created_by), toSqliteVal(doc.created_at), toSqliteVal(doc.updated_at)
         );
       }
     })();
@@ -527,9 +556,65 @@ async function pullFromSupabase() {
   }
 }
 
+let syncTimer = null;
+/**
+ * Tự động đồng bộ ngầm dữ liệu vừa cập nhật lên Supabase Cloud (Debounced)
+ * Giúp dữ liệu không bị mất kể cả khi Render redeploy hoặc restart container.
+ */
+function triggerBackgroundSupabaseSync(delayMs = 1500) {
+  if (!isSupabaseConfigured()) return;
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    pushToSupabase()
+      .then(res => console.log('[Auto-Sync Supabase] Dữ liệu vừa thay đổi đã tự động sao lưu lên Supabase Cloud thành công.'))
+      .catch(err => console.error('[Auto-Sync Supabase] Lỗi tự động sao lưu lên Supabase:', err.message));
+  }, delayMs);
+}
+
+/**
+ * Tự động khôi phục từ Supabase khi phát hiện container Render mới hoặc CSDL cục bộ còn mới nguyên
+ * CHỈ PULL TỪ SUPABASE VỀ, TUYỆT ĐỐI KHÔNG GHI ĐÈ HAY XÓA DỮ LIỆU TRÊN SUPABASE.
+ */
+async function autoRestoreFromSupabaseIfFresh() {
+  if (!isSupabaseConfigured()) return;
+  try {
+    const localUserCount = db.prepare('SELECT COUNT(*) as count FROM users').get()?.count || 0;
+    const localAssignedCount = db.prepare('SELECT COUNT(*) as count FROM assigned_tasks').get()?.count || 0;
+
+    // Chỉ tự động khôi phục nếu CSDL cục bộ là bản mới nguyên thủy (<= 2 users và 0 công việc được giao)
+    if (localUserCount <= 2 && localAssignedCount === 0) {
+      const pool = getPool();
+      if (!pool) return;
+      let client;
+      try {
+        client = await pool.connect();
+        const res = await client.query('SELECT COUNT(*) as count FROM users');
+        const supUserCount = parseInt(res.rows[0].count, 10) || 0;
+
+        if (supUserCount > localUserCount) {
+          console.log(`[Auto-Restore] Phát hiện container Render mới. CSDL Supabase Cloud có ${supUserCount} người dùng. Bắt đầu tự động khôi phục dữ liệu từ Supabase Cloud...`);
+          client.release();
+          client = null;
+          await pool.end();
+          const result = await pullFromSupabase();
+          console.log('[Auto-Restore] Khôi phục tự động THÀNH CÔNG từ Supabase Cloud!', result.stats);
+          return result;
+        }
+      } finally {
+        if (client) client.release();
+        if (pool) await pool.end();
+      }
+    }
+  } catch (err) {
+    console.error('[Auto-Restore] Lỗi khi tự động khôi phục từ Supabase:', err.message);
+  }
+}
+
 module.exports = {
   isSupabaseConfigured,
   getSupabaseStatus,
   pushToSupabase,
-  pullFromSupabase
+  pullFromSupabase,
+  triggerBackgroundSupabaseSync,
+  autoRestoreFromSupabaseIfFresh
 };

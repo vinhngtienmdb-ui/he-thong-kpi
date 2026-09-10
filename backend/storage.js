@@ -1,4 +1,4 @@
-﻿const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -10,11 +10,11 @@ try {
 } catch (e) {}
 
 // Check Cloudflare R2 Configuration
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID;
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID;
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY;
-const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME;
-const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL ? process.env.R2_PUBLIC_URL.replace(/\/$/, '') : '';
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '61aa28c5ab3cb4b879f03388f47e1a0d';
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || 'e887340c72d9befe14858b9d03905ba5';
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || 'b65cf53b88c9109f94acc528b712038c4b7a9d379126ecfd9c6d46fcebe42060';
+const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || 'kpi-storage';
+const R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || 'https://pub-4d4bf6bd5965404abc61975dcb16c02a.r2.dev').replace(/\/$/, '');
 
 const isR2Configured = Boolean(
   R2_ACCOUNT_ID && 

@@ -26,11 +26,18 @@ const {
   getSupabaseStatus, 
   pushToSupabase, 
   pullFromSupabase, 
-  isSupabaseConfigured 
+  isSupabaseConfigured,
+  triggerBackgroundSupabaseSync,
+  autoRestoreFromSupabaseIfFresh 
 } = require('./supabaseSync');
 
 // Initialize database
 initDatabase();
+
+// Tự động khôi phục dữ liệu từ Supabase Cloud nếu phát hiện container Render mới (fresh container)
+autoRestoreFromSupabaseIfFresh().catch(err => {
+  console.error('[Supabase Auto-Restore] Khởi chạy auto-restore thất bại:', err.message);
+});
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -646,6 +653,7 @@ app.post('/api/admin/users', requireAdmin, (req, res) => {
   );
 
   res.json({ success: true, id, message: 'Đã thêm cán bộ nhân viên thành công' });
+  triggerBackgroundSupabaseSync();
 });
 
 // Admin: Update user
@@ -701,6 +709,7 @@ app.put('/api/admin/users/:id', requireAdmin, (req, res) => {
 
   db.prepare(updateQuery).run(...params);
   res.json({ success: true, message: 'Đã cập nhật thông tin cán bộ thành công' });
+  triggerBackgroundSupabaseSync();
 });
 
 // Admin: Delete or deactivate user
@@ -708,6 +717,7 @@ app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
   db.prepare('UPDATE users SET is_active = 0 WHERE id = ?').run(id);
   res.json({ success: true, message: 'Đã ngừng kích hoạt tài khoản cán bộ' });
+  triggerBackgroundSupabaseSync();
 });
 
 // Admin: Reset / Re-issue user password
@@ -770,6 +780,7 @@ app.post('/api/admin/users/import', upload.single('file'), requireAdmin, async (
       message: `Đã xử lý file thành công: Thêm mới ${result.importedCount} cán bộ, Cập nhật ${result.updatedCount} cán bộ, Bỏ qua ${result.skippedCount}`,
       ...result
     });
+    triggerBackgroundSupabaseSync();
   } catch (error) {
     console.error('Import users error:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -1006,6 +1017,7 @@ app.post('/api/standard-tasks/import', upload.single('file'), requireManagerOrAd
     }
 
     res.json({ success: true, message: detailMsg, ...result });
+    triggerBackgroundSupabaseSync();
   } catch (error) {
     console.error('Import error:', error);
     let userMsg = error.message;

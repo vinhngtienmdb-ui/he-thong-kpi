@@ -1184,13 +1184,14 @@ export default function Header({
                   <span className="text-xs text-slate-500 font-medium">10/09/2026 (Bản phát hành hiện tại)</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
-                  Tối Ưu Triển Khai Render Cloud, Khắc Phục Triệt Để Lỗi Kết Nối Máy Chủ & Bảo Vệ Khóa Ngoại Kỳ Đánh Giá
+                  Tự Động Đồng Bộ & Khôi Phục CSDL Supabase Cloud, Bảo Toàn Tuyệt Đối Dữ Liệu Cán Bộ Sau Khi Update Code
                 </h4>
                 <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
-                  <li><strong>Tối ưu hóa triển khai Render Cloud tự động:</strong> Bổ sung tệp cấu hình <code>render.yaml</code> chuẩn Blueprint, tự động cấu hình chu trình <code>npm run build</code>, <code>postinstall</code> cài đặt dependencies đa tầng, thiết lập máy chủ bind lắng nghe <code>0.0.0.0</code> đáp ứng mọi kiến trúc container đám mây.</li>
-                  <li><strong>Cơ chế tự động thử lại kết nối (Auto-retry & Retry Button):</strong> Tự động gửi lại yêu cầu sau 2.5 giây khi phát hiện máy chủ Render đang khởi động lại hoặc sau trạng thái ngủ (cold-start); bổ sung nút <em>"Thử lại ngay"</em> trực tiếp trong hộp cảnh báo lỗi để người dùng thao tác tức thì.</li>
+                  <li><strong>Tự động sao lưu ngầm lên Supabase Cloud (Auto-Sync Background):</strong> Khi nhập danh sách cán bộ, tạo/sửa người dùng hoặc nạp danh mục công việc chuẩn từ Excel, hệ thống lập tức tự động đồng bộ ngầm lên đám mây Supabase PostgreSQL, bảo đảm dữ liệu luôn được lưu trữ vĩnh viễn trên đám mây.</li>
+                  <li><strong>Tự động khôi phục dữ liệu khi máy chủ khởi động lại (Auto-Restore on Boot):</strong> Khi Render tạo container mới hoặc khởi động lại (ephemeral container), hệ thống tự động kiểm tra và kéo toàn bộ dữ liệu cán bộ, phân công, điểm đánh giá từ Supabase Cloud về SQLite cục bộ, bảo toàn 100% dữ liệu mà không lo bị mất sau mỗi lần cập nhật mã nguồn.</li>
+                  <li><strong>Cơ chế tự động thử lại kết nối (Auto-retry & Retry Button):</strong> Tự động gửi lại yêu cầu sau 2.5 giây khi phát hiện máy chủ Render đang khởi động lại hoặc sau trạng thái ngủ (cold-start); bổ sung nút <em>"Thử lại ngay"</em> trực tiếp trong hộp cảnh báo lỗi.</li>
                   <li><strong>Kiểm soát an toàn ràng buộc Khóa Ngoại (Foreign Key) Kỳ Đánh Giá:</strong> Cơ chế tự kiểm tra và fallback thông minh gán kỳ đánh giá hiện hành nếu file Excel hoặc tham số gửi lên không khớp với CSDL, loại bỏ hoàn toàn lỗi <code>FOREIGN KEY constraint failed</code>.</li>
-                  <li><strong>Khả năng dự phòng tệp mẫu demo đa tầng:</strong> Hỗ trợ tìm kiếm tệp dữ liệu mẫu chuẩn ở mọi cấp thư mục (gốc, backend, current working directory), bảo đảm tính năng nạp nhanh luôn hoạt động trơn tru.</li>
+                  <li><strong>Cấu hình Render Blueprint chuẩn (render.yaml):</strong> Bổ sung tệp cấu hình Blueprint tự động thiết lập biến môi trường, chu trình build và host binding <code>0.0.0.0</code> đáp ứng mọi hạ tầng đám mây.</li>
                 </ul>
               </div>
 
