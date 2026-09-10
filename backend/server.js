@@ -20,25 +20,31 @@ initDatabase();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Ensure upload directory exists
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Multer storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${Date.now()}-${uuidv4()}${ext}`);
-  }
-});
-const upload = multer({ storage });
+// Storage Module (Supports Cloudflare R2 and Local Disk Fallback)
+const { upload, saveUploadedFile, deleteUploadedFile, isR2Configured, localUploadDir } = require('./storage');
 
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(uploadDir));
+app.use('/uploads', express.static(localUploadDir));
+
+// Proxy route to view / download files from Cloudflare R2 (when R2_PUBLIC_URL is not set or for private bucket)
+app.get(/^\/api\/storage\/(.+)$/, async (req, res) => {
+  const key = req.params[0];
+  if (!key) return res.status(404).send('Not found');
+  try {
+    const { s3Client, R2_BUCKET_NAME } = require('./storage');
+    const { GetObjectCommand } = require('@aws-sdk/client-s3');
+    if (!s3Client || !R2_BUCKET_NAME) {
+      return res.status(500).send('R2 Storage not configured');
+    }
+    const command = new GetObjectCommand({ Bucket: R2_BUCKET_NAME, Key: key });
+    const response = await s3Client.send(command);
+    if (response.ContentType) res.setHeader('Content-Type', response.ContentType);
+    response.Body.pipe(res);
+  } catch (e) {
+    res.status(404).send('File not found in storage: ' + e.message);
+  }
+});
 
 // Helper: Extract current viewer ID for data scoping
 function getViewerId(req) {
@@ -1342,7 +1348,7 @@ app.put('/api/assigned-tasks/:id/approve', requireManagerOrAdmin, (req, res) => 
 });
 
 // CBNV Cập nhật Kết quả & Minh chứng
-app.post('/api/assigned-tasks/:id/evidence', upload.single('evidence_file'), (req, res) => {
+app.post('/api/assigned-tasks/:id/evidence', upload.single('evidence_file'), async (req, res) => {
   const { id } = req.params;
   const { actual_finish_date, evidence_text, self_quality_pct, is_bonus_proposed, bonus_reason } = req.body;
 
@@ -1352,8 +1358,14 @@ app.post('/api/assigned-tasks/:id/evidence', upload.single('evidence_file'), (re
   let fileUrl = task.evidence_file_url;
   let fileName = task.evidence_file_name;
   if (req.file) {
-    fileUrl = `/uploads/${req.file.filename}`;
-    fileName = req.file.originalname;
+    const saved = await saveUploadedFile(req.file, 'evidence');
+    if (saved) {
+      if (task.evidence_file_url) {
+        await deleteUploadedFile(task.evidence_file_url);
+      }
+      fileUrl = saved.file_url;
+      fileName = saved.file_name;
+    }
   }
 
   // Calculate progress % based on finish date vs deadline
@@ -2486,7 +2498,7 @@ app.get('/api/documents/:id', (req, res) => {
 });
 
 // 4. Create Document (With File Upload)
-app.post('/api/documents', upload.single('file'), (req, res) => {
+app.post('/api/documents', upload.single('file'), async (req, res) => {
   try {
     const viewer = getViewer(req);
     const {
@@ -2511,8 +2523,11 @@ app.post('/api/documents', upload.single('file'), (req, res) => {
     let fileUrl = null;
     let fileName = null;
     if (req.file) {
-      fileUrl = `/uploads/${req.file.filename}`;
-      fileName = req.file.originalname;
+      const saved = await saveUploadedFile(req.file, 'documents');
+      if (saved) {
+        fileUrl = saved.file_url;
+        fileName = saved.file_name;
+      }
     }
 
     db.prepare(`
@@ -2537,7 +2552,7 @@ app.post('/api/documents', upload.single('file'), (req, res) => {
 });
 
 // 5. Update Document (With File Upload)
-app.put('/api/documents/:id', upload.single('file'), (req, res) => {
+app.put('/api/documents/:id', upload.single('file'), async (req, res) => {
   try {
     const { id } = req.params;
     const existing = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
@@ -2563,8 +2578,14 @@ app.put('/api/documents/:id', upload.single('file'), (req, res) => {
     let fileUrl = existing.file_url;
     let fileName = existing.file_name;
     if (req.file) {
-      fileUrl = `/uploads/${req.file.filename}`;
-      fileName = req.file.originalname;
+      const saved = await saveUploadedFile(req.file, 'documents');
+      if (saved) {
+        if (existing.file_url) {
+          await deleteUploadedFile(existing.file_url);
+        }
+        fileUrl = saved.file_url;
+        fileName = saved.file_name;
+      }
     }
 
     db.prepare(`
@@ -2612,12 +2633,16 @@ app.put('/api/documents/:id', upload.single('file'), (req, res) => {
 });
 
 // 6. Delete Document
-app.delete('/api/documents/:id', (req, res) => {
+app.delete('/api/documents/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const existing = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
     if (!existing) {
       return res.status(404).json({ error: 'Không tìm thấy văn bản' });
+    }
+
+    if (existing.file_url) {
+      await deleteUploadedFile(existing.file_url);
     }
 
     db.prepare('DELETE FROM documents WHERE id = ?').run(id);
