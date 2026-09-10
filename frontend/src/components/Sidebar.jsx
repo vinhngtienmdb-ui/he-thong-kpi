@@ -19,7 +19,8 @@ import {
   BarChart3,
   X,
   Files,
-  ClipboardCheck
+  ClipboardCheck,
+  BookUser
 } from 'lucide-react';
 
 export default function Sidebar({ 
@@ -170,6 +171,24 @@ export default function Sidebar({
           >
             <LayoutDashboard className={`w-5 h-5 shrink-0 ${currentTab === 'dashboard' ? 'text-[#db131a]' : 'text-red-100'}`} />
             {!isCollapsed && <span className="uppercase tracking-wider text-xs font-semibold">BẢNG GIÁM SÁT</span>}
+          </button>
+
+          {/* 1.1. DANH BẠ NỘI BỘ (Liên hệ toàn hệ thống & Cán bộ trực thuộc) */}
+          <button
+            type="button"
+            onClick={() => handleTabClick('directory')}
+            className={`
+              w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-sm transition-all
+              ${isCollapsed ? 'justify-center px-0' : ''}
+              ${currentTab === 'directory'
+                ? 'bg-white text-slate-900 shadow-md font-semibold'
+                : 'text-white/90 hover:bg-white/15 hover:text-white font-normal'
+              }
+            `}
+            title={isCollapsed ? 'DANH BẠ NỘI BỘ' : undefined}
+          >
+            <BookUser className={`w-5 h-5 shrink-0 ${currentTab === 'directory' ? 'text-[#db131a]' : 'text-red-100'}`} />
+            {!isCollapsed && <span className="uppercase tracking-wider text-xs font-semibold">DANH BẠ NỘI BỘ</span>}
           </button>
 
           {/* 2. QUẢN LÝ ĐÁNH GIÁ CÁN BỘ (8 Phân hệ Đánh giá Cốt lõi) */}

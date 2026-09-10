@@ -20,7 +20,8 @@ const {
   generateUserImportTemplate,
   importUsersFromExcel,
   exportCBQLWorkbook, 
-  exportMau02Workbook 
+  exportMau02Workbook,
+  exportDirectoryWorkbook
 } = require('./excelService');
 const { 
   getSupabaseStatus, 
@@ -674,6 +675,216 @@ app.get('/api/users', (req, res) => {
   query += ` ORDER BY u.role DESC, u.full_name ASC`;
   const users = db.prepare(query).all(...params);
   res.json(users);
+});
+
+// -------------------------------------------------------------
+// Directory (Danh bạ liên hệ toàn hệ thống & Quản lý cán bộ trực thuộc)
+// -------------------------------------------------------------
+app.get('/api/directory', (req, res) => {
+  const viewerId = getViewerId(req);
+  const viewer = viewerId ? db.prepare(`
+    SELECT u.*, r.code as role_code, r.data_scope, d.name as dept_name
+    FROM users u
+    LEFT JOIN roles r ON u.role_id = r.id
+    LEFT JOIN departments d ON u.dept_id = d.id
+    WHERE u.id = ?
+  `).get(viewerId) : null;
+
+  const accessibleUserIds = viewerId ? getAccessibleUserIds(viewerId) : null;
+  const accessibleSet = accessibleUserIds ? new Set(accessibleUserIds) : null;
+
+  // Cây phòng ban do viewer quản lý (nếu là lãnh đạo hoặc có thẩm quyền đơn vị)
+  const managedDeptIds = new Set();
+  if (viewer?.dept_id) {
+    managedDeptIds.add(viewer.dept_id);
+    try {
+      getDepartmentDescendantIds(viewer.dept_id).forEach(id => managedDeptIds.add(id));
+    } catch (e) {}
+  }
+  if (viewerId) {
+    try {
+      const leaderDepts = db.prepare('SELECT id FROM departments WHERE leader_id = ?').all(viewerId);
+      leaderDepts.forEach(d => {
+        managedDeptIds.add(d.id);
+        getDepartmentDescendantIds(d.id).forEach(id => managedDeptIds.add(id));
+      });
+    } catch (e) {}
+  }
+
+  const isManagerOrAdmin = Boolean(
+    viewer?.role === 'admin' ||
+    viewer?.role_code === 'admin_donvi' ||
+    viewer?.role === 'cbql' ||
+    viewer?.target_role === 'cbql' ||
+    ['admin', 'admin_donvi', 'cbql_phong', 'ld_coquan', 'to_truong', 'hieu_pho'].includes(viewer?.role_code) ||
+    viewer?.management_role ||
+    (accessibleSet && accessibleSet.size > 1)
+  );
+
+  let query = `
+    SELECT u.id, u.username, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.dept_id,
+           u.role_id, u.manager_id, u.management_role, u.final_evaluator_id,
+           u.birth_date, u.gender, u.phone, u.email, COALESCE(u.is_active, 1) as is_active,
+           d.name as dept_name, d.code as dept_code, d.location_name as dept_location,
+           r.name as role_name, r.code as role_code,
+           mgr.full_name as manager_name,
+           fe.full_name as final_evaluator_name
+    FROM users u
+    LEFT JOIN departments d ON u.dept_id = d.id
+    LEFT JOIN roles r ON u.role_id = r.id
+    LEFT JOIN users mgr ON u.manager_id = mgr.id
+    LEFT JOIN users fe ON u.final_evaluator_id = fe.id
+    WHERE COALESCE(u.is_active, 1) = 1
+  `;
+  const params = [];
+
+  const { search, dept_id, scope } = req.query;
+
+  if (dept_id) {
+    query += ` AND u.dept_id = ?`;
+    params.push(dept_id);
+  }
+
+  if (search && search.trim()) {
+    const term = `%${search.trim()}%`;
+    query += ` AND (u.full_name LIKE ? OR u.phone LIKE ? OR u.email LIKE ? OR u.username LIKE ? OR u.gov_title LIKE ? OR u.party_title LIKE ? OR d.name LIKE ?)`;
+    params.push(term, term, term, term, term, term, term);
+  }
+
+  query += ` ORDER BY d.id ASC, u.role DESC, u.full_name ASC`;
+  const rawUsers = db.prepare(query).all(...params);
+
+  // Gắn cờ quan hệ so với người xem
+  const allAnnotatedUsers = rawUsers.map(u => {
+    const isSelf = viewerId ? u.id === viewerId : false;
+    const isDirectSubordinate = viewerId ? (u.manager_id === viewerId || u.final_evaluator_id === viewerId) : false;
+    const isInMyDept = viewer?.dept_id ? (u.dept_id === viewer.dept_id || managedDeptIds.has(u.dept_id)) : false;
+    const isSubordinate = isDirectSubordinate || (accessibleSet ? (accessibleSet.has(u.id) && !isSelf) : false);
+
+    return {
+      ...u,
+      is_self: isSelf,
+      is_direct_subordinate: isDirectSubordinate,
+      is_in_my_dept: isInMyDept,
+      is_subordinate: isSubordinate,
+      can_assign: isManagerOrAdmin && (isSubordinate || isInMyDept || viewer?.role === 'admin')
+    };
+  });
+
+  // Lọc phạm vi hiển thị nếu có chỉ định scope
+  let filteredUsers = allAnnotatedUsers;
+  if (scope === 'subordinates') {
+    filteredUsers = allAnnotatedUsers.filter(u => u.is_subordinate);
+  } else if (scope === 'my_unit') {
+    filteredUsers = allAnnotatedUsers.filter(u => u.is_in_my_dept);
+  }
+
+  // Thống kê tổng quan
+  const subordinatesCount = allAnnotatedUsers.filter(u => u.is_subordinate).length;
+  const myDeptCount = allAnnotatedUsers.filter(u => u.is_in_my_dept).length;
+
+  const departments = db.prepare(`
+    SELECT d.*, u.full_name as leader_name,
+           (SELECT COUNT(*) FROM users WHERE dept_id = d.id AND COALESCE(is_active, 1) = 1) as user_count
+    FROM departments d
+    LEFT JOIN users u ON d.leader_id = u.id
+    WHERE COALESCE(d.is_active, 1) = 1
+    ORDER BY d.name ASC
+  `).all();
+
+  res.json({
+    success: true,
+    users: filteredUsers,
+    departments,
+    viewer: viewer ? {
+      id: viewer.id,
+      full_name: viewer.full_name,
+      dept_id: viewer.dept_id,
+      dept_name: viewer.dept_name,
+      role: viewer.role,
+      role_code: viewer.role_code,
+      is_manager: isManagerOrAdmin
+    } : null,
+    stats: {
+      total: allAnnotatedUsers.length,
+      subordinatesCount,
+      myDeptCount,
+      departmentsCount: departments.length
+    }
+  });
+});
+
+// Xuất file Excel Danh bạ nội bộ
+app.get('/api/directory/export', async (req, res) => {
+  try {
+    const viewerId = getViewerId(req);
+    const viewer = viewerId ? db.prepare(`
+      SELECT u.*, r.code as role_code, d.name as dept_name
+      FROM users u
+      LEFT JOIN roles r ON u.role_id = r.id
+      LEFT JOIN departments d ON u.dept_id = d.id
+      WHERE u.id = ?
+    `).get(viewerId) : null;
+
+    const accessibleUserIds = viewerId ? getAccessibleUserIds(viewerId) : null;
+    const accessibleSet = accessibleUserIds ? new Set(accessibleUserIds) : null;
+
+    let query = `
+      SELECT u.id, u.username, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.dept_id,
+             u.birth_date, u.gender, u.phone, u.email, COALESCE(u.is_active, 1) as is_active,
+             d.name as dept_name, mgr.full_name as manager_name
+      FROM users u
+      LEFT JOIN departments d ON u.dept_id = d.id
+      LEFT JOIN users mgr ON u.manager_id = mgr.id
+      WHERE COALESCE(u.is_active, 1) = 1
+    `;
+    const params = [];
+    const { search, dept_id, scope } = req.query;
+
+    if (dept_id) {
+      query += ` AND u.dept_id = ?`;
+      params.push(dept_id);
+    }
+    if (search && search.trim()) {
+      const term = `%${search.trim()}%`;
+      query += ` AND (u.full_name LIKE ? OR u.phone LIKE ? OR u.email LIKE ? OR u.username LIKE ? OR u.gov_title LIKE ? OR u.party_title LIKE ? OR d.name LIKE ?)`;
+      params.push(term, term, term, term, term, term, term);
+    }
+
+    query += ` ORDER BY d.id ASC, u.role DESC, u.full_name ASC`;
+    let list = db.prepare(query).all(...params);
+
+    list = list.map(u => {
+      const isSelf = viewerId ? u.id === viewerId : false;
+      const isDirectSubordinate = viewerId ? (u.manager_id === viewerId || u.final_evaluator_id === viewerId) : false;
+      const isInMyDept = viewer?.dept_id ? (u.dept_id === viewer.dept_id) : false;
+      const isSubordinate = isDirectSubordinate || (accessibleSet ? (accessibleSet.has(u.id) && !isSelf) : false);
+      return { ...u, is_self: isSelf, is_direct_subordinate: isDirectSubordinate, is_in_my_dept: isInMyDept, is_subordinate: isSubordinate };
+    });
+
+    if (scope === 'subordinates') {
+      list = list.filter(u => u.is_subordinate);
+    } else if (scope === 'my_unit') {
+      list = list.filter(u => u.is_in_my_dept);
+    }
+
+    let subtitleScope = 'Toàn hệ thống';
+    if (scope === 'subordinates') subtitleScope = 'Danh sách cán bộ trực thuộc';
+    else if (scope === 'my_unit') subtitleScope = `Đơn vị: ${viewer?.dept_name || 'Cơ quan'}`;
+
+    const workbook = await exportDirectoryWorkbook(list, {
+      title: 'DANH BẠ LIÊN HỆ NỘI BỘ',
+      subtitle: `Phạm vi: ${subtitleScope} - Thời điểm xuất: ${new Date().toLocaleDateString('vi-VN')}`
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="danh-ba-lien-he-${Date.now()}.xlsx"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Error exporting directory:', error);
+    res.status(500).json({ success: false, message: 'Lỗi khi xuất danh bạ ra Excel: ' + error.message });
+  }
 });
 
 // Admin / Unit Admin: Add new user

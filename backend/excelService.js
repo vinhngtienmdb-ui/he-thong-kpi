@@ -1835,6 +1835,112 @@ async function exportMau02Workbook(periodId) {
   sigRow4.getCell(11).alignment = { horizontal: 'center' };
 
   return workbook;
+}
+
+/**
+ * Xuất Danh bạ liên hệ toàn hệ thống ra Excel
+ */
+async function exportDirectoryWorkbook(users, options = {}) {
+  const workbook = new ExcelJS.Workbook();
+  const ws = workbook.addWorksheet('Danh bạ liên hệ', {
+    pageSetup: { paperSize: 9, orientation: 'landscape' }
+  });
+
+  const title = options.title || 'DANH BẠ LIÊN HỆ NỘI BỘ';
+  const subtitle = options.subtitle || `Thời điểm xuất: ${new Date().toLocaleDateString('vi-VN')}`;
+
+  // Title
+  const titleRow = ws.addRow([title]);
+  titleRow.font = { name: 'Times New Roman', size: 16, bold: true, color: { argb: 'FF990000' } };
+  titleRow.alignment = { horizontal: 'center' };
+  ws.mergeCells('A1:J1');
+
+  const subRow = ws.addRow([subtitle]);
+  subRow.font = { name: 'Times New Roman', size: 12, italic: true };
+  subRow.alignment = { horizontal: 'center' };
+  ws.mergeCells('A2:J2');
+
+  ws.addRow([]);
+
+  // Headers
+  const headers = [
+    'STT',
+    'Họ và tên',
+    'Tên đăng nhập',
+    'Đơn vị / Phòng ban',
+    'Chức vụ Đảng',
+    'Chức danh chính quyền',
+    'Số điện thoại',
+    'Email',
+    'Cán bộ quản lý',
+    'Phân loại'
+  ];
+
+  const hRow = ws.addRow(headers);
+  hRow.font = { name: 'Times New Roman', size: 12, bold: true };
+  hRow.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  hRow.eachCell((cell) => {
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E7FF' }
+    };
+    cell.border = {
+      top: { style: 'thin' },
+      left: { style: 'thin' },
+      bottom: { style: 'thin' },
+      right: { style: 'thin' }
+    };
+  });
+
+  // Data rows
+  users.forEach((u, idx) => {
+    let classification = 'Toàn hệ thống';
+    if (u.is_self) classification = 'Bản thân';
+    else if (u.is_direct_subordinate) classification = 'Cán bộ trực thuộc';
+    else if (u.is_in_my_dept) classification = 'Cùng đơn vị';
+
+    const row = ws.addRow([
+      idx + 1,
+      u.full_name || '',
+      u.username || '',
+      u.dept_name || '',
+      u.party_title || '',
+      u.gov_title || '',
+      u.phone || '',
+      u.email || '',
+      u.manager_name || '',
+      classification
+    ]);
+
+    row.font = { name: 'Times New Roman', size: 12 };
+    row.getCell(1).alignment = { horizontal: 'center' };
+    row.getCell(7).alignment = { horizontal: 'center' };
+    row.getCell(10).alignment = { horizontal: 'center' };
+
+    row.eachCell((cell) => {
+      cell.border = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+    });
+  });
+
+  // Adjust column widths
+  ws.columns = [
+    { width: 6 },   // STT
+    { width: 26 },  // Họ tên
+    { width: 16 },  // Username
+    { width: 28 },  // Đơn vị
+    { width: 20 },  // Chức vụ Đảng
+    { width: 24 },  // Chức danh CQ
+    { width: 16 },  // SĐT
+    { width: 26 },  // Email
+    { width: 24 },  // Quản lý
+    { width: 20 }   // Phân loại
+  ];
 
   return workbook;
 }
@@ -1844,5 +1950,7 @@ module.exports = {
   generateUserImportTemplate,
   importUsersFromExcel,
   exportCBQLWorkbook,
-  exportMau02Workbook
+  exportMau02Workbook,
+  exportDirectoryWorkbook
 };
+

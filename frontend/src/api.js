@@ -97,6 +97,17 @@ export const api = {
     const query = new URLSearchParams(params).toString();
     return fetchApi(`/users${query ? `?${query}` : ''}`);
   },
+  getDirectory: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return fetchApi(`/directory${query ? `?${query}` : ''}`);
+  },
+  getDirectoryExportUrl: (params = {}) => {
+    const vId = getViewerId();
+    const queryObj = { ...params };
+    if (vId) queryObj.viewer_id = vId;
+    const query = new URLSearchParams(queryObj).toString();
+    return `${BASE_URL}/directory/export${query ? `?${query}` : ''}`;
+  },
   getAxes: () => fetchApi('/axes'),
   getDashboardStats: (periodId) => fetchApi(`/stats/dashboard?period_id=${periodId}`),
 

@@ -14,12 +14,13 @@ import ChartsTab from './components/ChartsTab';
 import ReportTab from './components/ReportTab';
 import UsersManagementTab from './components/UsersManagementTab';
 import SystemConfigTab from './components/SystemConfigTab';
+import DirectoryTab from './components/DirectoryTab';
 import LoginScreen from './components/LoginScreen';
 import { api, setViewerId } from './api';
 import { Calendar, CheckCircle2 } from 'lucide-react';
 
 const VALID_TABS = [
-  'dashboard', 'standard', 'documents', 'assignment', 'execution',
+  'dashboard', 'directory', 'standard', 'documents', 'assignment', 'execution',
   'self_eval', 'grading', 'advisory', 'voting', 'charts',
   'reports', 'users_mgmt', 'system_config'
 ];
@@ -435,6 +436,16 @@ export default function App() {
               axes={axes}
               onReloadPeriods={loadInitialData}
               onPeriodChange={handlePeriodChange}
+            />
+          )}
+
+          {currentTab === 'directory' && (
+            <DirectoryTab
+              currentUser={currentUser}
+              setCurrentTab={setCurrentTab}
+              onAssignToUser={(targetUser) => {
+                setCurrentTab('assignment');
+              }}
             />
           )}
 
