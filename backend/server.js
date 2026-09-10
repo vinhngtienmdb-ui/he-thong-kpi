@@ -524,14 +524,17 @@ app.get('/api/users', (req, res) => {
 
   let query = `
     SELECT u.id, u.username, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.dept_id,
-           u.role_id, u.manager_id, u.birth_date, u.gender, u.phone, u.email, COALESCE(u.is_active, 1) as is_active,
+           u.role_id, u.manager_id, u.management_role, u.final_evaluator_id,
+           u.birth_date, u.gender, u.phone, u.email, COALESCE(u.is_active, 1) as is_active,
            d.name as dept_name,
            r.name as role_name, r.code as role_code, r.data_scope,
-           mgr.full_name as manager_name
+           mgr.full_name as manager_name,
+           fe.full_name as final_evaluator_name
     FROM users u
     LEFT JOIN departments d ON u.dept_id = d.id
     LEFT JOIN roles r ON u.role_id = r.id
     LEFT JOIN users mgr ON u.manager_id = mgr.id
+    LEFT JOIN users fe ON u.final_evaluator_id = fe.id
     WHERE 1=1
   `;
   const params = [];
@@ -552,7 +555,11 @@ app.get('/api/users', (req, res) => {
 
 // Admin: Add new user
 app.post('/api/admin/users', requireAdmin, (req, res) => {
-  const { username, password, full_name, role, target_role, role_id, manager_id, party_title, gov_title, dept_id, birth_date, gender, phone, email } = req.body;
+  const { 
+    username, password, full_name, role, target_role, role_id, manager_id,
+    management_role, final_evaluator_id,
+    party_title, gov_title, dept_id, birth_date, gender, phone, email 
+  } = req.body;
   if (!username || !full_name) {
     return res.status(400).json({ success: false, message: 'Thiếu tên đăng nhập hoặc họ tên' });
   }
@@ -582,12 +589,24 @@ app.post('/api/admin/users', requireAdmin, (req, res) => {
     if (r) effectiveRoleId = r.id;
   }
 
+  // Derive default management_role if not specified
+  let effectiveMgmtRole = management_role;
+  if (!effectiveMgmtRole) {
+    if (effectiveRole === 'admin' || (gov_title && (gov_title.includes('Trưởng') || gov_title.includes('Giám đốc') || gov_title.includes('Bí thư')))) {
+      effectiveMgmtRole = 'lanh_dao';
+    } else if (effectiveRole === 'cbql') {
+      effectiveMgmtRole = (gov_title && gov_title.includes('Tổ trưởng')) ? 'to_truong' : 'quan_ly';
+    } else {
+      effectiveMgmtRole = 'nhan_vien';
+    }
+  }
+
   db.prepare(`
-    INSERT INTO users (id, username, password, full_name, role, target_role, role_id, manager_id, party_title, gov_title, dept_id, birth_date, gender, phone, email, is_active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    INSERT INTO users (id, username, password, full_name, role, target_role, role_id, manager_id, management_role, final_evaluator_id, party_title, gov_title, dept_id, birth_date, gender, phone, email, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `).run(
     id, username, password || '123456', full_name, effectiveRole, effectiveTargetRole,
-    effectiveRoleId || null, manager_id || null,
+    effectiveRoleId || null, manager_id || null, effectiveMgmtRole || 'nhan_vien', final_evaluator_id || null,
     party_title || 'Đảng viên', gov_title || 'Chuyên viên', dept_id || null,
     birth_date || '1985-01-01', gender || 'Nam', phone || '', email || ''
   );
@@ -598,7 +617,11 @@ app.post('/api/admin/users', requireAdmin, (req, res) => {
 // Admin: Update user
 app.put('/api/admin/users/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
-  const { full_name, role, target_role, role_id, manager_id, party_title, gov_title, dept_id, birth_date, gender, phone, email, is_active, password } = req.body;
+  const { 
+    full_name, role, target_role, role_id, manager_id,
+    management_role, final_evaluator_id,
+    party_title, gov_title, dept_id, birth_date, gender, phone, email, is_active, password 
+  } = req.body;
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng' });
@@ -618,12 +641,16 @@ app.put('/api/admin/users/:id', requireAdmin, (req, res) => {
 
   let updateQuery = `
     UPDATE users 
-    SET full_name = ?, role = ?, target_role = ?, role_id = ?, manager_id = ?, party_title = ?, gov_title = ?, dept_id = ?,
+    SET full_name = ?, role = ?, target_role = ?, role_id = ?, manager_id = ?,
+        management_role = ?, final_evaluator_id = ?,
+        party_title = ?, gov_title = ?, dept_id = ?,
         birth_date = ?, gender = ?, phone = ?, email = ?, is_active = ?
   `;
   const params = [
     full_name || user.full_name, effectiveRole, effectiveTargetRole,
     effectiveRoleId || null, manager_id !== undefined ? manager_id : user.manager_id,
+    management_role !== undefined ? management_role : (user.management_role || 'nhan_vien'),
+    final_evaluator_id !== undefined ? final_evaluator_id : user.final_evaluator_id,
     party_title !== undefined ? party_title : user.party_title,
     gov_title !== undefined ? gov_title : user.gov_title, dept_id || user.dept_id,
     birth_date || user.birth_date, gender || user.gender, phone !== undefined ? phone : user.phone,
@@ -1651,8 +1678,16 @@ app.put('/api/assigned-tasks/:id/grade', requireManagerOrAdmin, (req, res) => {
   const task = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
   if (!task) return res.status(404).json({ message: 'Không tìm thấy công việc' });
 
-  // Guard: Kiểm tra thẩm quyền chấm điểm cán bộ
+  // Guard: Tuyệt đối không được trực tiếp tự chấm điểm nhiệm vụ của bản thân
   const viewerId = getViewerId(req);
+  if (viewerId && task.user_id === viewerId) {
+    return res.status(403).json({
+      success: false,
+      message: 'Theo quy định, cán bộ quản lý không được trực tiếp tự chấm điểm nhiệm vụ của chính bản thân mình.'
+    });
+  }
+
+  // Guard: Kiểm tra thẩm quyền chấm điểm cán bộ
   const accessibleUserIds = getAccessibleUserIds(viewerId);
   if (accessibleUserIds !== null && !accessibleUserIds.includes(task.user_id)) {
     return res.status(403).json({ 
@@ -2127,6 +2162,14 @@ app.post('/api/evaluations/return', requireManagerOrAdmin, (req, res) => {
   const returnerName = viewer?.full_name || 'Lãnh đạo đơn vị';
   const reasonText = return_reason ? String(return_reason).trim() : 'Yêu cầu rà soát, tự đánh giá lại các tiêu chí chưa đạt hoặc chưa đủ minh chứng.';
 
+  // Guard: Không tự trả về bản đánh giá của chính mình
+  if (viewerId && evalRec.user_id === viewerId) {
+    return res.status(403).json({
+      success: false,
+      message: 'Không thể trả về bản tự đánh giá của chính bản thân mình.'
+    });
+  }
+
   db.prepare(`
     UPDATE evaluations
     SET status = 'returned',
@@ -2151,6 +2194,14 @@ app.post('/api/evaluations/conclude', requireManagerOrAdmin, (req, res) => {
   const viewerId = getViewerId(req);
   const viewer = viewerId ? db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId) : null;
   const isAdmin = viewer?.role === 'admin';
+
+  // Guard: Tuyệt đối không được trực tiếp tự kết luận mức xếp loại cho bản thân
+  if (viewerId && evalRec.user_id === viewerId) {
+    return res.status(403).json({
+      success: false,
+      message: 'Theo quy định, cán bộ quản lý không được tự kết luận mức xếp loại cho chính bản thân mình. Hồ sơ của bạn phải do cấp trên trực tiếp hoặc lãnh đạo cơ quan đánh giá.'
+    });
+  }
 
   if (evalRec.is_locked === 1 && !isAdmin) {
     return res.status(403).json({

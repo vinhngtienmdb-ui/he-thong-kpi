@@ -15,17 +15,20 @@ import {
   Clock,
   AlertTriangle,
   X,
-  Info
+  Info,
+  ShieldAlert
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate } from '../constants';
 import FinalizePeriodModal from './FinalizePeriodModal';
 
 export default function GradingTab({ selectedPeriod, currentUser, users, axes, periods = [], onReloadPeriods, onPeriodChange }) {
-  const [selectedUser, setSelectedUser] = useState(currentUser?.id || '');
+  // Lọc danh sách cán bộ có thể thẩm định: TUYỆT ĐỐI KHÔNG ĐƯỢC CHẤM ĐIỂM CHO BẢN THÂN
+  const evaluatableUsers = users.filter(u => u.id !== currentUser?.id);
+  const [selectedUser, setSelectedUser] = useState('');
   const [evalData, setEvalData] = useState(null);
   const [userTasks, setUserTasks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [isFinalizeModalOpen, setIsFinalizeModalOpen] = useState(false);
 
   // Active grading modal state
@@ -63,14 +66,42 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
   const isPastGradingLock = Boolean(gradingLockDate && todayStr > gradingLockDate);
   const isGradingLocked = (isPeriodLocked || isPastGradingLock) && currentUser?.role !== 'admin';
 
-  const canGrade = !isGradingLocked && (currentUser?.role === 'admin' || currentUser?.role === 'cbql' || (currentUser?.data_scope && currentUser?.data_scope !== 'personal'));
+  const selectedUserObj = users.find(u => u.id === selectedUser);
+  const isSelf = Boolean(currentUser && selectedUser === currentUser.id);
+
+  // Quan hệ quản lý đối với cán bộ được chọn:
+  const isDirectManager = Boolean(currentUser && selectedUserObj?.manager_id === currentUser.id);
+  const isFinalEvaluator = Boolean(
+    currentUser && (
+      selectedUserObj?.final_evaluator_id === currentUser.id ||
+      currentUser.management_role === 'lanh_dao' ||
+      currentUser.role === 'admin'
+    )
+  );
+  const isIndirectManager = Boolean(
+    currentUser && !isDirectManager && (
+      currentUser.management_role === 'lanh_dao' ||
+      currentUser.management_role === 'quan_ly' ||
+      currentUser.role === 'admin'
+    )
+  );
+
+  const canGrade = !isSelf && !isGradingLocked && (
+    currentUser?.role === 'admin' ||
+    currentUser?.role === 'cbql' ||
+    currentUser?.management_role === 'lanh_dao' ||
+    currentUser?.management_role === 'quan_ly' ||
+    currentUser?.management_role === 'to_truong'
+  );
 
   useEffect(() => {
-    if (currentUser) {
-      const isAccessible = users.some(u => u.id === selectedUser);
+    if (evaluatableUsers.length > 0) {
+      const isAccessible = evaluatableUsers.some(u => u.id === selectedUser);
       if (!isAccessible) {
-        setSelectedUser(currentUser.id);
+        setSelectedUser(evaluatableUsers[0].id);
       }
+    } else {
+      setSelectedUser('');
     }
   }, [currentUser, users]);
 
@@ -113,6 +144,10 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
   async function handleSaveGrade(e) {
     e.preventDefault();
     if (!gradingTask) return;
+    if (isSelf) {
+      alert('Theo quy định, bạn không được tự chấm điểm nhiệm vụ cho chính bản thân mình!');
+      return;
+    }
 
     try {
       await api.gradeTask(gradingTask.id, gradeForm);
@@ -125,6 +160,7 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
   }
 
   function handleToggleCriteria(index) {
+    if (isSelf) return;
     const updated = [...criteriaList];
     updated[index].is_satisfied = updated[index].is_satisfied === 1 ? 0 : 1;
     updated[index].score = updated[index].is_satisfied === 1 ? updated[index].max_score : 0;
@@ -133,6 +169,10 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
 
   async function handleSavePart1() {
     if (!evalData?.evaluation?.id) return;
+    if (isSelf) {
+      alert('Theo quy định, bạn không được tự thẩm định tiêu chí Phần I cho chính bản thân mình!');
+      return;
+    }
     try {
       setSavingPart1(true);
       const items = criteriaList.map(c => ({
@@ -156,6 +196,10 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
 
   async function handleSaveConclusion() {
     if (!evalData?.evaluation?.id) return;
+    if (isSelf) {
+      alert('Theo quy định, bạn không được tự kết luận mức xếp loại cho chính bản thân mình!');
+      return;
+    }
     if (isGradingLocked) {
       alert('Kỳ đánh giá đã bị khóa hoặc hết hạn chấm điểm. Không thể lưu kết luận!');
       return;
@@ -362,20 +406,96 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
 
           <div className="flex items-center space-x-2">
             <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">Đánh giá cho cán bộ:</span>
-            <select
-              value={selectedUser}
-              onChange={(e) => setSelectedUser(e.target.value)}
-              className="text-xs font-bold p-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-2 focus:ring-red-500"
-            >
-              {users.map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.full_name} ({u.role === 'cbql' ? 'CBQL' : 'CBNV'}) - {u.gov_title || ''}
-                </option>
-              ))}
-            </select>
+            {evaluatableUsers.length > 0 ? (
+              <select
+                value={selectedUser}
+                onChange={(e) => setSelectedUser(e.target.value)}
+                className="text-xs font-bold p-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-2 focus:ring-red-500 max-w-[320px] truncate cursor-pointer"
+              >
+                {evaluatableUsers.map(u => {
+                  const isDirect = u.manager_id === currentUser?.id;
+                  const roleBadge = u.management_role === 'lanh_dao' ? 'Lãnh đạo' :
+                                    u.management_role === 'quan_ly' ? 'Cấp phó' :
+                                    u.management_role === 'to_truong' ? 'Tổ trưởng' : 'CBNV';
+                  const relationBadge = isDirect ? ' • Trực tiếp' : '';
+                  return (
+                    <option key={u.id} value={u.id}>
+                      {u.full_name} [{roleBadge}]{relationBadge} - {u.gov_title || ''}
+                    </option>
+                  );
+                })}
+              </select>
+            ) : (
+              <span className="text-xs text-slate-400 italic bg-slate-100 px-3 py-1.5 rounded-md border border-slate-200">
+                Không có cán bộ cấp dưới
+              </span>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Management Hierarchy & Authority Banner */}
+      {selectedUserObj && !isSelf && (
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+            <div className="flex items-center gap-1.5 text-slate-600">
+              <span className="font-semibold text-slate-700">👔 Quản lý trực tiếp:</span>
+              <span className="font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200">
+                {selectedUserObj.manager_name || 'Lãnh đạo cơ quan (Trực thuộc)'}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-slate-600">
+              <span className="font-semibold text-slate-700">⚖️ Người đánh giá cuối cùng:</span>
+              <span className="font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200">
+                {selectedUserObj.final_evaluator_name || 'Lãnh đạo cơ quan (Người đứng đầu)'}
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-slate-500 font-medium hidden md:inline">Thẩm quyền của bạn:</span>
+            {isDirectManager && (
+              <span className="px-2.5 py-1 bg-blue-100 text-blue-800 font-bold rounded-md border border-blue-200 flex items-center gap-1">
+                ⭐ Quản lý trực tiếp (Thẩm định minh chứng & Nhận xét)
+              </span>
+            )}
+            {isFinalEvaluator && (
+              <span className="px-2.5 py-1 bg-purple-100 text-purple-800 font-bold rounded-md border border-purple-200 flex items-center gap-1">
+                👑 Người đánh giá cuối cùng (Kết luận xếp loại)
+              </span>
+            )}
+            {isIndirectManager && !isFinalEvaluator && (
+              <span className="px-2.5 py-1 bg-slate-100 text-slate-700 font-semibold rounded-md border border-slate-200">
+                👁️ Quản lý gián tiếp
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Anti Self-Grading Warning Banner */}
+      {isSelf && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 sm:p-5 text-amber-900 flex items-start gap-3 shadow-xs">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <div className="font-bold text-sm">
+              LƯU Ý QUY ĐỊNH: Không được trực tiếp đánh giá hoặc kết luận xếp loại cho bản thân
+            </div>
+            <p className="text-xs text-amber-800 leading-relaxed">
+              Căn cứ Quy định số 366-QĐ/TW và Hướng dẫn số 06-HD/BTCTU, cán bộ quản lý và nhân viên tuyệt đối không được tự chấm điểm hoặc kết luận xếp loại cho chính mình. Hồ sơ KPI của bạn sẽ do Quản lý trực tiếp hoặc Lãnh đạo cấp trên đánh giá. Hãy chuyển sang phân hệ <strong>Tự đánh giá cuối quý (Bước 5)</strong> để nộp bản tự kê khai.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!selectedUser && evaluatableUsers.length === 0 && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center space-y-3">
+          <ShieldAlert className="w-12 h-12 text-slate-400 mx-auto" />
+          <h3 className="text-base font-bold text-slate-800">Bạn không có cán bộ cấp dưới để đánh giá</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            Theo phân cấp quản lý, hệ thống chỉ cho phép thẩm định cán bộ cấp dưới theo tuyến quản lý trực tiếp hoặc gián tiếp. Hồ sơ đánh giá của bạn sẽ do cấp trên trực tiếp thực hiện.
+          </p>
+        </div>
+      )}
 
       {/* Summary Score Card */}
       <div className="bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-xs grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 items-center">

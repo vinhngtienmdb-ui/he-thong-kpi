@@ -56,6 +56,8 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
     dept_id: '',
     role_id: '',
     manager_id: '',
+    final_evaluator_id: '',
+    management_role: 'nhan_vien',
     role: 'cbnv',
     target_role: 'cbnv',
     party_title: 'Đảng viên',
@@ -184,6 +186,8 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       dept_id: departments[0]?.id || '',
       role_id: defaultRoleId,
       manager_id: '',
+      final_evaluator_id: '',
+      management_role: 'nhan_vien',
       role: 'cbnv',
       target_role: 'cbnv',
       party_title: 'Đảng viên',
@@ -206,6 +210,8 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       dept_id: user.dept_id || '',
       role_id: user.role_id || roles.find(r => r.code === user.role)?.id || '',
       manager_id: user.manager_id || '',
+      final_evaluator_id: user.final_evaluator_id || '',
+      management_role: user.management_role || (user.role === 'cbql' ? 'quan_ly' : 'nhan_vien'),
       role: user.role || 'cbnv',
       target_role: user.target_role || (user.role === 'cbnv' ? 'cbnv' : 'cbql'),
       party_title: user.party_title || '',
@@ -401,13 +407,13 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
             <thead className="bg-slate-50 text-slate-700 text-xs font-semibold uppercase border-b border-slate-200">
               <tr>
                 <th className="px-4 py-3.5 w-14 text-center">STT</th>
-                <th className="px-4 py-3.5 min-w-[240px]">Họ và tên / Tài khoản</th>
-                <th className="px-4 py-3.5 min-w-[200px]">Đơn vị / Phòng ban</th>
-                <th className="px-4 py-3.5 min-w-[200px]">Quản lý trực tiếp</th>
-                <th className="px-4 py-3.5 min-w-[170px]">Chức vụ</th>
-                <th className="px-4 py-3.5 min-w-[230px] text-center">Vai trò & Phạm vi dữ liệu</th>
-                <th className="px-4 py-3.5 min-w-[150px] text-center">Mẫu đánh giá</th>
-                <th className="px-4 py-3.5 min-w-[140px] text-center">Trạng thái</th>
+                <th className="px-4 py-3.5 min-w-[220px]">Họ và tên / Tài khoản</th>
+                <th className="px-4 py-3.5 min-w-[180px]">Đơn vị / Phòng ban</th>
+                <th className="px-4 py-3.5 min-w-[220px]">Tuyến Quản lý & Đánh giá</th>
+                <th className="px-4 py-3.5 min-w-[200px]">Cấp bậc CBQL & Chức vụ</th>
+                <th className="px-4 py-3.5 min-w-[210px] text-center">Vai trò & Phạm vi</th>
+                <th className="px-4 py-3.5 min-w-[140px] text-center">Mẫu đánh giá</th>
+                <th className="px-4 py-3.5 min-w-[130px] text-center">Trạng thái</th>
                 <th className="px-4 py-3.5 text-center min-w-[120px] w-32">Thao tác</th>
               </tr>
             </thead>
@@ -438,17 +444,49 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                       </span>
                     </td>
                     <td className="px-4 py-3.5">
-                      {u.manager_name ? (
-                        <span className="font-semibold text-slate-700 flex items-center gap-1">
-                          👔 {u.manager_name}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 italic text-xs">Trực thuộc Lãnh đạo CQ</span>
-                      )}
+                      <div className="space-y-1 text-xs">
+                        <div className="flex items-center gap-1.5 text-slate-700">
+                          <span className="text-slate-400 font-normal">Trực tiếp:</span>
+                          {u.manager_name ? (
+                            <span className="font-semibold text-slate-800">👔 {u.manager_name}</span>
+                          ) : (
+                            <span className="text-slate-400 italic">Trực thuộc Lãnh đạo CQ</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-indigo-700">
+                          <span className="text-slate-400 font-normal">ĐG cuối:</span>
+                          {u.final_evaluator_name ? (
+                            <span className="font-semibold text-indigo-900">👑 {u.final_evaluator_name}</span>
+                          ) : (
+                            <span className="text-slate-500 italic">Theo phân cấp Lãnh đạo</span>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3.5">
-                      <div className="text-slate-800 font-semibold">{u.gov_title || 'Chuyên viên'}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">{u.party_title || 'Đảng viên'}</div>
+                      <div className="space-y-1">
+                        <div>
+                          {u.management_role === 'lanh_dao' ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                              👑 Lãnh đạo (Người đứng đầu)
+                            </span>
+                          ) : u.management_role === 'quan_ly' ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                              ⭐ Quản lý (Cấp phó)
+                            </span>
+                          ) : u.management_role === 'to_truong' ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                              🏷️ Tổ trưởng chuyên môn
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600">
+                              👤 Cán bộ, Nhân viên
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-slate-800 font-medium text-xs">{u.gov_title || 'Chuyên viên'}</div>
+                        <div className="text-[11px] text-slate-500">{u.party_title || 'Đảng viên'}</div>
+                      </div>
                     </td>
                     <td className="px-4 py-3.5 text-center">
                       <div className="inline-flex flex-col items-center">
@@ -662,30 +700,54 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                       .filter(u => !editingUser || u.id !== editingUser.id)
                       .map(u => (
                         <option key={u.id} value={u.id}>
-                          {u.full_name} ({u.gov_title || u.role}) - {u.dept_name || ''}
+                          {u.management_role === 'lanh_dao' ? '👑 [Lãnh đạo]' : u.management_role === 'quan_ly' ? '⭐ [Cấp phó]' : u.management_role === 'to_truong' ? '🏷️ [Tổ trưởng]' : '👔'} {u.full_name} ({u.gov_title || u.role}) - {u.dept_name || ''}
                         </option>
                       ))}
                   </select>
                   <p className="text-[10px] text-slate-400 mt-0.5">
-                    Thiết lập tuyến báo cáo trực tiếp/gián tiếp để phân quyền giao việc và chấm điểm.
+                    Quản lý trực tiếp giao việc hàng ngày, theo dõi tiến độ và nhận xét ban đầu.
                   </p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Mẫu đánh giá KPI áp dụng
+                    Người đánh giá cuối cùng (Ký duyệt kết luận)
                   </label>
                   <select
-                    value={formData.target_role}
-                    onChange={(e) => setFormData({ ...formData, target_role: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-amber-50/50"
+                    value={formData.final_evaluator_id}
+                    onChange={(e) => setFormData({ ...formData, final_evaluator_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-indigo-50/40 font-medium"
                   >
-                    <option value="cbnv">Mẫu 01-B: Dành cho Công chức, CBNV (16 tiêu chí)</option>
-                    <option value="cbql">Mẫu 01-A: Dành cho Cán bộ Lãnh đạo, QL (17 tiêu chí)</option>
+                    <option value="">-- Mặc định (Theo phân cấp Lãnh đạo đơn vị) --</option>
+                    {users
+                      .filter(u => (!editingUser || u.id !== editingUser.id) && (u.role === 'cbql' || u.role === 'admin' || u.management_role === 'lanh_dao' || u.management_role === 'quan_ly'))
+                      .map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.management_role === 'lanh_dao' ? '👑 [Lãnh đạo đứng đầu]' : u.management_role === 'quan_ly' ? '⭐ [Quản lý - Cấp phó]' : '👔'} {u.full_name} ({u.gov_title || u.role})
+                        </option>
+                      ))}
                   </select>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    Có thể là Quản lý cấp phó hoặc Lãnh đạo đứng đầu. Lưu ý: Không ai được tự đánh giá cho bản thân.
+                  </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                    Cấp bậc CBQL
+                  </label>
+                  <select
+                    value={formData.management_role}
+                    onChange={(e) => setFormData({ ...formData, management_role: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-purple-50/40 font-semibold text-purple-900"
+                  >
+                    <option value="lanh_dao">👑 Lãnh đạo (Người đứng đầu)</option>
+                    <option value="quan_ly">⭐ Quản lý (Cấp phó đơn vị)</option>
+                    <option value="to_truong">🏷️ Tổ trưởng chuyên môn</option>
+                    <option value="nhan_vien">👤 Cán bộ, Nhân viên (CBNV)</option>
+                  </select>
+                </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                     Mẫu đánh giá KPI áp dụng
@@ -693,10 +755,10 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                   <select
                     value={formData.target_role}
                     onChange={(e) => setFormData({ ...formData, target_role: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-amber-50/50"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-amber-50/50 font-medium"
                   >
-                    <option value="cbnv">Mẫu 01-B: Dành cho Công chức, CBNV (16 tiêu chí)</option>
-                    <option value="cbql">Mẫu 01-A: Dành cho Cán bộ Lãnh đạo, QL (17 tiêu chí)</option>
+                    <option value="cbnv">Mẫu 01-B: CBNV (16 tiêu chí)</option>
+                    <option value="cbql">Mẫu 01-A: Lãnh đạo/QL (17 tiêu chí)</option>
                   </select>
                 </div>
                 <div>

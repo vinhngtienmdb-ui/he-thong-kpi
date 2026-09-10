@@ -261,12 +261,29 @@ function initDatabase() {
     "ALTER TABLE evaluations ADD COLUMN advisory_submitted_at TEXT;",
     "ALTER TABLE evaluations ADD COLUMN is_advisory_submitted INTEGER DEFAULT 0;",
     "ALTER TABLE assigned_tasks ADD COLUMN inherited_from_task_id TEXT;",
-    "ALTER TABLE assigned_tasks ADD COLUMN inherited_from_user_name TEXT;"
+    "ALTER TABLE assigned_tasks ADD COLUMN inherited_from_user_name TEXT;",
+    "ALTER TABLE users ADD COLUMN management_role TEXT DEFAULT 'nhan_vien';",
+    "ALTER TABLE users ADD COLUMN final_evaluator_id TEXT;"
   ];
 
   for (const m of migrations) {
     try { db.exec(m); } catch (e) {}
   }
+
+  // Backfill management_role for users if default
+  try {
+    db.prepare(`
+      UPDATE users 
+      SET management_role = CASE
+        WHEN role = 'admin' OR LOWER(gov_title) LIKE '%trưởng ban%' OR LOWER(gov_title) LIKE '%hiệu trưởng%' OR LOWER(gov_title) LIKE '%giám đốc%' OR LOWER(party_title) LIKE '%bí thư%' THEN 'lanh_dao'
+        WHEN role = 'cbql' AND (LOWER(gov_title) LIKE '%phó%' OR LOWER(party_title) LIKE '%phó%') THEN 'quan_ly'
+        WHEN LOWER(gov_title) LIKE '%tổ trưởng%' THEN 'to_truong'
+        WHEN role = 'cbql' THEN 'quan_ly'
+        ELSE 'nhan_vien'
+      END
+      WHERE management_role IS NULL OR management_role = 'nhan_vien'
+    `).run();
+  } catch (e) {}
 
   // Backfill parent_agency and location_name for departments if not set
   try {
@@ -665,6 +682,12 @@ function getAccessibleUserIds(viewerUserId) {
       }
     }
   }
+
+  // Cán bộ mà người này là Người đánh giá cuối cùng
+  try {
+    const evaluatedSubs = db.prepare('SELECT id FROM users WHERE final_evaluator_id = ?').all(user.id);
+    evaluatedSubs.forEach(u => accessibleSet.add(u.id));
+  } catch (e) {}
 
   return Array.from(accessibleSet);
 }
