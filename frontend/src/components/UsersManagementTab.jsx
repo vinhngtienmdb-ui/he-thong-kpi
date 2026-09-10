@@ -12,6 +12,8 @@ import {
   RefreshCw,
   KeyRound,
   Lock,
+  Unlock,
+  Trash2,
   Eye,
   EyeOff,
   Shield,
@@ -50,6 +52,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('ALL');
   const [filterDept, setFilterDept] = useState('ALL');
+  const [filterStatus, setFilterStatus] = useState('ALL');
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -289,14 +292,28 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
     }
   };
 
-  const handleDelete = async (user) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn vô hiệu hoá/xoá cán bộ "${user.full_name}"?`)) return;
+  const handleToggleStatus = async (user, newStatus) => {
+    const actionText = newStatus === 1 ? 'mở khoá và kích hoạt lại' : 'khoá / ngừng kích hoạt';
+    if (!window.confirm(`Bạn có chắc chắn muốn ${actionText} tài khoản cán bộ "${user.full_name}"?`)) return;
     try {
-      await api.deleteAdminUser(user.id);
-      loadInitialData();
+      await api.toggleAdminUserStatus(user.id, newStatus);
+      await loadInitialData();
       if (onReloadUsers) onReloadUsers();
     } catch (err) {
       alert('Lỗi: ' + err.message);
+    }
+  };
+
+  const handlePermanentDelete = async (user) => {
+    const confirmMsg = `CẢNH BÁO XOÁ VĨNH VIỄN:\n\nBạn có chắc chắn muốn xoá hoàn toàn tài khoản cán bộ "${user.full_name}" (${user.username}) khỏi hệ thống và đồng bộ Supabase Cloud?\n\n- Toàn bộ nhiệm vụ phân công và dữ liệu đánh giá kiểm thử liên quan sẽ được dọn dẹp triệt để.\n- Thao tác này KHÔNG THỂ khôi phục!`;
+    if (!window.confirm(confirmMsg)) return;
+    try {
+      const res = await api.deleteAdminUser(user.id, true);
+      alert(res.message || 'Đã xoá vĩnh viễn tài khoản cán bộ thành công');
+      await loadInitialData();
+      if (onReloadUsers) onReloadUsers();
+    } catch (err) {
+      alert('Lỗi khi xoá: ' + err.message);
     }
   };
 
@@ -306,7 +323,11 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       u.username?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = filterRole === 'ALL' || u.role === filterRole;
     const matchesDept = filterDept === 'ALL' || u.dept_id === filterDept;
-    return matchesSearch && matchesRole && matchesDept;
+    const matchesStatus =
+      filterStatus === 'ALL' ||
+      (filterStatus === 'ACTIVE' && (u.is_active === 1 || u.is_active === undefined || u.is_active === null)) ||
+      (filterStatus === 'INACTIVE' && u.is_active === 0);
+    return matchesSearch && matchesRole && matchesDept && matchesStatus;
   });
 
   const selectedRoleObj = roles.find(r => r.id === formData.role_id);
@@ -442,6 +463,16 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
             <option value="admin">Quản trị viên (Admin)</option>
             <option value="cbql">Lãnh đạo, Quản lý (CBQL)</option>
             <option value="cbnv">Cán bộ, Nhân viên (CBNV)</option>
+          </select>
+
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+          >
+            <option value="ALL">Tất cả trạng thái</option>
+            <option value="ACTIVE">Đang hoạt động</option>
+            <option value="INACTIVE">Đã khoá / Vô hiệu hoá</option>
           </select>
         </div>
       </div>
@@ -602,15 +633,32 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                           <KeyRound className="w-4 h-4" />
                         </button>
                         {u.id !== currentUser?.id && (
-                          <button
-                            onClick={() => handleDelete(u)}
-                            className="p-1.5 text-rose-600 hover:text-rose-900 hover:bg-rose-50 rounded transition"
-                            title="Vô hiệu hoá"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                          <>
+                            {u.is_active !== 0 ? (
+                              <button
+                                onClick={() => handleToggleStatus(u, 0)}
+                                className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded transition cursor-pointer"
+                                title="Khoá tài khoản cán bộ"
+                              >
+                                <Lock className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleToggleStatus(u, 1)}
+                                className="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded transition cursor-pointer"
+                                title="Mở khoá / kích hoạt lại tài khoản"
+                              >
+                                <Unlock className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handlePermanentDelete(u)}
+                              className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded transition cursor-pointer"
+                              title="Xoá vĩnh viễn khỏi hệ thống & Supabase"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>

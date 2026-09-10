@@ -33,7 +33,8 @@ const {
   syncDirectRoleToSupabase,
   syncWithSupabaseOnStartup,
   autoRestoreFromSupabaseIfFresh,
-  deleteStandardTasksFromSupabase
+  deleteStandardTasksFromSupabase,
+  deleteUserFromSupabase
 } = require('./supabaseSync');
 
 // Initialize database
@@ -1100,15 +1101,71 @@ app.delete('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
   const isSysAdmin = checkIsAdmin(viewer);
   const accessibleUserIds = getAccessibleUserIds(viewer?.id);
 
-  if (!isSysAdmin && accessibleUserIds !== null && !accessibleUserIds.includes(id)) {
-    return res.status(403).json({ success: false, message: 'Bạn không có quyền vô hiệu hoá cán bộ ngoài đơn vị quản lý.' });
+  if (viewer?.id === id) {
+    return res.status(400).json({ success: false, message: 'Bạn không thể tự vô hiệu hoá hoặc xoá tài khoản của chính mình.' });
   }
 
+  if (!isSysAdmin && accessibleUserIds !== null && !accessibleUserIds.includes(id)) {
+    return res.status(403).json({ success: false, message: 'Bạn không có quyền thao tác trên tài khoản cán bộ ngoài đơn vị quản lý.' });
+  }
+
+  const isPermanent = req.query.permanent === 'true' || req.body?.permanent === true;
+
+  if (isPermanent) {
+    // Xoá vĩnh viễn (Hard delete): Dọn dẹp ràng buộc khoá ngoại và xoá triệt để
+    const deleteSqlite = db.transaction(() => {
+      db.prepare('DELETE FROM evaluation_criteria_details WHERE evaluation_id IN (SELECT id FROM evaluations WHERE user_id = ?)').run(id);
+      db.prepare('DELETE FROM evaluations WHERE user_id = ? OR returned_by = ?').run(id, id);
+      db.prepare('DELETE FROM assigned_tasks WHERE user_id = ? OR assigned_by = ?').run(id, id);
+      db.prepare('DELETE FROM votes WHERE user_id = ? OR voter_id = ?').run(id, id);
+      db.prepare('UPDATE users SET manager_id = NULL WHERE manager_id = ?').run(id);
+      db.prepare('UPDATE users SET final_evaluator_id = NULL WHERE final_evaluator_id = ?').run(id);
+      db.prepare('UPDATE departments SET leader_id = NULL WHERE leader_id = ?').run(id);
+      db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    });
+    deleteSqlite();
+
+    // Xoá đồng bộ tức thì trên Supabase Cloud
+    await deleteUserFromSupabase(id);
+
+    return res.json({ success: true, message: 'Đã xóa vĩnh viễn tài khoản cán bộ và dọn dẹp các dữ liệu liên quan thành công.' });
+  }
+
+  // Xoá mềm / Ngừng kích hoạt (Khoá tài khoản)
   db.prepare('UPDATE users SET is_active = 0 WHERE id = ?').run(id);
   const deactivatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (deactivatedUser) await syncDirectUserToSupabase(deactivatedUser);
 
   res.json({ success: true, message: 'Đã ngừng kích hoạt tài khoản cán bộ' });
+  triggerBackgroundSupabaseSync(300);
+});
+
+// Admin / Unit Admin: Kích hoạt lại hoặc khoá tài khoản cán bộ
+app.put('/api/admin/users/:id/status', requireCanManageUsers, async (req, res) => {
+  const { id } = req.params;
+  const { is_active } = req.body || {};
+  const viewer = req.viewer || getViewer(req);
+  const isSysAdmin = checkIsAdmin(viewer);
+  const accessibleUserIds = getAccessibleUserIds(viewer?.id);
+
+  if (viewer?.id === id) {
+    return res.status(400).json({ success: false, message: 'Bạn không thể thay đổi trạng thái tài khoản của chính mình.' });
+  }
+
+  if (!isSysAdmin && accessibleUserIds !== null && !accessibleUserIds.includes(id)) {
+    return res.status(403).json({ success: false, message: 'Bạn không có quyền thao tác trên tài khoản cán bộ ngoài đơn vị quản lý.' });
+  }
+
+  const newStatus = is_active ? 1 : 0;
+  db.prepare('UPDATE users SET is_active = ? WHERE id = ?').run(newStatus, id);
+  const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (updatedUser) await syncDirectUserToSupabase(updatedUser);
+
+  res.json({ 
+    success: true, 
+    message: newStatus === 1 ? 'Đã mở khoá và kích hoạt lại tài khoản cán bộ thành công' : 'Đã khoá tài khoản cán bộ thành công',
+    is_active: newStatus 
+  });
   triggerBackgroundSupabaseSync(300);
 });
 

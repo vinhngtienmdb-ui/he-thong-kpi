@@ -884,6 +884,36 @@ async function deleteStandardTasksFromSupabase(ids) {
   }
 }
 
+/**
+ * Xóa hoàn toàn một người dùng và các dữ liệu liên quan khỏi Supabase Cloud
+ */
+async function deleteUserFromSupabase(userId) {
+  if (!isSupabaseConfigured() || !userId) return;
+  const pool = getPool();
+  if (!pool) return;
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    await client.query('DELETE FROM evaluation_criteria_details WHERE evaluation_id IN (SELECT id FROM evaluations WHERE user_id = $1)', [userId]);
+    await client.query('DELETE FROM evaluations WHERE user_id = $1 OR returned_by = $1', [userId]);
+    await client.query('DELETE FROM assigned_tasks WHERE user_id = $1 OR assigned_by = $1', [userId]);
+    await client.query('DELETE FROM votes WHERE user_id = $1 OR voter_id = $1', [userId]);
+    await client.query('UPDATE users SET manager_id = NULL WHERE manager_id = $1', [userId]);
+    await client.query('UPDATE users SET final_evaluator_id = NULL WHERE final_evaluator_id = $1', [userId]);
+    await client.query('UPDATE departments SET leader_id = NULL WHERE leader_id = $1', [userId]);
+    await client.query('DELETE FROM users WHERE id = $1', [userId]);
+    await client.query('COMMIT');
+    console.log(`[Supabase Delete] Đã xóa vĩnh viễn user ${userId} trên Supabase Cloud.`);
+  } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    console.error(`[Supabase Delete] Lỗi khi xóa user ${userId} trên Supabase:`, err.message);
+  } finally {
+    if (client) client.release();
+    if (pool) await pool.end();
+  }
+}
+
 module.exports = {
   isSupabaseConfigured,
   getSupabaseStatus,
@@ -894,6 +924,7 @@ module.exports = {
   syncDirectRoleToSupabase,
   syncWithSupabaseOnStartup,
   autoRestoreFromSupabaseIfFresh,
-  deleteStandardTasksFromSupabase
+  deleteStandardTasksFromSupabase,
+  deleteUserFromSupabase
 };
 

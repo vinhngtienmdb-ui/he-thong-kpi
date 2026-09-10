@@ -416,9 +416,16 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
-  deleteAdminUser: (id) => {
-    return fetchApi(`/admin/users/${id}`, {
+  deleteAdminUser: (id, permanent = false) => {
+    return fetchApi(`/admin/users/${id}${permanent ? '?permanent=true' : ''}`, {
       method: 'DELETE',
+    });
+  },
+  toggleAdminUserStatus: (id, is_active) => {
+    return fetchApi(`/admin/users/${id}/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active }),
     });
   },
   resetAdminUserPassword: (id, data = {}) => {
