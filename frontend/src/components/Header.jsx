@@ -1176,12 +1176,66 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 2.5 */}
+              {/* Version 3.2 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 2.5</span>
-                  <span className="text-xs text-slate-500 font-medium">09/09/2026 (Bản phát hành hiện tại)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.2</span>
+                  <span className="text-xs text-slate-500 font-medium">10/09/2026 (Bản phát hành hiện tại)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Tách biệt CSDL & Bảo vệ Dữ liệu Tuyệt đối khi Cập nhật Code, Tối ưu Triển khai Render & Supabase Cloud
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Tự phục hồi CSDL thông minh (Self-healing Auto Recovery):</strong> Tự động quét và khôi phục CSDL từ các bản snapshot trong thư mục <code>backend/backups/</code> nếu tệp <code>kpi.db</code> bị thiếu hoặc xóa sau lệnh <code>git pull</code>; cách ly CSDL hoàn toàn khỏi Git.</li>
+                  <li><strong>Tách biệt cập nhật code khỏi Supabase Cloud:</strong> Quá trình cập nhật phần mềm hoặc khởi động máy chủ tuyệt đối KHÔNG tự ý ghi đè hay xóa dữ liệu trên Supabase. Mọi hoạt động sao lưu và khôi phục đám mây đều chuyển sang cơ chế chủ động (On-demand) do Quản trị viên kiểm soát.</li>
+                  <li><strong>Phân hệ Đồng bộ Đám mây Supabase (PostgreSQL Cloud):</strong> Tích hợp thẻ giám sát trạng thái kết nối, bảng so sánh số lượng bản ghi thời gian thực giữa SQLite và Supabase, cùng các nút thao tác: <em>Sao lưu lên Supabase (Push)</em> và <em>Khôi phục từ Supabase (Pull)</em> tại tab Cấu hình hệ thống.</li>
+                  <li><strong>Bộ công cụ dòng lệnh (CLI Tools):</strong> Cung cấp các lệnh terminal tiện lợi: <code>npm run db:status</code>, <code>npm run db:push-supabase</code>, <code>npm run db:pull-supabase</code>.</li>
+                  <li><strong>Khắc phục lỗi Foreign Key & Unique Constraint trên Render:</strong> Tối ưu hóa thứ tự phụ thuộc bảng dữ liệu khi khởi tạo CSDL mới; loại bỏ ràng buộc <code>UNIQUE</code> trên mã tiêu chí để cả CBQL và CBNV cùng sử dụng các mã nhánh chuyên môn <code>2.1, 2.2, 2.3</code> (Mẫu 01-A & Mẫu 01-B) mà không gây xung đột khóa.</li>
+                </ul>
+              </div>
+
+              {/* Version 3.1 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-400 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-bold">Phiên bản 3.1</span>
+                  <span className="text-xs text-slate-500 font-medium">10/09/2026</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Quy định Tài khoản Admin Nghiệp vụ, Nhập liệu Excel Thông minh & Chuẩn hóa Xếp loại Ban đầu
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Quy định tài khoản Admin nghiệp vụ:</strong> Các tài khoản quyền Quản trị cơ quan / Quản trị đơn vị là tài khoản điều hành kỹ thuật, không tham gia tự đánh giá hay chấm điểm KPI; tự động loại trừ khỏi danh sách giao việc và biểu quyết xếp loại.</li>
+                  <li><strong>Khắc phục xếp loại ban đầu:</strong> Khi import danh sách nhân sự mới hoặc tạo mới cán bộ, trạng thái xếp loại luôn mặc định là <em>"Chưa tự đánh giá" / "Chưa có kết luận"</em>; khắc phục lỗi tự động hiển thị "Hoàn thành tốt nhiệm vụ" khi chưa thực hiện chấm điểm và biểu quyết.</li>
+                  <li><strong>Nâng cấp Bộ nhập liệu Excel thông minh:</strong> Tự động nhận diện linh hoạt các cấu trúc cột dữ liệu đa dạng trong file Excel Danh mục công việc chuẩn và Danh sách cán bộ nhân viên; khắc phục triệt để lỗi xác thực thẩm quyền <code>x-viewer-id</code>.</li>
+                </ul>
+              </div>
+
+              {/* Version 3.0 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-400 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-bold">Phiên bản 3.0</span>
+                  <span className="text-xs text-slate-500 font-medium">09/09/2026</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Quản lý Hồ sơ Văn bản Đến & Đi Gắn liền KPI, Thiết lập Khóa KPI & Cơ chế Phúc tra
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Quản lý Văn bản điều hành gắn liền KPI:</strong> Phân hệ theo dõi văn bản đến/đi, giao việc trực tiếp từ văn bản chỉ đạo, phân công cán bộ chủ trì & phối hợp, tự động liên kết thành nhiệm vụ KPI.</li>
+                  <li><strong>Thời điểm khóa chấm điểm KPI tự động:</strong> Cho phép cán bộ quản trị cấu hình ngày giờ khóa tự động cho từng kỳ đánh giá quý; quá thời hạn quy định, hệ thống tự động khóa tính năng chấm điểm để đảm bảo tính kỷ luật.</li>
+                  <li><strong>Cơ chế hoàn trả hồ sơ (Feedback / Return):</strong> Cán bộ quản lý có thể trả lại nhiệm vụ hoặc phiếu đánh giá yêu cầu bổ sung sản phẩm minh chứng nếu chưa đạt yêu cầu.</li>
+                  <li><strong>Lưu trữ tệp minh chứng đa tầng:</strong> Hỗ trợ lưu trữ đám mây Cloudflare R2 không giới hạn kết hợp lưu trữ đĩa cục bộ tự động dự phòng.</li>
+                </ul>
+              </div>
+
+              {/* Version 2.5 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-400 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-bold">Phiên bản 2.5</span>
+                  <span className="text-xs text-slate-500 font-medium">09/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Chuẩn hóa Ngày tháng dd/mm/yyyy, Menu Tài khoản Cá nhân hóa & Báo cáo Giám sát
