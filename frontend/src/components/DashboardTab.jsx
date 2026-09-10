@@ -86,7 +86,7 @@ export default function DashboardTab({
       const promises = [
         api.getDashboardStats(selectedPeriod),
         currentUser ? api.getEvaluation(selectedPeriod, currentUser.id) : null,
-        currentUser ? api.getAssignedTasks(selectedPeriod, currentUser.id) : [],
+        currentUser ? api.getAssignedTasks({ period_id: selectedPeriod, user_id: currentUser.id }) : [],
         api.getMau02Report(selectedPeriod).catch(() => []),
         api.getAdminConfigs().catch(() => null)
       ];

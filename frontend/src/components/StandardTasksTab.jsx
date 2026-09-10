@@ -31,7 +31,8 @@ export default function StandardTasksTab({
   currentUser, 
   users = [], 
   departments = [],
-  onAssignTask 
+  onAssignTask,
+  setCurrentTab
 }) {
   const isCBQL = currentUser?.role === 'cbql' || currentUser?.role === 'admin';
   const [tasks, setTasks] = useState([]);
@@ -544,13 +545,20 @@ export default function StandardTasksTab({
         <div className="flex items-center gap-2 text-xs">
           <button
             type="button"
-            className="w-6 h-6 rounded-full bg-red-700 text-white flex items-center justify-center font-bold text-[10px] shadow-xs hover:bg-red-800 transition shrink-0"
-            title="Quay lại"
+            onClick={() => setCurrentTab ? setCurrentTab('dashboard') : window.history.back()}
+            className="w-6 h-6 rounded-full bg-red-700 text-white flex items-center justify-center font-bold text-[10px] shadow-xs hover:bg-red-800 transition shrink-0 cursor-pointer"
+            title="Quay lại Bảng điều khiển"
           >
             «
           </button>
           <div className="flex items-center gap-1 font-semibold truncate">
-            <span className="text-slate-500">Trang chủ</span>
+            <span 
+              onClick={() => setCurrentTab ? setCurrentTab('dashboard') : null}
+              className="text-slate-500 hover:text-red-700 cursor-pointer transition"
+              title="Về Bảng điều khiển"
+            >
+              Trang chủ
+            </span>
             <span className="text-slate-400">&gt;</span>
             <span className="text-red-700 font-bold">Danh mục sản phẩm công việc chuẩn đơn vị</span>
           </div>
@@ -561,7 +569,9 @@ export default function StandardTasksTab({
           {/* Quay lại */}
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-red-700 text-red-700 bg-white hover:bg-red-50 text-xs font-bold transition shadow-2xs"
+            onClick={() => setCurrentTab ? setCurrentTab('dashboard') : window.history.back()}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-red-700 text-red-700 bg-white hover:bg-red-50 text-xs font-bold transition shadow-2xs cursor-pointer"
+            title="Quay lại Bảng điều khiển"
           >
             <span>← Quay lại</span>
           </button>

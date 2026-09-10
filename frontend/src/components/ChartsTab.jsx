@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 
-export default function ChartsTab({ selectedPeriod, currentUser }) {
+export default function ChartsTab({ selectedPeriod, currentUser, setCurrentTab }) {
   const [chartData, setChartData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -57,12 +57,20 @@ export default function ChartsTab({ selectedPeriod, currentUser }) {
       <div className="flex items-center gap-2 text-xs pb-1 border-b border-slate-200">
         <button
           type="button"
-          className="w-6 h-6 rounded-full bg-red-700 text-white flex items-center justify-center font-bold text-[10px] shadow-xs"
+          onClick={() => setCurrentTab ? setCurrentTab('dashboard') : window.history.back()}
+          className="w-6 h-6 rounded-full bg-red-700 text-white flex items-center justify-center font-bold text-[10px] shadow-xs hover:bg-red-800 transition shrink-0 cursor-pointer"
+          title="Quay lại Bảng điều khiển"
         >
           «
         </button>
         <div className="flex items-center gap-1 font-semibold">
-          <span className="text-slate-500">Trang chủ</span>
+          <span 
+            onClick={() => setCurrentTab ? setCurrentTab('dashboard') : null}
+            className="text-slate-500 hover:text-red-700 cursor-pointer transition"
+            title="Về Bảng điều khiển"
+          >
+            Trang chủ
+          </span>
           <span className="text-slate-400">&gt;</span>
           <span className="text-red-700 font-bold">Biểu đồ thống kê kết quả KPI toàn đơn vị</span>
         </div>

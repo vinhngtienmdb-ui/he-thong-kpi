@@ -438,6 +438,7 @@ export default function App() {
               users={accessibleUsers.length > 0 ? accessibleUsers : users}
               departments={departments}
               onAssignTask={handleAssignTaskFromCatalog}
+              setCurrentTab={setCurrentTab}
             />
           )}
 
@@ -449,6 +450,7 @@ export default function App() {
               users={accessibleUsers.length > 0 ? accessibleUsers : users}
               departments={departments}
               axes={axes}
+              setCurrentTab={setCurrentTab}
             />
           )}
 
@@ -469,6 +471,7 @@ export default function App() {
               selectedPeriod={selectedPeriod}
               currentUser={currentUser}
               axes={axes}
+              setCurrentTab={setCurrentTab}
             />
           )}
 
@@ -477,6 +480,7 @@ export default function App() {
               selectedPeriod={selectedPeriod}
               currentUser={currentUser}
               users={accessibleUsers.length > 0 ? accessibleUsers : (currentUser ? [currentUser] : [])}
+              setCurrentTab={setCurrentTab}
             />
           )}
 
@@ -489,6 +493,7 @@ export default function App() {
               periods={periods}
               onReloadPeriods={loadInitialData}
               onPeriodChange={handlePeriodChange}
+              setCurrentTab={setCurrentTab}
             />
           )}
 
@@ -497,6 +502,7 @@ export default function App() {
               selectedPeriod={selectedPeriod}
               currentUser={currentUser}
               users={accessibleUsers.length > 0 ? accessibleUsers : (currentUser ? [currentUser] : [])}
+              setCurrentTab={setCurrentTab}
             />
           )}
 
@@ -505,6 +511,7 @@ export default function App() {
               selectedPeriod={selectedPeriod}
               currentUser={currentUser}
               users={accessibleUsers.length > 0 ? accessibleUsers : (currentUser ? [currentUser] : [])}
+              setCurrentTab={setCurrentTab}
             />
           )}
 
@@ -512,6 +519,7 @@ export default function App() {
             <ChartsTab
               selectedPeriod={selectedPeriod}
               currentUser={currentUser}
+              setCurrentTab={setCurrentTab}
             />
           )}
 
@@ -524,6 +532,7 @@ export default function App() {
               users={accessibleUsers.length > 0 ? accessibleUsers : (currentUser ? [currentUser] : [])}
               departments={departments}
               axes={axes}
+              setCurrentTab={setCurrentTab}
             />
           )}
 
@@ -532,6 +541,7 @@ export default function App() {
               currentUser={currentUser}
               departments={departments}
               onReloadUsers={handleReloadUsers}
+              setCurrentTab={setCurrentTab}
             />
           )}
 
@@ -544,6 +554,7 @@ export default function App() {
               departments={departments}
               onReloadDepartments={handleReloadDepartments}
               currentUser={currentUser}
+              setCurrentTab={setCurrentTab}
             />
           )}
         </main>

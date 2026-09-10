@@ -150,8 +150,15 @@ export const api = {
   },
 
   // Assigned Tasks
-  getAssignedTasks: (params = {}) => {
-    const query = new URLSearchParams(params).toString();
+  getAssignedTasks: (params = {}, maybeUserId) => {
+    let queryObj = {};
+    if (typeof params === 'string') {
+      queryObj.period_id = params;
+      if (maybeUserId) queryObj.user_id = maybeUserId;
+    } else {
+      queryObj = params || {};
+    }
+    const query = new URLSearchParams(queryObj).toString();
     return fetchApi(`/assigned-tasks?${query}`);
   },
   assignTask: (data) => {

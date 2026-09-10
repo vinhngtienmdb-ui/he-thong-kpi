@@ -22,7 +22,7 @@ import { api } from '../api';
 import { formatDate } from '../constants';
 import FinalizePeriodModal from './FinalizePeriodModal';
 
-export default function GradingTab({ selectedPeriod, currentUser, users, axes, periods = [], onReloadPeriods, onPeriodChange }) {
+export default function GradingTab({ selectedPeriod, currentUser, users, axes, periods = [], onReloadPeriods, onPeriodChange, setCurrentTab }) {
   // Lọc danh sách cán bộ có thể thẩm định: TUYỆT ĐỐI KHÔNG ĐƯỢC CHẤM ĐIỂM CHO BẢN THÂN VÀ KHÔNG ĐÁNH GIÁ TÀI KHOẢN ADMIN NGHIỆP VỤ
   const evaluatableUsers = users.filter(u => u.id !== currentUser?.id && u.role !== 'admin');
   const [selectedUser, setSelectedUser] = useState('');
@@ -476,13 +476,22 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
       {isSelf && (
         <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 sm:p-5 text-amber-900 flex items-start gap-3 shadow-xs">
           <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-          <div className="space-y-1">
+          <div className="space-y-2">
             <div className="font-bold text-sm">
               LƯU Ý QUY ĐỊNH: Không được trực tiếp đánh giá hoặc kết luận xếp loại cho bản thân
             </div>
             <p className="text-xs text-amber-800 leading-relaxed">
               Căn cứ Quy định số 366-QĐ/TW và Hướng dẫn số 06-HD/BTCTU, cán bộ quản lý và nhân viên tuyệt đối không được tự chấm điểm hoặc kết luận xếp loại cho chính mình. Hồ sơ KPI của bạn sẽ do Quản lý trực tiếp hoặc Lãnh đạo cấp trên đánh giá. Hãy chuyển sang phân hệ <strong>Tự đánh giá cuối quý (Bước 5)</strong> để nộp bản tự kê khai.
             </p>
+            {setCurrentTab && (
+              <button
+                type="button"
+                onClick={() => setCurrentTab('self_eval')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs rounded-lg transition shadow-xs cursor-pointer"
+              >
+                <span>👉 Chuyển sang phân hệ Tự đánh giá</span>
+              </button>
+            )}
           </div>
         </div>
       )}
