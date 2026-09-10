@@ -20,9 +20,11 @@ import {
   Building2,
   User,
   Sparkles,
-  Edit
+  Edit,
+  Users as UsersIcon
 } from 'lucide-react';
 import { api } from '../api';
+import UserGroupManagementModal from './UserGroupManagementModal';
 
 export default function UsersManagementTab({ currentUser, departments = [], onReloadUsers }) {
   const canManage = currentUser?.role === 'admin' || currentUser?.role_code === 'admin_donvi';
@@ -54,6 +56,10 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
   const [filterRole, setFilterRole] = useState('ALL');
   const [filterDept, setFilterDept] = useState('ALL');
   const [filterStatus, setFilterStatus] = useState('ALL');
+
+  // User Groups state
+  const [userGroups, setUserGroups] = useState([]);
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -171,12 +177,14 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
   const loadInitialData = async () => {
     setLoading(true);
     try {
-      const [usersData, rolesData] = await Promise.all([
+      const [usersData, rolesData, groupsData] = await Promise.all([
         api.getAdminUsers(),
-        api.getRoles()
+        api.getRoles(),
+        api.getUserGroups().catch(() => [])
       ]);
       setUsers(usersData);
       setRoles(rolesData);
+      setUserGroups(groupsData || []);
     } catch (err) {
       console.error(err);
       setErrorMsg('Không thể tải danh sách CBNV: ' + err.message);
@@ -371,6 +379,16 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
           >
             <FileSpreadsheet className="w-4 h-4 text-white" />
             <span>Nhập từ Excel</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsGroupModalOpen(true)}
+            className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3.5 py-2.5 rounded-lg border border-slate-300 transition shadow-xs cursor-pointer"
+            title="Quản lý nhóm người dùng tự tạo để giao việc và phân bổ văn bản"
+          >
+            <UsersIcon className="w-4 h-4 text-slate-600" />
+            <span>Nhóm người dùng ({userGroups.length})</span>
           </button>
 
           <button
@@ -1527,6 +1545,14 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
           </div>
         </div>
       )}
+      {/* Modal Quản lý Nhóm người dùng tự tạo */}
+      <UserGroupManagementModal
+        isOpen={isGroupModalOpen}
+        onClose={() => setIsGroupModalOpen(false)}
+        users={users}
+        departments={departments}
+        onGroupsUpdated={(g) => setUserGroups(g)}
+      />
     </div>
   );
 }
