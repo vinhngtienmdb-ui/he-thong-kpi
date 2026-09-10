@@ -7,14 +7,32 @@ export function setViewerId(id) {
 }
 
 export function getViewerId() {
-  return currentViewerId;
+  if (currentViewerId) return currentViewerId;
+  try {
+    const stored = localStorage.getItem('kpi_user');
+    if (stored) {
+      const user = JSON.parse(stored);
+      if (user && user.id) {
+        currentViewerId = user.id;
+        return user.id;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
+export function getAuthHeaders() {
+  const headers = {};
+  const viewerId = getViewerId();
+  if (viewerId) {
+    headers['x-viewer-id'] = viewerId;
+    headers['x-user-id'] = viewerId;
+  }
+  return headers;
 }
 
 export async function fetchApi(endpoint, options = {}) {
-  const headers = { ...(options.headers || {}) };
-  if (currentViewerId && !headers['x-viewer-id']) {
-    headers['x-viewer-id'] = currentViewerId;
-  }
+  const headers = { ...getAuthHeaders(), ...(options.headers || {}) };
 
   const res = await fetch(`${BASE_URL}${endpoint}`, {
     ...options,
@@ -89,10 +107,20 @@ export const api = {
   },
   getStandardTasksTemplateUrl: () => `${BASE_URL}/standard-tasks/template`,
   importStandardTasks: (formData) => {
-    return fetch(`${BASE_URL}/standard-tasks/import`, {
+    const headers = { ...getAuthHeaders() };
+    const viewerId = getViewerId();
+    const queryParam = viewerId ? `?viewer_id=${encodeURIComponent(viewerId)}` : '';
+    return fetch(`${BASE_URL}/standard-tasks/import${queryParam}`, {
       method: 'POST',
+      headers,
       body: formData,
-    }).then(res => res.json());
+    }).then(async res => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || 'Lỗi nhập danh mục công việc từ Excel');
+      }
+      return data;
+    });
   },
   createStandardTask: (data) => {
     return fetchApi('/standard-tasks', {
@@ -169,10 +197,20 @@ export const api = {
     });
   },
   submitEvidence: (id, formData) => {
-    return fetch(`${BASE_URL}/assigned-tasks/${id}/evidence`, {
+    const headers = { ...getAuthHeaders() };
+    const viewerId = getViewerId();
+    const queryParam = viewerId ? `?viewer_id=${encodeURIComponent(viewerId)}` : '';
+    return fetch(`${BASE_URL}/assigned-tasks/${id}/evidence${queryParam}`, {
       method: 'POST',
+      headers,
       body: formData,
-    }).then(res => res.json());
+    }).then(async res => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || 'Lỗi tải lên minh chứng');
+      }
+      return data;
+    });
   },
   getSubordinateEvidences: (id) => {
     return fetchApi(`/assigned-tasks/${id}/subordinate-evidences`);
@@ -280,10 +318,17 @@ export const api = {
 
   // Admin User Management
   getAdminUsers: () => fetchApi('/users'),
-  getUserTemplateUrl: () => `${BASE_URL}/admin/users/template`,
+  getUserTemplateUrl: () => {
+    const viewerId = getViewerId();
+    return `${BASE_URL}/admin/users/template${viewerId ? `?viewer_id=${encodeURIComponent(viewerId)}` : ''}`;
+  },
   importAdminUsers: (formData) => {
-    return fetch(`${BASE_URL}/admin/users/import`, {
+    const headers = { ...getAuthHeaders() };
+    const viewerId = getViewerId();
+    const queryParam = viewerId ? `?viewer_id=${encodeURIComponent(viewerId)}` : '';
+    return fetch(`${BASE_URL}/admin/users/import${queryParam}`, {
       method: 'POST',
+      headers,
       body: formData,
     }).then(async (res) => {
       const data = await res.json().catch(() => ({}));
@@ -397,9 +442,10 @@ export const api = {
   },
   getDocument: (id) => fetchApi(`/documents/${id}`),
   createDocument: (formData) => {
-    const headers = {};
-    if (currentViewerId) headers['x-viewer-id'] = currentViewerId;
-    return fetch(`${BASE_URL}/documents`, {
+    const headers = { ...getAuthHeaders() };
+    const viewerId = getViewerId();
+    const queryParam = viewerId ? `?viewer_id=${encodeURIComponent(viewerId)}` : '';
+    return fetch(`${BASE_URL}/documents${queryParam}`, {
       method: 'POST',
       headers,
       body: formData,
@@ -412,9 +458,10 @@ export const api = {
     });
   },
   updateDocument: (id, formData) => {
-    const headers = {};
-    if (currentViewerId) headers['x-viewer-id'] = currentViewerId;
-    return fetch(`${BASE_URL}/documents/${id}`, {
+    const headers = { ...getAuthHeaders() };
+    const viewerId = getViewerId();
+    const queryParam = viewerId ? `?viewer_id=${encodeURIComponent(viewerId)}` : '';
+    return fetch(`${BASE_URL}/documents/${id}${queryParam}`, {
       method: 'PUT',
       headers,
       body: formData,

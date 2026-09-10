@@ -143,6 +143,10 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       const fd = new FormData();
       fd.append('file', importFile);
       fd.append('update_existing', updateExisting);
+      const vId = currentUser?.id || (api.getViewerId ? api.getViewerId() : null);
+      if (vId) {
+        fd.append('viewer_id', vId);
+      }
 
       const res = await api.importAdminUsers(fd);
       setImportResult(res);

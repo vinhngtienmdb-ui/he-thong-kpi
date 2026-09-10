@@ -89,9 +89,13 @@ function normalizeOutputResult(val) {
   return str;
 }
 
-async function importStandardTasksFromExcel(filePath, targetPeriodId = null) {
+async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null) {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(filePath);
+  if (Buffer.isBuffer(fileOrPath)) {
+    await workbook.xlsx.load(fileOrPath);
+  } else {
+    await workbook.xlsx.readFile(fileOrPath);
+  }
 
   const sheet = workbook.getWorksheet('01. Mẫu import') || workbook.worksheets[0];
   if (!sheet) {
@@ -347,9 +351,13 @@ async function generateUserImportTemplate() {
 }
 
 // Import multiple users from Excel file
-async function importUsersFromExcel(filePath, options = {}) {
+async function importUsersFromExcel(fileOrPath, options = {}) {
   const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(filePath);
+  if (Buffer.isBuffer(fileOrPath)) {
+    await workbook.xlsx.load(fileOrPath);
+  } else {
+    await workbook.xlsx.readFile(fileOrPath);
+  }
 
   const sheet = workbook.getWorksheet('01. Danh sách người dùng') || workbook.worksheets[0];
   if (!sheet) {
@@ -391,13 +399,15 @@ async function importUsersFromExcel(filePath, options = {}) {
   const insertUserStmt = db.prepare(`
     INSERT INTO users (
       id, username, password, full_name, role, target_role, role_id, manager_id,
+      management_role, final_evaluator_id,
       party_title, gov_title, dept_id, birth_date, gender, phone, email, is_active
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `);
 
   const updateUserStmt = db.prepare(`
     UPDATE users
     SET full_name = ?, role = ?, target_role = ?, role_id = ?,
+        management_role = COALESCE(?, management_role),
         party_title = ?, gov_title = ?, dept_id = ?, birth_date = ?,
         gender = ?, phone = ?, email = ?
     WHERE id = ?
@@ -476,12 +486,33 @@ async function importUsersFromExcel(filePath, options = {}) {
     const phone = String(row.getCell(12).text || '').trim();
     const email = String(row.getCell(13).text || '').trim();
 
+    // Determine management role
+    let managementRole = 'nhan_vien';
+    if (effectiveRole === 'admin') {
+      managementRole = 'lanh_dao';
+    } else if (effectiveRole === 'cbql') {
+      const lowerGov = govTitle.toLowerCase();
+      const lowerRole = roleInput.toLowerCase();
+      if (lowerGov.includes('trưởng ban') || lowerGov.includes('trưởng phòng') || lowerGov.includes('giám đốc') || lowerGov.includes('hiệu trưởng') || lowerGov.includes('chánh') || lowerRole.includes('trưởng') || lowerRole.includes('ld_coquan')) {
+        managementRole = 'lanh_dao';
+      } else {
+        managementRole = 'quan_ly';
+      }
+    } else {
+      if (govTitle.toLowerCase().includes('tổ trưởng') || govTitle.toLowerCase().includes('trưởng bộ phận')) {
+        managementRole = 'to_truong';
+      } else {
+        managementRole = 'nhan_vien';
+      }
+    }
+
     try {
       const existingId = userLookup.get(username);
       if (existingId) {
         if (updateExisting) {
           updateUserStmt.run(
             fullName, effectiveRole, effectiveTargetRole, effectiveRoleId,
+            managementRole,
             partyTitle, govTitle, deptId, birthDate,
             gender, phone, email, existingId
           );
@@ -496,7 +527,7 @@ async function importUsersFromExcel(filePath, options = {}) {
         const newId = uuidv4();
         insertUserStmt.run(
           newId, username, password, fullName, effectiveRole, effectiveTargetRole,
-          effectiveRoleId, null, partyTitle, govTitle, deptId, birthDate,
+          effectiveRoleId, null, managementRole, null, partyTitle, govTitle, deptId, birthDate,
           gender, phone, email
         );
         userLookup.set(username, newId);

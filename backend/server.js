@@ -721,11 +721,12 @@ app.post('/api/admin/users/import', upload.single('file'), requireAdmin, async (
     }
 
     const updateExisting = req.body?.update_existing === 'true' || req.body?.update_existing === true || req.body?.update_existing === '1';
-    const result = await importUsersFromExcel(req.file.path, { updateExisting });
+    const fileSource = req.file.buffer || req.file.path;
+    const result = await importUsersFromExcel(fileSource, { updateExisting });
 
-    // Clean up temporary uploaded file
+    // Clean up temporary uploaded file if on disk
     try {
-      if (fs.existsSync(req.file.path)) {
+      if (req.file.path && fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
       }
     } catch (e) {}
@@ -923,16 +924,16 @@ app.get('/api/standard-tasks/template', (req, res) => {
 // Import standard tasks from Excel
 app.post('/api/standard-tasks/import', upload.single('file'), requireManagerOrAdmin, async (req, res) => {
   try {
-    let filePath;
+    let fileSource;
     if (req.file) {
-      filePath = req.file.path;
+      fileSource = req.file.buffer || req.file.path;
     } else {
       // Use existing demo file if no file uploaded
-      filePath = path.join(__dirname, '..', 'mau-import-new-san-pham-cong-viec-chuan.xlsx');
+      fileSource = path.join(__dirname, '..', 'mau-import-new-san-pham-cong-viec-chuan.xlsx');
     }
 
     const { period_id } = req.body;
-    const result = await importStandardTasksFromExcel(filePath, period_id);
+    const result = await importStandardTasksFromExcel(fileSource, period_id);
     res.json({ success: true, message: `Đã nạp thành công ${result.importedCount} công việc chuẩn`, ...result });
   } catch (error) {
     console.error('Import error:', error);
