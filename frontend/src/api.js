@@ -486,4 +486,23 @@ export const api = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   }),
+
+  // Database Backup & Restore
+  getBackupDownloadUrl: () => `${BASE_URL}/system/backup/download`,
+  getBackupList: () => fetchApi('/system/backup/list'),
+  createBackup: () => fetchApi('/system/backup/create', { method: 'POST' }),
+  restoreBackup: (formData) => {
+    const headers = { ...getAuthHeaders() };
+    return fetch(`${BASE_URL}/system/backup/restore`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    }).then(async res => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || err.message || `Lỗi: ${res.status}`);
+      }
+      return res.json();
+    });
+  },
 };

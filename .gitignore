@@ -7,10 +7,13 @@ backend/node_modules/
 frontend/dist/
 dist/
 
-# SQLite WAL & Temp files
+# SQLite Database files & Backups (Dữ liệu người dùng - Không ghi đè khi update code)
+*.db
 *.db-shm
 *.db-wal
+backend/kpi.db
 backend/database.sqlite
+backend/backups/
 *.tmp
 
 # Test exports

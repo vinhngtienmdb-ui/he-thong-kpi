@@ -5,7 +5,16 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
-const { db, initDatabase, getDepartmentDescendantIds, getAccessibleUserIds } = require('./database');
+const { 
+  db, 
+  dbPath, 
+  backupDir, 
+  checkpointDatabase, 
+  createBackup, 
+  initDatabase, 
+  getDepartmentDescendantIds, 
+  getAccessibleUserIds 
+} = require('./database');
 const { 
   importStandardTasksFromExcel, 
   generateUserImportTemplate,
@@ -3424,6 +3433,117 @@ app.put('/api/documents/dispatches/:dispatchId/complete', (req, res) => {
   } catch (err) {
     console.error('Error completing document dispatch:', err);
     res.status(500).json({ error: 'Lỗi cập nhật hoàn thành: ' + err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// 9. Database Backup & Restore Management (Bảo vệ dữ liệu an toàn khi update code)
+// -------------------------------------------------------------
+
+// Download full database file (.db)
+app.get('/api/system/backup/download', (req, res) => {
+  try {
+    checkpointDatabase();
+    if (!fs.existsSync(dbPath)) {
+      return res.status(404).json({ error: 'Không tìm thấy tệp cơ sở dữ liệu' });
+    }
+
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+    const filename = `kpi_backup_${timestamp}.db`;
+
+    res.setHeader('Content-Type', 'application/x-sqlite3');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    const stream = fs.createReadStream(dbPath);
+    stream.pipe(res);
+  } catch (err) {
+    console.error('Error downloading backup:', err);
+    res.status(500).json({ error: 'Lỗi tải tệp sao lưu: ' + err.message });
+  }
+});
+
+// List available automated backups
+app.get('/api/system/backup/list', (req, res) => {
+  try {
+    if (!fs.existsSync(backupDir)) {
+      return res.json([]);
+    }
+
+    const files = fs.readdirSync(backupDir)
+      .filter(f => f.endsWith('.db'))
+      .map(f => {
+        const fullPath = path.join(backupDir, f);
+        const stat = fs.statSync(fullPath);
+        return {
+          filename: f,
+          size_bytes: stat.size,
+          size_formatted: (stat.size / 1024).toFixed(1) + ' KB',
+          created_at: stat.mtime
+        };
+      })
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    res.json(files);
+  } catch (err) {
+    console.error('Error listing backups:', err);
+    res.status(500).json({ error: 'Lỗi lấy danh sách bản sao lưu: ' + err.message });
+  }
+});
+
+// Trigger a manual snapshot backup
+app.post('/api/system/backup/create', (req, res) => {
+  try {
+    const backupFile = createBackup('manual_backup');
+    if (!backupFile) {
+      return res.status(500).json({ error: 'Không thể tạo bản sao lưu' });
+    }
+    const filename = path.basename(backupFile);
+    res.json({ success: true, message: `Đã tạo bản sao lưu thành công: ${filename}`, filename });
+  } catch (err) {
+    console.error('Error creating manual backup:', err);
+    res.status(500).json({ error: 'Lỗi tạo bản sao lưu: ' + err.message });
+  }
+});
+
+// Restore database from uploaded backup file
+app.post('/api/system/backup/restore', upload.single('backup_file'), (req, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ error: 'Vui lòng chọn file sao lưu (.db) để phục hồi' });
+    }
+
+    // Verify SQLite magic header ("SQLite format 3\0")
+    const header = req.file.buffer.slice(0, 16).toString('utf-8');
+    if (!header.startsWith('SQLite format 3')) {
+      return res.status(400).json({ error: 'File tải lên không phải là cơ sở dữ liệu SQLite hợp lệ (.db)' });
+    }
+
+    // 1. Create a safety snapshot of current DB before overwriting
+    createBackup('pre_restore_safety');
+
+    // 2. Checkpoint and safely replace db file
+    checkpointDatabase();
+    fs.writeFileSync(dbPath, req.file.buffer);
+
+    // 3. Remove old WAL / SHM files to avoid schema conflict
+    try {
+      const walPath = `${dbPath}-wal`;
+      const shmPath = `${dbPath}-shm`;
+      if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+      if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+    } catch (e) {}
+
+    // 4. Re-run initDatabase to guarantee any newer migration columns exist
+    initDatabase();
+
+    res.json({
+      success: true,
+      message: 'Đã phục hồi cơ sở dữ liệu thành công! Toàn bộ dữ liệu của bạn đã được khôi phục nguyên vẹn.'
+    });
+  } catch (err) {
+    console.error('Error restoring database:', err);
+    res.status(500).json({ error: 'Lỗi phục hồi dữ liệu: ' + err.message });
   }
 });
 

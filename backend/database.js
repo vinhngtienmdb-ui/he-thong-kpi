@@ -3,13 +3,80 @@ const path = require('path');
 const fs = require('fs');
 
 const dbPath = path.join(__dirname, 'kpi.db');
+const backupDir = path.join(__dirname, 'backups');
+if (!fs.existsSync(backupDir)) {
+  try { fs.mkdirSync(backupDir, { recursive: true }); } catch (e) {}
+}
+
 const db = new Database(dbPath);
 
 // Enable foreign keys and WAL mode for high performance
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
+// Flush WAL journal into the main database file
+function checkpointDatabase() {
+  try {
+    const res = db.pragma('wal_checkpoint(TRUNCATE)');
+    return res;
+  } catch (e) {
+    console.error('Error checkpointing database:', e.message);
+    return null;
+  }
+}
+
+// Create an automated snapshot backup
+function createBackup(prefix = 'kpi_backup') {
+  try {
+    checkpointDatabase();
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const backupFile = path.join(backupDir, `${prefix}_${timestamp}.db`);
+    fs.copyFileSync(dbPath, backupFile);
+
+    // Keep max 15 recent backups
+    const files = fs.readdirSync(backupDir)
+      .filter(f => f.endsWith('.db'))
+      .map(f => ({ name: f, path: path.join(backupDir, f), time: fs.statSync(path.join(backupDir, f)).mtime.getTime() }))
+      .sort((a, b) => b.time - a.time);
+
+    if (files.length > 15) {
+      for (let i = 15; i < files.length; i++) {
+        try { fs.unlinkSync(files[i].path); } catch (err) {}
+      }
+    }
+    return backupFile;
+  } catch (e) {
+    console.error('Error creating database backup:', e.message);
+    return null;
+  }
+}
+
+// Flush WAL on process exit
+process.on('SIGINT', () => {
+  checkpointDatabase();
+  process.exit(0);
+});
+process.on('SIGTERM', () => {
+  checkpointDatabase();
+  process.exit(0);
+});
+process.on('beforeExit', () => {
+  checkpointDatabase();
+});
+
+// Periodic checkpoint every 5 minutes
+const checkpointTimer = setInterval(checkpointDatabase, 5 * 60 * 1000);
+if (checkpointTimer.unref) checkpointTimer.unref();
+
 function initDatabase() {
+  try {
+    if (fs.existsSync(dbPath) && fs.statSync(dbPath).size > 0) {
+      createBackup('startup');
+    }
+  } catch (e) {}
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS departments (
       id TEXT PRIMARY KEY,
@@ -694,6 +761,10 @@ function getAccessibleUserIds(viewerUserId) {
 
 module.exports = {
   db,
+  dbPath,
+  backupDir,
+  checkpointDatabase,
+  createBackup,
   initDatabase,
   getDepartmentDescendantIds,
   getAccessibleUserIds

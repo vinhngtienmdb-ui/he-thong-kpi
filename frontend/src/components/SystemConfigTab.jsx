@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Settings, 
   Building2, 
@@ -10,20 +10,25 @@ import {
   Layers, 
   Users, 
   Check, 
-  X,
-  ChevronRight,
-  Info,
-  Sliders,
-  CheckSquare,
-  Lock,
-  Unlock,
-  Clock,
-  AlertTriangle,
-  Power,
-  PowerOff,
-  Search,
-  CheckCircle2,
-  XCircle
+  X, 
+  ChevronRight, 
+  Info, 
+  Sliders, 
+  CheckSquare, 
+  Lock, 
+  Unlock, 
+  Clock, 
+  AlertTriangle, 
+  Power, 
+  PowerOff, 
+  Search, 
+  CheckCircle2, 
+  XCircle,
+  Database,
+  Download,
+  UploadCloud,
+  RefreshCw,
+  HardDrive
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate } from '../constants';
@@ -58,7 +63,7 @@ export default function SystemConfigTab({
     );
   }
 
-  const [activeSubTab, setActiveSubTab] = useState('departments'); // 'general', 'departments', 'roles'
+  const [activeSubTab, setActiveSubTab] = useState('departments'); // 'general', 'departments', 'roles', 'database'
   const [configs, setConfigs] = useState({});
   const [axes, setAxes] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -68,6 +73,80 @@ export default function SystemConfigTab({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
+
+  // Database Backup State
+  const [backupsList, setBackupsList] = useState([]);
+  const [backupsLoading, setBackupsLoading] = useState(false);
+  const [creatingBackup, setCreatingBackup] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const loadBackups = async () => {
+    try {
+      setBackupsLoading(true);
+      const data = await api.getBackupList();
+      setBackupsList(data || []);
+    } catch (err) {
+      console.error('Error loading backups:', err);
+    } finally {
+      setBackupsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSubTab === 'database') {
+      loadBackups();
+    }
+  }, [activeSubTab]);
+
+  const handleCreateManualBackup = async () => {
+    try {
+      setCreatingBackup(true);
+      const res = await api.createBackup();
+      setMessage({ text: res.message || 'Đã tạo bản sao lưu thành công!', type: 'success' });
+      await loadBackups();
+    } catch (err) {
+      setMessage({ text: 'Lỗi tạo sao lưu: ' + err.message, type: 'error' });
+    } finally {
+      setCreatingBackup(false);
+    }
+  };
+
+  const handleFileRestoreChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.db')) {
+      alert('Vui lòng chọn tệp cơ sở dữ liệu SQLite có đuôi mở rộng là .db');
+      e.target.value = '';
+      return;
+    }
+
+    const confirmMsg = `CẢNH BÁO QUAN TRỌNG VỀ PHỤC HỒI DỮ LIỆU:\n\n` +
+      `Bạn đang chuẩn bị phục hồi CSDL từ tệp: "${file.name}" (${(file.size / 1024).toFixed(1)} KB).\n\n` +
+      `Toàn bộ dữ liệu hiện tại sẽ được thay thế bằng dữ liệu trong tệp này.\n` +
+      `(Hệ thống sẽ tự động tạo một bản sao lưu an toàn của dữ liệu hiện tại trước khi ghi đè).\n\n` +
+      `Bạn có chắc chắn muốn tiến hành phục hồi?`;
+
+    if (!window.confirm(confirmMsg)) {
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      setRestoring(true);
+      const formData = new FormData();
+      formData.append('backup_file', file);
+      const res = await api.restoreBackup(formData);
+      alert(res.message || 'Phục hồi dữ liệu thành công!');
+      window.location.reload();
+    } catch (err) {
+      alert('Lỗi phục hồi CSDL: ' + err.message);
+    } finally {
+      setRestoring(false);
+      e.target.value = '';
+    }
+  };
 
   useEffect(() => {
     if (departments && departments.length > 0) {
@@ -507,6 +586,17 @@ export default function SystemConfigTab({
         >
           <Sliders className="w-4 h-4" />
           <span>3. Trọng số HD.06 & Chu kỳ Quý</span>
+        </button>
+        <button
+          onClick={() => setActiveSubTab('database')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-xs font-bold transition ${
+            activeSubTab === 'database'
+              ? 'bg-red-700 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Database className="w-4 h-4" />
+          <span>4. Sao lưu & Phục hồi CSDL</span>
         </button>
       </div>
 
@@ -1245,6 +1335,151 @@ export default function SystemConfigTab({
                 );
               })}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUB-TAB 4: DATABASE BACKUP & RESTORE */}
+      {activeSubTab === 'database' && (
+        <div className="space-y-6">
+          {/* Thông báo giải thích cơ chế bảo vệ dữ liệu */}
+          <div className="bg-emerald-50 border-2 border-emerald-300 text-emerald-950 p-5 rounded-2xl shadow-xs flex items-start gap-4">
+            <div className="p-2.5 rounded-xl bg-emerald-600 text-white shrink-0 mt-0.5">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div className="space-y-1.5 text-xs">
+              <h3 className="font-bold text-sm text-emerald-950">
+                🔒 Dữ liệu đã được Cách ly & Bảo vệ An toàn tuyệt đối khi Cập nhật Code (Git Pull)
+              </h3>
+              <p className="text-emerald-800 leading-relaxed">
+                Tệp cơ sở dữ liệu thực tế (<code>kpi.db</code>) đã được cấu hình loại trừ khỏi Git (<code>.gitignore</code>) và bổ sung cơ chế tự động ghi trọn vẹn (WAL checkpoint) cùng sao lưu xoay vòng tự động mỗi khi khởi động hệ thống. Khi bạn hoặc quản trị viên chạy lệnh cập nhật code từ GitHub, <strong>toàn bộ dữ liệu cán bộ, nhiệm vụ, văn bản và điểm đánh giá đã thực hiện sẽ được giữ nguyên 100%</strong> mà không lo bị ghi đè.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Box 1: Tải về bản sao lưu CSDL */}
+            <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-6 space-y-4 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-red-100 text-red-700 rounded-xl">
+                    <Download className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Tải về Bản sao lưu CSDL (.db)</h3>
+                    <p className="text-xs text-slate-500">Tải trọn vẹn tệp kpi.db về máy tính để lưu trữ</p>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Trước khi thực hiện các đợt nâng cấp tính năng lớn hoặc bảo trì hệ thống, bạn có thể tải về một bản sao lưu toàn diện của CSDL SQLite chỉ với một cú nhấp chuột.
+                </p>
+              </div>
+
+              <div className="pt-4 border-t flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={handleCreateManualBackup}
+                  disabled={creatingBackup}
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-4 h-4 ${creatingBackup ? 'animate-spin text-red-600' : ''}`} />
+                  <span>{creatingBackup ? 'Đang tạo snapshot...' : 'Tạo Snapshot ngay'}</span>
+                </button>
+
+                <a
+                  href={api.getBackupDownloadUrl()}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-5 py-2.5 rounded-xl bg-red-700 hover:bg-red-800 text-white text-xs font-bold transition shadow-sm flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Tải tệp kpi.db về máy</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Box 2: Phục hồi CSDL từ file */}
+            <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-6 space-y-4 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-indigo-100 text-indigo-700 rounded-xl">
+                    <UploadCloud className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Phục hồi CSDL từ File (.db)</h3>
+                    <p className="text-xs text-slate-500">Ghi đè dữ liệu an toàn từ tệp sao lưu đã tải trước đó</p>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Cho phép bạn khôi phục lại dữ liệu bất cứ lúc nào từ tệp <code>.db</code>. Hệ thống sẽ tự động tạo một bản sao lưu an toàn của dữ liệu hiện tại trước khi thực hiện ghi đè.
+                </p>
+              </div>
+
+              <div className="pt-4 border-t">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileRestoreChange}
+                  accept=".db"
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={restoring}
+                  className="w-full px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <UploadCloud className={`w-4 h-4 ${restoring ? 'animate-bounce' : ''}`} />
+                  <span>{restoring ? 'Đang phục hồi CSDL...' : 'Chọn file .db để Phục hồi dữ liệu'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Lịch sử các bản sao lưu tự động trên Server */}
+          <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-6 space-y-4">
+            <div className="flex items-center justify-between border-b pb-3">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <HardDrive className="w-4 h-4 text-red-700" />
+                <span>Danh sách các bản Sao lưu Tự động trên Máy chủ (Thư mục backend/backups/)</span>
+              </h3>
+              <button
+                type="button"
+                onClick={loadBackups}
+                disabled={backupsLoading}
+                className="text-xs text-slate-600 hover:text-red-700 font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${backupsLoading ? 'animate-spin' : ''}`} />
+                <span>Làm mới</span>
+              </button>
+            </div>
+
+            {backupsLoading ? (
+              <div className="py-6 text-center text-xs text-slate-400">Đang tải danh sách bản sao lưu...</div>
+            ) : backupsList.length === 0 ? (
+              <div className="py-6 text-center text-xs text-slate-500">
+                Chưa có bản snapshot nào được lưu trong thư mục backups. Hãy bấm "Tạo Snapshot ngay" ở trên.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto">
+                {backupsList.map((b, idx) => (
+                  <div key={b.filename} className="py-3 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-6 text-slate-400 font-mono text-[11px]">#{idx + 1}</span>
+                      <div>
+                        <div className="font-mono font-bold text-slate-800">{b.filename}</div>
+                        <div className="text-[10px] text-slate-400">Thời gian tạo: {new Date(b.created_at).toLocaleString('vi-VN')}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md font-mono text-[11px] font-semibold">
+                        {b.size_formatted}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
