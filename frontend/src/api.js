@@ -317,6 +317,13 @@ export const api = {
       method: 'DELETE',
     });
   },
+  bulkDeleteAssignedTasks: (ids) => {
+    return fetchApi('/assigned-tasks/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+  },
   proposeStandardTask: (data) => {
     return fetchApi('/standard-tasks/propose', {
       method: 'POST',

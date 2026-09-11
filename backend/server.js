@@ -2793,20 +2793,32 @@ app.put('/api/assigned-tasks/:id/reassign', requireManagerOrAdmin, (req, res) =>
 // Lãnh đạo / Admin xóa hoặc hủy nhiệm vụ đã giao hoặc bị trả lại
 app.delete('/api/assigned-tasks/:id', requireManagerOrAdmin, (req, res) => {
   const { id } = req.params;
-  const viewerId = getViewerId(req);
+  const viewer = getViewer(req);
+  const viewerId = viewer?.id || getViewerId(req);
+  const isAdmin = Boolean(
+    viewer && (
+      viewer.role === 'admin' || 
+      viewer.target_role === 'admin' || 
+      viewer.target_role === 'admin_donvi' || 
+      viewer.role_id === 'role-admin' || 
+      viewer.role_id === 'role-admin-donvi' || 
+      viewer.username === 'admin' || 
+      viewer.username === 'mnhy.andong'
+    )
+  );
 
   const task = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
   if (!task) return res.status(404).json({ success: false, message: 'Không tìm thấy công việc' });
 
-  if (task.status === 'approved') {
+  // Nếu không phải Admin thì không được xóa công việc đã chấm điểm phê duyệt
+  if (!isAdmin && task.status === 'approved') {
     return res.status(400).json({ success: false, message: 'Công việc đã được chấm điểm phê duyệt, không thể xóa' });
   }
 
-  // Kiểm tra quyền
-  const accessibleUserIds = getAccessibleUserIds(viewerId);
-  if (accessibleUserIds !== null && !accessibleUserIds.includes(task.user_id) && task.assigned_by !== viewerId) {
-    const viewer = viewerId ? db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId) : null;
-    if (viewer?.role !== 'admin') {
+  // Kiểm tra quyền đối với CBQL thông thường (không phải admin)
+  if (!isAdmin) {
+    const accessibleUserIds = getAccessibleUserIds(viewerId);
+    if (accessibleUserIds !== null && !accessibleUserIds.includes(task.user_id) && task.assigned_by !== viewerId) {
       return res.status(403).json({ success: false, message: 'Bạn không có quyền xóa nhiệm vụ này' });
     }
   }
@@ -2816,6 +2828,51 @@ app.delete('/api/assigned-tasks/:id', requireManagerOrAdmin, (req, res) => {
   triggerBackgroundSupabaseSync();
 
   res.json({ success: true, message: `Đã xóa nhiệm vụ "${task.task_name}" thành công!` });
+});
+
+// Admin / Lãnh đạo xóa nhiều nhiệm vụ đã giao cùng lúc
+app.post('/api/assigned-tasks/bulk-delete', requireManagerOrAdmin, (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ success: false, message: 'Danh sách ID công việc không hợp lệ' });
+  }
+
+  const viewer = getViewer(req);
+  const viewerId = viewer?.id || getViewerId(req);
+  const isAdmin = Boolean(
+    viewer && (
+      viewer.role === 'admin' || 
+      viewer.target_role === 'admin' || 
+      viewer.target_role === 'admin_donvi' || 
+      viewer.role_id === 'role-admin' || 
+      viewer.role_id === 'role-admin-donvi' || 
+      viewer.username === 'admin' || 
+      viewer.username === 'mnhy.andong'
+    )
+  );
+
+  const placeholders = ids.map(() => '?').join(',');
+  let deleteQuery = `DELETE FROM assigned_tasks WHERE id IN (${placeholders})`;
+  let params = [...ids];
+
+  if (!isAdmin) {
+    deleteQuery += " AND status != 'approved'";
+    const accessibleUserIds = getAccessibleUserIds(viewerId);
+    if (accessibleUserIds !== null) {
+      const userPlaceholders = accessibleUserIds.map(() => '?').join(',');
+      deleteQuery += ` AND (user_id IN (${userPlaceholders}) OR assigned_by = ?)`;
+      params.push(...accessibleUserIds, viewerId);
+    }
+  }
+
+  const result = db.prepare(deleteQuery).run(...params);
+  triggerBackgroundSupabaseSync();
+
+  res.json({ 
+    success: true, 
+    deletedCount: result.changes,
+    message: `Đã xóa thành công ${result.changes} nhiệm vụ!` 
+  });
 });
 
 // Cán bộ Phản hồi đánh giá nhiệm vụ cuối kỳ (Bước 4 theo tài liệu V6)

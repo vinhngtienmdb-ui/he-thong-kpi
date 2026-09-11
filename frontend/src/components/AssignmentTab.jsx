@@ -30,7 +30,8 @@ import {
   Paperclip,
   Zap,
   FolderPlus,
-  Briefcase
+  Briefcase,
+  Trash2
 } from 'lucide-react';
 import { api } from '../api';
 import { OUTPUT_RESULT_OPTIONS, formatDate, toInputDateFormat, parseDateOnly } from '../constants';
@@ -123,10 +124,22 @@ export default function AssignmentTab({
 
   // Multi-user selection state for CBQL
   const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [selectedTaskIds, setSelectedTaskIds] = useState([]);
   const [modalUserSearch, setModalUserSearch] = useState('');
   const [stdTaskSearch, setStdTaskSearch] = useState('');
 
-  const isCBQL = currentUser?.role === 'cbql' || currentUser?.role === 'admin' || (currentUser?.data_scope && currentUser?.data_scope !== 'personal');
+  const isAdmin = Boolean(
+    currentUser?.role === 'admin' || 
+    currentUser?.role_code === 'admin' || 
+    currentUser?.role_id === 'role-admin' || 
+    currentUser?.role_id === 'role-admin-donvi' || 
+    currentUser?.target_role === 'admin_donvi' || 
+    currentUser?.target_role === 'admin' ||
+    currentUser?.username === 'admin' ||
+    currentUser?.username === 'mnhy.andong'
+  );
+
+  const isCBQL = isAdmin || currentUser?.role === 'cbql' || currentUser?.role === 'admin' || (currentUser?.data_scope && currentUser?.data_scope !== 'personal');
   const assignableUsers = isCBQL 
     ? users.filter(u => u.role !== 'admin') 
     : (currentUser && currentUser.role !== 'admin' ? [currentUser] : []);
@@ -471,9 +484,42 @@ export default function AssignmentTab({
     try {
       await api.deleteAssignedTask(task.id);
       alert(`Đã thu hồi công việc "${task.task_name}" thành công!`);
+      setSelectedTaskIds(prev => prev.filter(id => id !== task.id));
       loadData();
     } catch (err) {
       alert('Lỗi thu hồi công việc: ' + (err.message || err));
+    }
+  }
+
+  // Admin xóa công việc đã giao (Xóa hoàn toàn mọi trạng thái)
+  async function handleDeleteTask(task) {
+    if (!task) return;
+    const confirmMsg = `Bạn có chắc chắn muốn XÓA công việc "${task.task_name}" (Giao cho: ${task.user_name || 'cán bộ'})?\n\n(Lưu ý: Thao tác này sẽ xóa hoàn toàn công việc khỏi hệ thống).`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await api.deleteAssignedTask(task.id);
+      alert(`Đã xóa công việc "${task.task_name}" thành công!`);
+      setSelectedTaskIds(prev => prev.filter(id => id !== task.id));
+      loadData();
+    } catch (err) {
+      alert('Lỗi xóa công việc: ' + (err.message || err));
+    }
+  }
+
+  // Admin xóa hàng loạt công việc đã chọn
+  async function handleBulkDeleteAssignedTasks() {
+    if (!selectedTaskIds || selectedTaskIds.length === 0) return;
+    const confirmMsg = `CẢNH BÁO: Bạn đang chọn XÓA ${selectedTaskIds.length} công việc đã giao.\n\nBạn có chắc chắn muốn xóa vĩnh viễn các công việc đã chọn khỏi hệ thống không?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const res = await api.bulkDeleteAssignedTasks(selectedTaskIds);
+      alert(`Đã xóa thành công ${res?.deletedCount || selectedTaskIds.length} công việc đã giao!`);
+      setSelectedTaskIds([]);
+      loadData();
+    } catch (err) {
+      alert('Lỗi xóa hàng loạt công việc: ' + (err.message || err));
     }
   }
 
@@ -1260,6 +1306,17 @@ export default function AssignmentTab({
                         </div>
 
                         <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200/60">
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTask(task)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-lg shadow-2xs transition-colors"
+                              title="Admin xóa công việc này"
+                            >
+                              <Trash2 size={13} className="text-rose-600" />
+                              <span>Xóa</span>
+                            </button>
+                          )}
                           {isPending && isCBQL ? (
                             <>
                               <button
@@ -1287,7 +1344,7 @@ export default function AssignmentTab({
                             >
                               Nộp minh chứng →
                             </button>
-                          ) : (
+                          ) : !isAdmin && (
                             <span className="text-[11px] text-slate-500 italic">Đang theo dõi</span>
                           )}
                         </div>
@@ -1676,43 +1733,64 @@ export default function AssignmentTab({
                                                   )}
                                                 </td>
                                                 <td className="py-2 px-3 text-center whitespace-nowrap">
-                                                  {task.status === 'pending_acceptance' && currentUser?.id === task.user_id ? (
-                                                    <div className="flex items-center justify-center gap-1 flex-wrap">
+                                                  <div className="flex items-center justify-center gap-1 flex-wrap">
+                                                    {task.status === 'pending_acceptance' && currentUser?.id === task.user_id ? (
+                                                      <>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => handleAcceptTask(task.id)}
+                                                          className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded shadow-2xs"
+                                                          title="Xác nhận tiếp nhận nhiệm vụ (chuyển vào Công việc cá nhân)"
+                                                        >
+                                                          Nhận việc
+                                                        </button>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => openReturnModal(task)}
+                                                          className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] rounded shadow-2xs"
+                                                          title="Trả lại việc cho cấp trên với lý do"
+                                                        >
+                                                          Trả lại
+                                                        </button>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => openFeedbackModal(task)}
+                                                          className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] rounded shadow-2xs"
+                                                          title="Phản hồi lý do chưa hợp lý (tối đa 1 lần)"
+                                                        >
+                                                          Phản hồi
+                                                        </button>
+                                                      </>
+                                                    ) : task.status === 'feedback_submitted' && isCBQL ? (
+                                                      <>
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => openReassignModal(task)}
+                                                          className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded shadow-2xs"
+                                                          title="Điều chỉnh thông tin và giao lại nhiệm vụ"
+                                                        >
+                                                          Giao lại
+                                                        </button>
+                                                        {!isAdmin && (
+                                                          <button
+                                                            type="button"
+                                                            onClick={() => handleRecallTask(task)}
+                                                            className="px-2 py-0.5 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-[10px] rounded shadow-2xs"
+                                                            title="Thu hồi công việc đã giao nhầm"
+                                                          >
+                                                            Thu hồi
+                                                          </button>
+                                                        )}
+                                                      </>
+                                                    ) : currentUser?.id === task.user_id ? (
                                                       <button
                                                         type="button"
-                                                        onClick={() => handleAcceptTask(task.id)}
-                                                        className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded shadow-2xs"
-                                                        title="Xác nhận tiếp nhận nhiệm vụ (chuyển vào Công việc cá nhân)"
+                                                        onClick={() => { if (setCurrentTab) setCurrentTab('execution'); }}
+                                                        className="px-2.5 py-1 bg-red-700 hover:bg-red-800 text-white font-bold text-[11px] rounded-lg shadow-2xs"
                                                       >
-                                                        Nhận việc
+                                                        Nộp MC →
                                                       </button>
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => openReturnModal(task)}
-                                                        className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] rounded shadow-2xs"
-                                                        title="Trả lại việc cho cấp trên với lý do"
-                                                      >
-                                                        Trả lại
-                                                      </button>
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => openFeedbackModal(task)}
-                                                        className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] rounded shadow-2xs"
-                                                        title="Phản hồi lý do chưa hợp lý (tối đa 1 lần)"
-                                                      >
-                                                        Phản hồi
-                                                      </button>
-                                                    </div>
-                                                  ) : task.status === 'feedback_submitted' && isCBQL ? (
-                                                    <div className="flex items-center justify-center gap-1">
-                                                      <button
-                                                        type="button"
-                                                        onClick={() => openReassignModal(task)}
-                                                        className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded shadow-2xs"
-                                                        title="Điều chỉnh thông tin và giao lại nhiệm vụ"
-                                                      >
-                                                        Giao lại
-                                                      </button>
+                                                    ) : !isAdmin && (((currentUser?.id === task.assigned_by) || isCBQL) && task.origin === 'assigned' && task.status !== 'approved') ? (
                                                       <button
                                                         type="button"
                                                         onClick={() => handleRecallTask(task)}
@@ -1721,31 +1799,22 @@ export default function AssignmentTab({
                                                       >
                                                         Thu hồi
                                                       </button>
-                                                    </div>
-                                                  ) : currentUser?.id === task.user_id ? (
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => { if (setCurrentTab) setCurrentTab('execution'); }}
-                                                      className="px-2.5 py-1 bg-red-700 hover:bg-red-800 text-white font-bold text-[11px] rounded-lg shadow-2xs"
-                                                    >
-                                                      Nộp MC →
-                                                    </button>
-                                                  ) : (
-                                                    <div className="flex items-center justify-center gap-1">
-                                                      {(((currentUser?.id === task.assigned_by) || isCBQL) && task.origin === 'assigned' && task.status !== 'approved') ? (
-                                                        <button
-                                                          type="button"
-                                                          onClick={() => handleRecallTask(task)}
-                                                          className="px-2 py-0.5 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-[10px] rounded shadow-2xs"
-                                                          title="Thu hồi công việc đã giao nhầm"
-                                                        >
-                                                          Thu hồi
-                                                        </button>
-                                                      ) : (
-                                                        <span className="text-slate-400 italic text-[11px]">Theo dõi</span>
-                                                      )}
-                                                    </div>
-                                                  )}
+                                                    ) : !isAdmin && (
+                                                      <span className="text-slate-400 italic text-[11px]">Theo dõi</span>
+                                                    )}
+
+                                                    {isAdmin && (
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteTask(task)}
+                                                        className="inline-flex items-center gap-0.5 px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-[10px] rounded shadow-2xs transition-colors"
+                                                        title="Admin xóa công việc đã giao này"
+                                                      >
+                                                        <Trash2 size={11} className="text-rose-600" />
+                                                        <span>Xóa</span>
+                                                      </button>
+                                                    )}
+                                                  </div>
                                                 </td>
                                               </tr>
                                             );
@@ -1999,11 +2068,61 @@ export default function AssignmentTab({
                 )}
               </div>
 
+              {/* Bulk Delete Actions Bar for Admin */}
+              {isAdmin && selectedTaskIds.length > 0 && (
+                <div className="flex items-center justify-between p-3 bg-rose-50 border border-rose-200 rounded-xl animate-in fade-in duration-150">
+                  <div className="flex items-center gap-2.5">
+                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-rose-600 text-white text-xs font-bold">
+                      {selectedTaskIds.length}
+                    </span>
+                    <span className="text-sm font-bold text-rose-900">
+                      Đã chọn {selectedTaskIds.length} công việc đã giao
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTaskIds([])}
+                      className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 bg-white border border-slate-200 rounded-lg shadow-2xs hover:bg-slate-50 transition"
+                    >
+                      Hủy chọn
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleBulkDeleteAssignedTasks}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-2xs transition active:scale-95 cursor-pointer"
+                    >
+                      <Trash2 size={14} />
+                      <span>Xóa {selectedTaskIds.length} công việc đã chọn</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Detailed Table (hidden lg:block) */}
               <div className="hidden lg:block overflow-x-auto">
                 <table className="w-full min-w-[1350px] text-left text-sm text-slate-600">
                   <thead className="bg-slate-50 font-bold text-slate-700 border-b border-slate-200">
                     <tr>
+                      {isAdmin && (
+                        <th className="px-3 py-3.5 w-10 text-center">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500 cursor-pointer"
+                            checked={currentViewTasks.length > 0 && currentViewTasks.every(t => selectedTaskIds.includes(t.id))}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                const allIds = currentViewTasks.map(t => t.id);
+                                setSelectedTaskIds(prev => Array.from(new Set([...prev, ...allIds])));
+                              } else {
+                                const pageIds = new Set(currentViewTasks.map(t => t.id));
+                                setSelectedTaskIds(prev => prev.filter(id => !pageIds.has(id)));
+                              }
+                            }}
+                            title="Chọn tất cả công việc đang hiển thị"
+                          />
+                        </th>
+                      )}
                       <th className="px-4 py-3.5 w-14 text-center">STT</th>
                       {activeView !== 'personal' && activeView !== 'assigned_in' && (
                         <th className="px-4 py-3.5 min-w-[220px]">Người thực hiện</th>
@@ -2022,7 +2141,7 @@ export default function AssignmentTab({
                   <tbody className="divide-y divide-slate-100">
                     {currentViewTasks.length === 0 ? (
                       <tr>
-                        <td colSpan="9" className="text-center py-12 text-slate-400 italic">
+                        <td colSpan={isAdmin ? 10 : 9} className="text-center py-12 text-slate-400 italic">
                           Không tìm thấy công việc nào phù hợp với bộ lọc hiện tại.
                         </td>
                       </tr>
@@ -2035,6 +2154,22 @@ export default function AssignmentTab({
 
                         return (
                           <tr key={t.id} className="hover:bg-slate-50 transition">
+                            {isAdmin && (
+                              <td className="px-3 py-3.5 text-center">
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500 cursor-pointer"
+                                  checked={selectedTaskIds.includes(t.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedTaskIds(prev => [...prev, t.id]);
+                                    } else {
+                                      setSelectedTaskIds(prev => prev.filter(id => id !== t.id));
+                                    }
+                                  }}
+                                />
+                              </td>
+                            )}
                             <td className="px-4 py-3.5 text-center font-semibold text-slate-400">
                               {idx + 1}
                             </td>
@@ -2144,107 +2279,123 @@ export default function AssignmentTab({
 
                             {/* Actions */}
                             <td className="px-4 py-3.5 text-center whitespace-nowrap">
-                              {t.status === 'pending_acceptance' && currentUser?.id === t.user_id ? (
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAcceptTask(t.id)}
-                                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-2xs"
-                                    title="Xác nhận tiếp nhận nhiệm vụ (chuyển vào Công việc cá nhân)"
-                                  >
-                                    Nhận việc
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => openReturnModal(t)}
-                                    className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg shadow-2xs"
-                                    title="Trả lại việc cho cấp trên với lý do"
-                                  >
-                                    Trả lại
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => openFeedbackModal(t)}
-                                    className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg shadow-2xs"
-                                    title="Phản hồi chưa hợp lý (tối đa 1 lần)"
-                                  >
-                                    Phản hồi
-                                  </button>
-                                </div>
-                              ) : t.status === 'feedback_submitted' && isCBQL ? (
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => openReassignModal(t)}
-                                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs"
-                                    title="Điều chỉnh thông tin và giao lại nhiệm vụ"
-                                  >
-                                    Giao lại
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRecallTask(t)}
-                                    className="px-2.5 py-1 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-lg shadow-2xs"
-                                    title="Thu hồi công việc đã giao nhầm"
-                                  >
-                                    Thu hồi
-                                  </button>
-                                </div>
-                              ) : isPending && isCBQL ? (
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => openApprovalModal(t)}
-                                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-2xs"
-                                  >
-                                    Duyệt
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRejectTask(t)}
-                                    className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg shadow-2xs"
-                                  >
-                                    Từ chối
-                                  </button>
-                                </div>
-                              ) : t.user_id === currentUser?.id ? (
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      if (setCurrentTab) setCurrentTab('execution');
-                                    }}
-                                    className="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold text-xs rounded-lg transition"
-                                  >
-                                    Nộp MC
-                                  </button>
-                                  {(((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') && (
+                              <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                {t.status === 'pending_acceptance' && currentUser?.id === t.user_id ? (
+                                  <>
                                     <button
                                       type="button"
-                                      onClick={() => handleRecallTask(t)}
-                                      className="px-2.5 py-1 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-lg shadow-2xs"
-                                      title="Thu hồi công việc đã giao nhầm"
+                                      onClick={() => handleAcceptTask(t.id)}
+                                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-2xs"
+                                      title="Xác nhận tiếp nhận nhiệm vụ (chuyển vào Công việc cá nhân)"
                                     >
-                                      Thu hồi
+                                      Nhận việc
                                     </button>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="flex items-center justify-center gap-1.5">
-                                  {(((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') ? (
                                     <button
                                       type="button"
-                                      onClick={() => handleRecallTask(t)}
-                                      className="px-2.5 py-1 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-lg shadow-2xs"
-                                      title="Thu hồi công việc đã giao nhầm"
+                                      onClick={() => openReturnModal(t)}
+                                      className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg shadow-2xs"
+                                      title="Trả lại việc cho cấp trên với lý do"
                                     >
-                                      Thu hồi
+                                      Trả lại
                                     </button>
-                                  ) : (
-                                    <span className="text-xs text-slate-400 italic">Theo dõi</span>
-                                  )}
-                                </div>
-                              )}
+                                    <button
+                                      type="button"
+                                      onClick={() => openFeedbackModal(t)}
+                                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg shadow-2xs"
+                                      title="Phản hồi chưa hợp lý (tối đa 1 lần)"
+                                    >
+                                      Phản hồi
+                                    </button>
+                                  </>
+                                ) : t.status === 'feedback_submitted' && isCBQL ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => openReassignModal(t)}
+                                      className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs"
+                                      title="Điều chỉnh thông tin và giao lại nhiệm vụ"
+                                    >
+                                      Giao lại
+                                    </button>
+                                    {!isAdmin && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRecallTask(t)}
+                                        className="px-2.5 py-1 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-lg shadow-2xs"
+                                        title="Thu hồi công việc đã giao nhầm"
+                                      >
+                                        Thu hồi
+                                      </button>
+                                    )}
+                                  </>
+                                ) : isPending && isCBQL ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => openApprovalModal(t)}
+                                      className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-2xs"
+                                    >
+                                      Duyệt
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRejectTask(t)}
+                                      className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg shadow-2xs"
+                                    >
+                                      Từ chối
+                                    </button>
+                                  </>
+                                ) : t.user_id === currentUser?.id ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (setCurrentTab) setCurrentTab('execution');
+                                      }}
+                                      className="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold text-xs rounded-lg transition"
+                                    >
+                                      Nộp MC
+                                    </button>
+                                    {!isAdmin && (((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRecallTask(t)}
+                                        className="px-2.5 py-1 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-lg shadow-2xs"
+                                        title="Thu hồi công việc đã giao nhầm"
+                                      >
+                                        Thu hồi
+                                      </button>
+                                    )}
+                                  </>
+                                ) : (
+                                  <>
+                                    {!isAdmin && (((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRecallTask(t)}
+                                        className="px-2.5 py-1 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-lg shadow-2xs"
+                                        title="Thu hồi công việc đã giao nhầm"
+                                      >
+                                        Thu hồi
+                                      </button>
+                                    ) : !isAdmin && (
+                                      <span className="text-xs text-slate-400 italic">Theo dõi</span>
+                                    )}
+                                  </>
+                                )}
+
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteTask(t)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-lg shadow-2xs transition-colors cursor-pointer active:scale-95"
+                                    title="Admin xóa công việc này"
+                                  >
+                                    <Trash2 size={13} className="text-rose-600" />
+                                    <span>Xóa</span>
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -2399,13 +2550,15 @@ export default function AssignmentTab({
                               >
                                 Giao lại
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => handleRecallTask(t)}
-                                className="px-3.5 py-1.5 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
-                              >
-                                Thu hồi
-                              </button>
+                              {!isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRecallTask(t)}
+                                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                                >
+                                  Thu hồi
+                                </button>
+                              )}
                             </>
                           ) : isPending && isCBQL ? (
                             <>
@@ -2435,7 +2588,7 @@ export default function AssignmentTab({
                               >
                                 Nộp MC →
                               </button>
-                              {(((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') && (
+                              {!isAdmin && (((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') && (
                                 <button
                                   type="button"
                                   onClick={() => handleRecallTask(t)}
@@ -2447,7 +2600,7 @@ export default function AssignmentTab({
                             </>
                           ) : (
                             <>
-                              {(((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') ? (
+                              {!isAdmin && (((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') ? (
                                 <button
                                   type="button"
                                   onClick={() => handleRecallTask(t)}
@@ -2455,10 +2608,22 @@ export default function AssignmentTab({
                                 >
                                   Thu hồi
                                 </button>
-                              ) : (
+                              ) : !isAdmin && (
                                 <span className="text-xs text-slate-400 italic">Theo dõi</span>
                               )}
                             </>
+                          )}
+
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteTask(t)}
+                              className="inline-flex items-center gap-1 px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95 transition-colors"
+                              title="Admin xóa công việc này"
+                            >
+                              <Trash2 size={13} className="text-rose-600" />
+                              <span>Xóa</span>
+                            </button>
                           )}
                         </div>
                       </div>
