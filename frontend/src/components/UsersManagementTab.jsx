@@ -36,9 +36,11 @@ import {
 import { api } from '../api';
 import UserGroupManagementModal from './UserGroupManagementModal';
 import { compareUsersByPositionAndName } from '../userSorting';
+import { getUserPermissions } from '../permissions';
 
 export default function UsersManagementTab({ currentUser, departments = [], onReloadUsers }) {
-  const canManage = currentUser?.role === 'admin' || currentUser?.role_code === 'admin_donvi';
+  const userPerms = getUserPermissions(currentUser);
+  const canManage = userPerms.canManageUsers;
   if (currentUser && !canManage) {
     return (
       <div className="max-w-3xl mx-auto py-12 px-4 text-center">

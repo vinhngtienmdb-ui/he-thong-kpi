@@ -1247,12 +1247,59 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
+              {/* Version 5.2 */}
+              <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 5.2</span>
+                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 00:05 (Bản phát hành mới nhất - Chuẩn Hóa Danh Mục Theo Quý, Cây Đơn Vị Thứ Bậc, Phân Quyền Giao Việc & Trình Văn Thư, Khắc Phục Phân Quyền Động CBQL)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Chuẩn Hóa Danh Mục Công Việc Chuẩn Theo Quý, Sắp Xếp Cây Đơn Vị Từ Cao Xuống Thấp, Phân Định Thẩm Quyền Phân Công Công Việc, Phân Quyền Văn Thư Trình Văn Bản & Khắc Phục Triệt Để Lỗi Phân Quyền Động Cho CBQL
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Khắc phục triệt để lỗi phân quyền động CBQL truy cập Quản lý người dùng & Cấu hình hệ thống:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Loại bỏ hoàn toàn các rào cản kiểm tra tĩnh tại <code>UsersManagementTab</code> và <code>SystemConfigTab</code>; chuyển đổi thống nhất sang kiểm tra động theo <code>getUserPermissions(currentUser)</code>.</li>
+                      <li>Khi Quản trị viên cấp thêm quyền <code>can_manage_users</code> hoặc <code>can_manage_system</code> cho vai trò CBQL, người dùng thuộc nhóm CBQL có quyền truy cập và thao tác ngay lập tức mà không gặp lỗi "Không đủ quyền" hay 403 Forbidden.</li>
+                      <li>Tự động kích hoạt làm mới danh sách cán bộ và phân quyền hiện hành (<code>onReloadUsers</code>) ngay sau khi Quản trị viên lưu phân quyền vai trò.</li>
+                      <li>Nâng cấp các API quản lý Đơn vị / Phòng ban (tạo, cập nhật, xóa, nhập Excel) tại backend từ <code>requireAdmin</code> sang <code>requireCanManageUsers</code> để cán bộ được giao quyền quản lý đơn vị/người dùng thao tác thuận tiện.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Danh mục công việc chuẩn áp dụng riêng biệt cho từng Quý:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Chuẩn hóa dữ liệu toàn bộ 78 nhiệm vụ công việc chuẩn áp dụng riêng cho Quý III/2026 (<code>period_id = 'p-2'</code>).</li>
+                      <li>Quý IV/2026 (<code>period_id = 'p-3'</code>) hiện chưa phát hành danh mục, hiển thị trạng thái thông báo trực quan, ngăn chặn việc hiển thị sai lệch hoặc tràn danh mục giữa các quý khác nhau.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Sắp xếp Cây Danh mục Đơn vị / Phòng ban theo thứ bậc từ cao xuống thấp:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Tự động sắp xếp phân cấp theo hình cây (Topological Hierarchy): từ Đơn vị cao nhất (Thành ủy TP.HCM - Cấp 0) &rarr; Đơn vị trực thuộc (Đảng ủy Phường An Đông - Cấp 1) &rarr; Đơn vị cơ sở (Chi bộ Mầm non Hoàng Yến - Cấp 2).</li>
+                      <li>Hiển thị thụt lề phân cấp trực quan, kèm nhãn cấp bậc trên cây quản lý cơ cấu tổ chức và danh mục phòng ban.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Phân định Thẩm quyền Phân công công việc & Bảo vệ Danh mục chuẩn:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Chỉ người dùng có chức danh Lãnh đạo hoặc Cán bộ Quản lý (CBQL) mới có thẩm quyền phân công công việc tại phân hệ Giao việc (B1).</li>
+                      <li>Cán bộ nhân viên (CBNV) bị khóa các nút sửa, xóa danh mục công việc chuẩn để bảo toàn tính toàn vẹn của danh mục chung.</li>
+                      <li>Sau khi Lãnh đạo đã phân công công việc từ văn bản, nút "Phân công" tự động ẩn để tránh thao tác trùng lặp.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Quyền Văn thư Trình văn bản cho Lãnh đạo:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Bổ sung vai trò Cán bộ Văn thư (<code>role-van-thu</code>) với quyền đặc thù <code>can_submit_documents</code>.</li>
+                      <li>Chỉ người dùng có quyền Văn thư mới hiển thị tính năng "Trình LĐ" tại phân hệ Quản lý & Phân bổ văn bản; bảo vệ API <code>POST /api/documents/:id/submit-to-leader</code> chống truy cập trái phép.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
               {/* Version 5.1 */}
-              <div className="relative pl-6 border-l-2 border-indigo-600 space-y-2">
-                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-indigo-600 border-2 border-white shadow-xs"></span>
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-xs font-bold">Phiên bản 5.1</span>
-                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Chuẩn Hóa Phân Quyền CBNV, Nhóm Đối Tượng Báo Cáo & Lọc Lãnh Đạo Trực Tiếp)</span>
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-300 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 5.1</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 - 21:30 (Chuẩn Hóa Phân Quyền CBNV, Nhóm Đối Tượng Báo Cáo & Lọc Lãnh Đạo Trực Tiếp)</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Phân Loại Đối Tượng Công Chức / Viên Chức / Người Lao Động, Tách Nhóm & Tỷ Lệ Xếp Loại Báo Cáo Mẫu 02, Cơ Chế Phân Quyền Động, Phân Quyền Giao Diện CBNV, Lọc Lãnh Đạo Trực Tiếp Theo Đơn Vị & Tinh Gọn Danh Mục Báo Cáo
@@ -1291,9 +1338,9 @@ export default function Header({
               {/* Version 5.0 */}
               <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-300 border-2 border-white shadow-xs"></span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 5.0</span>
-                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Đổi Tên Quản Lý Người Dùng, Cây Phân Cấp Đơn Vị & Hỗ Trợ Đa Chức Vụ / Kiêm Nhiệm)</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 - 15:00 (Đổi Tên Quản Lý Người Dùng, Cây Phân Cấp Đơn Vị & Hỗ Trợ Đa Chức Vụ / Kiêm Nhiệm)</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Đổi Tên Quản Lý Phân Quyền Thành "Quản Lý Người Dùng", Quản Lý Người Dùng Theo Phân Cấp Đơn Vị (Hierarchical Organizational Unit Tree), Hỗ Trợ Cán Bộ Đa Chức Vụ / Kiêm Nhiệm Tại Một Hoặc Nhiều Đơn Vị Theo Chuẩn iCPV TP.HCM

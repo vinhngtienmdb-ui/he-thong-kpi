@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate } from '../constants';
+import { getUserPermissions } from '../permissions';
 
 export default function SystemConfigTab({ 
   currentPeriod, 
@@ -42,9 +43,11 @@ export default function SystemConfigTab({
   users = [],
   departments = [],
   onReloadDepartments,
-  currentUser
+  currentUser,
+  onReloadUsers
 }) {
-  if (currentUser && currentUser.role !== 'admin') {
+  const userPerms = getUserPermissions(currentUser);
+  if (currentUser && !userPerms.canManageSystem) {
     return (
       <div className="max-w-3xl mx-auto py-12 px-4 text-center">
         <div className="bg-white rounded-2xl p-8 border border-slate-200 shadow-sm space-y-4">
@@ -254,7 +257,8 @@ export default function SystemConfigTab({
       can_assign_tasks: true,
       can_grade_tasks: true,
       can_conclude_evaluation: true,
-      can_view_all_reports: false
+      can_view_all_reports: false,
+      can_submit_documents: false
     }
   });
 
@@ -498,7 +502,8 @@ export default function SystemConfigTab({
         can_assign_tasks: true,
         can_grade_tasks: true,
         can_conclude_evaluation: true,
-        can_view_all_reports: false
+        can_view_all_reports: false,
+        can_submit_documents: false
       }
     });
     setIsRoleModalOpen(true);
@@ -518,7 +523,8 @@ export default function SystemConfigTab({
         can_assign_tasks: Boolean(perms.can_assign_tasks),
         can_grade_tasks: Boolean(perms.can_grade_tasks),
         can_conclude_evaluation: Boolean(perms.can_conclude_evaluation),
-        can_view_all_reports: Boolean(perms.can_view_all_reports)
+        can_view_all_reports: Boolean(perms.can_view_all_reports),
+        can_submit_documents: Boolean(perms.can_submit_documents)
       }
     });
     setIsRoleModalOpen(true);
@@ -537,6 +543,9 @@ export default function SystemConfigTab({
       setIsRoleModalOpen(false);
       const updatedRoles = await api.getRoles();
       setRoles(updatedRoles);
+      if (onReloadUsers) {
+        await onReloadUsers();
+      }
     } catch (err) {
       alert('Lỗi lưu vai trò: ' + err.message);
     }
@@ -801,15 +810,16 @@ export default function SystemConfigTab({
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-2">
-                              {d.parent_id ? (
-                                <div className="flex items-center text-slate-400 pl-3">
-                                  <span className="text-slate-300 mr-1">└─</span>
+                              {d.level > 0 || d.parent_id ? (
+                                <div className="flex items-center text-slate-400" style={{ paddingLeft: `${Math.max(1, d.level || 1) * 16}px` }}>
+                                  <span className="text-slate-300 mr-1.5 font-mono">└─</span>
                                   <span className={`font-semibold ${isActive ? 'text-slate-900' : 'text-slate-600 line-through'}`}>{d.name}</span>
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-1.5 font-bold text-slate-900">
                                   <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-red-600' : 'bg-slate-400'}`}></span>
                                   <span className={isActive ? '' : 'text-slate-600 line-through'}>{d.name}</span>
+                                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-red-100 text-red-700 font-bold ml-1">Cấp cao nhất</span>
                                 </div>
                               )}
                             </div>
@@ -1991,6 +2001,19 @@ export default function SystemConfigTab({
                       className="rounded text-red-600 focus:ring-red-500"
                     />
                     <span className="font-semibold text-slate-800">Xem Báo cáo Mẫu 02 Toàn CQ</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 p-2 rounded-lg border border-purple-200 bg-purple-50/50 hover:bg-purple-50 cursor-pointer col-span-2 sm:col-span-1">
+                    <input
+                      type="checkbox"
+                      checked={roleForm.permissions.can_submit_documents || false}
+                      onChange={(e) => setRoleForm({
+                        ...roleForm,
+                        permissions: { ...roleForm.permissions, can_submit_documents: e.target.checked }
+                      })}
+                      className="rounded text-purple-600 focus:ring-purple-500"
+                    />
+                    <span className="font-semibold text-purple-900">Quyền Văn thư (Trình văn bản cho Lãnh đạo)</span>
                   </label>
                 </div>
               </div>

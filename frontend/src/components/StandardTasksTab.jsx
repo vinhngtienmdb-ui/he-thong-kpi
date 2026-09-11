@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import { OUTPUT_RESULT_OPTIONS, formatDate, toInputDateFormat } from '../constants';
+import { getUserPermissions } from '../permissions';
 
 export default function StandardTasksTab({ 
   selectedPeriod, 
@@ -35,14 +36,8 @@ export default function StandardTasksTab({
   onAssignTask,
   setCurrentTab
 }) {
-  const isCBQL = Boolean(
-    currentUser?.role === 'cbql' || 
-    currentUser?.role === 'admin' || 
-    currentUser?.target_role === 'cbql' ||
-    ['admin', 'admin_donvi', 'cbql_phong', 'ld_coquan', 'to_truong', 'hieu_pho'].includes(currentUser?.role_code) ||
-    (currentUser?.data_scope && currentUser?.data_scope !== 'personal') ||
-    currentUser?.management_role
-  );
+  const userPerms = getUserPermissions(currentUser);
+  const isCBQL = Boolean(userPerms.isManager || userPerms.isAdmin || userPerms.canAssignTasks);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1179,8 +1174,19 @@ export default function StandardTasksTab({
                 </tr>
               ) : filteredTasks.length === 0 ? (
                 <tr>
-                  <td colSpan="13" className="text-center py-12 text-slate-400 italic">
-                    Không tìm thấy công việc nào phù hợp. Bấm "Thêm mới" hoặc "Nhập file" để tạo dữ liệu.
+                  <td colSpan="13" className="text-center py-12 text-slate-500 italic text-xs">
+                    {tasks.length === 0 ? (
+                      <div>
+                        <p className="font-semibold text-slate-700">Kỳ đánh giá này hiện chưa có danh mục công việc chuẩn.</p>
+                        {isCBQL ? (
+                          <p className="text-slate-400 mt-1">Lãnh đạo / CBQL có thể bấm <strong>"↑ Nhập file"</strong> để nạp danh mục Excel hoặc <strong>"+ Thêm mới"</strong> để tạo công việc chuẩn cho kỳ này.</p>
+                        ) : (
+                          <p className="text-slate-400 mt-1">Danh mục công việc chuẩn áp dụng riêng cho từng quý. Vui lòng liên hệ Lãnh đạo đơn vị để nạp danh mục.</p>
+                        )}
+                      </div>
+                    ) : (
+                      'Không tìm thấy công việc nào phù hợp với bộ lọc tìm kiếm.'
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -1434,8 +1440,19 @@ export default function StandardTasksTab({
               Đang tải danh mục sản phẩm công việc chuẩn...
             </div>
           ) : filteredTasks.length === 0 ? (
-            <div className="text-center py-10 text-slate-400 bg-white rounded-xl border border-slate-200">
-              Không tìm thấy công việc nào phù hợp. Bấm "Thêm mới" hoặc "Nhập file" để tạo dữ liệu.
+            <div className="text-center py-10 text-slate-500 bg-white rounded-xl border border-slate-200 text-xs p-4">
+              {tasks.length === 0 ? (
+                <div>
+                  <p className="font-semibold text-slate-700">Kỳ đánh giá này hiện chưa có danh mục công việc chuẩn.</p>
+                  {isCBQL ? (
+                    <p className="text-slate-400 mt-1">Lãnh đạo / CBQL có thể bấm <strong>"↑ Nhập file"</strong> hoặc <strong>"+ Thêm mới"</strong> để nạp danh mục.</p>
+                  ) : (
+                    <p className="text-slate-400 mt-1">Danh mục công việc chuẩn áp dụng riêng cho từng quý.</p>
+                  )}
+                </div>
+              ) : (
+                'Không tìm thấy công việc nào phù hợp với bộ lọc.'
+              )}
             </div>
           ) : (
             filteredTasks.map((t, idx) => {

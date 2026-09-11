@@ -552,6 +552,38 @@ app.get('/api/periods', (req, res) => {
   res.json(periods);
 });
 
+function sortDepartmentsHierarchically(depts) {
+  if (!Array.isArray(depts) || depts.length === 0) return [];
+  const idMap = new Map();
+  const childrenMap = new Map();
+  depts.forEach(d => {
+    idMap.set(d.id, d);
+    childrenMap.set(d.id, []);
+  });
+  const roots = [];
+  depts.forEach(d => {
+    if (d.parent_id && idMap.has(d.parent_id)) {
+      childrenMap.get(d.parent_id).push(d);
+    } else {
+      roots.push(d);
+    }
+  });
+  roots.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+  const result = [];
+  function traverse(dept, level = 0) {
+    result.push({ ...dept, level });
+    const children = childrenMap.get(dept.id) || [];
+    children.sort((a, b) => (a.code || '').localeCompare(b.code || ''));
+    for (const child of children) {
+      traverse(child, level + 1);
+    }
+  }
+  for (const root of roots) {
+    traverse(root, 0);
+  }
+  return result;
+}
+
 app.get('/api/departments', (req, res) => {
   const depts = db.prepare(`
     SELECT d.*, 
@@ -568,13 +600,14 @@ app.get('/api/departments', (req, res) => {
     FROM departments d
     LEFT JOIN departments p ON d.parent_id = p.id
     LEFT JOIN users u ON d.leader_id = u.id
-    ORDER BY d.parent_id IS NOT NULL, d.code ASC
+    ORDER BY d.code ASC
   `).all();
-  res.json(depts);
+  const sortedDepts = sortDepartmentsHierarchically(depts);
+  res.json(sortedDepts);
 });
 
-// Admin: Create department
-app.post('/api/departments', requireAdmin, (req, res) => {
+// Admin / Manager: Create department
+app.post('/api/departments', requireCanManageUsers, (req, res) => {
   const { code, name, parent_id, leader_id, description, parent_agency, location_name, agency_type, manager_title, leader_title } = req.body;
   if (!code || !name) {
     return res.status(400).json({ success: false, message: 'Thiếu mã hoặc tên đơn vị/phòng ban' });
@@ -600,8 +633,8 @@ app.post('/api/departments', requireAdmin, (req, res) => {
   res.json({ success: true, id, message: 'Đã tạo đơn vị/phòng ban mới thành công' });
 });
 
-// Admin: Update department
-app.put('/api/departments/:id', requireAdmin, (req, res) => {
+// Admin / Manager: Update department
+app.put('/api/departments/:id', requireCanManageUsers, (req, res) => {
   const { id } = req.params;
   const { code, name, parent_id, leader_id, description, is_active, parent_agency, location_name, agency_type, manager_title, leader_title } = req.body;
   const dept = db.prepare('SELECT * FROM departments WHERE id = ?').get(id);
@@ -644,8 +677,8 @@ app.put('/api/departments/:id', requireAdmin, (req, res) => {
   res.json({ success: true, message: 'Đã cập nhật thông tin phòng ban thành công' });
 });
 
-// Admin: Delete department
-app.delete('/api/departments/:id', requireAdmin, (req, res) => {
+// Admin / Manager: Delete department
+app.delete('/api/departments/:id', requireCanManageUsers, (req, res) => {
   const { id } = req.params;
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users WHERE dept_id = ? AND (is_active IS NULL OR is_active = 1)').get(id).count;
   if (userCount > 0) {
@@ -661,8 +694,8 @@ app.delete('/api/departments/:id', requireAdmin, (req, res) => {
   res.json({ success: true, message: 'Đã xóa đơn vị thành công' });
 });
 
-// Admin: Import danh mục đơn vị hàng loạt từ Excel chuẩn iCPV TP.HCM
-app.post('/api/admin/departments/import-excel', requireAdmin, (req, res) => {
+// Admin / Manager: Import danh mục đơn vị hàng loạt từ Excel chuẩn iCPV TP.HCM
+app.post('/api/admin/departments/import-excel', requireCanManageUsers, (req, res) => {
   const { items } = req.body;
   if (!Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ success: false, message: 'Danh sách đơn vị nhập không hợp lệ hoặc rỗng' });
@@ -1843,7 +1876,7 @@ app.get('/api/standard-tasks', (req, res) => {
   const params = [];
 
   if (period_id) {
-    query += ' AND (period_id = ? OR period_id IS NULL)';
+    query += ' AND period_id = ?';
     params.push(period_id);
   }
   if (axis_code) {
@@ -6178,6 +6211,18 @@ app.post('/api/documents/:id/submit-to-leader', (req, res) => {
     const { id } = req.params;
     const viewer = getViewer(req);
     const { leader_id, leader_note } = req.body || {};
+
+    if (viewer) {
+      let perms = {};
+      try {
+        perms = typeof viewer.permissions === 'string' ? JSON.parse(viewer.permissions) : (viewer.permissions || {});
+      } catch (e) {}
+      const userTitle = `${viewer.gov_title || ''} ${viewer.party_title || ''}`.toLowerCase();
+      const isVanThu = checkIsAdmin(viewer) || perms.can_submit_documents === true || userTitle.includes('văn thư') || String(viewer.username || '').toLowerCase().includes('vanthu');
+      if (!isVanThu) {
+        return res.status(403).json({ success: false, error: 'Chỉ người dùng có quyền Văn thư mới có tính năng trình văn bản cho Lãnh đạo!' });
+      }
+    }
 
     if (!leader_id) {
       return res.status(400).json({ success: false, error: 'Vui lòng chọn Lãnh đạo để trình văn bản!' });

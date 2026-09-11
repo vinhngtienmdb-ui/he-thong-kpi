@@ -36,6 +36,7 @@ import {
 import { api } from '../api';
 import { OUTPUT_RESULT_OPTIONS, formatDate, toInputDateFormat, parseDateOnly } from '../constants';
 import UserGroupManagementModal from './UserGroupManagementModal';
+import { getUserPermissions } from '../permissions';
 
 export default function AssignmentTab({ 
   selectedPeriod, 
@@ -163,7 +164,8 @@ export default function AssignmentTab({
     currentUser?.username === 'mnhy.andong'
   );
 
-  const isCBQL = isAdmin || currentUser?.role === 'cbql' || currentUser?.role === 'admin' || (currentUser?.data_scope && currentUser?.data_scope !== 'personal');
+  const userPerms = getUserPermissions(currentUser);
+  const isCBQL = Boolean(isAdmin || userPerms.isManager || userPerms.canAssignTasks);
   const assignableUsers = isCBQL 
     ? users.filter(u => u.role !== 'admin') 
     : (currentUser && currentUser.role !== 'admin' ? [currentUser] : []);

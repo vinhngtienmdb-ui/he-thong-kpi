@@ -34,6 +34,7 @@ import {
 import { api } from '../api';
 import { formatDate, toInputDateFormat } from '../constants';
 import UserGroupManagementModal from './UserGroupManagementModal';
+import { getUserPermissions } from '../permissions';
 
 // Document Classifications (Phân loại văn bản chuẩn hành chính)
 const DOC_TYPES = [
@@ -152,8 +153,11 @@ export default function DocumentManagementTab({
   // Submitting loaders
   const [submitting, setSubmitting] = useState(false);
 
-  // Check if current user is manager or admin
-  const isCBQL = currentUser?.role === 'admin' || currentUser?.role === 'cbql' || currentUser?.role_code === 'admin' || currentUser?.role_code === 'cbql_phong' || currentUser?.role_code === 'ld_coquan';
+  // Permissions (Chỉ Văn thư mới có quyền trình LĐ; chỉ Lãnh đạo/CBQL mới có quyền phân công)
+  const userPerms = getUserPermissions(currentUser);
+  const isAdmin = Boolean(userPerms.isAdmin);
+  const isCBQL = Boolean(userPerms.isManager || userPerms.isAdmin || userPerms.canAssignTasks);
+  const canSubmitToLeader = Boolean(userPerms.isVanThu || userPerms.isAdmin);
 
   // Leaders list for submitting documents
   const leaders = useMemo(() => {
@@ -877,8 +881,8 @@ export default function DocumentManagementTab({
                       {/* Thao tác */}
                       <td className="px-3.5 py-3 text-center">
                         <div className="flex items-center justify-center gap-1.5 flex-wrap">
-                          {/* Trình Lãnh đạo button */}
-                          {doc.status !== 'completed' && (
+                          {/* Trình Lãnh đạo button (Chỉ người dùng có quyền Văn thư mới có tính năng này) */}
+                          {canSubmitToLeader && (doc.status === 'pending_dispatch' || !doc.status) && (
                             <button
                               type="button"
                               onClick={() => handleOpenSubmitLeader(doc)}
@@ -890,16 +894,16 @@ export default function DocumentManagementTab({
                             </button>
                           )}
 
-                          {/* Phân bổ / Chỉ đạo button */}
-                          {isCBQL && doc.status !== 'completed' && (
+                          {/* Phân công / Chỉ đạo button (Chỉ Lãnh đạo/CBQL; Sau khi Lãnh đạo đã phân công => không còn hiển thị nút Phân công) */}
+                          {isCBQL && (doc.status === 'pending_dispatch' || doc.status === 'submitted_to_leader') && (!doc.dispatches_count || doc.dispatches_count === 0) && (
                             <button
                               type="button"
                               onClick={() => handleOpenDispatch(doc)}
                               className="px-2.5 py-1 bg-red-700 hover:bg-red-800 text-white font-bold text-[11px] rounded-lg shadow-2xs transition flex items-center gap-1 cursor-pointer"
-                              title="Lãnh đạo phân bổ xử lý văn bản và giao việc KPI hoặc chuyển đọc tham khảo"
+                              title="Lãnh đạo phân công xử lý văn bản và giao việc KPI hoặc chuyển đọc tham khảo"
                             >
                               <Send className="w-3 h-3" />
-                              <span>{doc.status === 'submitted_to_leader' ? 'Chỉ đạo' : 'Phân bổ'}</span>
+                              <span>{doc.status === 'submitted_to_leader' ? 'Chỉ đạo' : 'Phân công'}</span>
                             </button>
                           )}
 
@@ -1023,7 +1027,7 @@ export default function DocumentManagementTab({
                     <span>Chi tiết</span>
                   </button>
 
-                  {doc.status !== 'completed' && (
+                  {canSubmitToLeader && (doc.status === 'pending_dispatch' || !doc.status) && (
                     <button
                       type="button"
                       onClick={() => handleOpenSubmitLeader(doc)}
@@ -1034,14 +1038,14 @@ export default function DocumentManagementTab({
                     </button>
                   )}
 
-                  {isCBQL && doc.status !== 'completed' && (
+                  {isCBQL && (doc.status === 'pending_dispatch' || doc.status === 'submitted_to_leader') && (!doc.dispatches_count || doc.dispatches_count === 0) && (
                     <button
                       type="button"
                       onClick={() => handleOpenDispatch(doc)}
                       className="flex-1 min-w-[85px] py-2 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-lg shadow-xs transition flex items-center justify-center gap-1 cursor-pointer"
                     >
                       <Send className="w-3.5 h-3.5" />
-                      <span>{doc.status === 'submitted_to_leader' ? 'Chỉ đạo' : 'Phân bổ'}</span>
+                      <span>{doc.status === 'submitted_to_leader' ? 'Chỉ đạo' : 'Phân công'}</span>
                     </button>
                   )}
 
@@ -1948,7 +1952,7 @@ export default function DocumentManagementTab({
                     <Send className="w-4 h-4 text-red-700" />
                     <span>Lịch sử Phân bổ & Kết quả Thực hiện ({detailModalDoc.dispatches?.length || 0})</span>
                   </h4>
-                  {isCBQL && detailModalDoc.status !== 'completed' && (
+                  {isCBQL && (detailModalDoc.status === 'pending_dispatch' || detailModalDoc.status === 'submitted_to_leader') && (!detailModalDoc.dispatches || detailModalDoc.dispatches.length === 0) && (
                     <button
                       type="button"
                       onClick={() => {
@@ -1959,7 +1963,7 @@ export default function DocumentManagementTab({
                       className="text-xs font-bold text-red-700 hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>Thêm phân bổ mới</span>
+                      <span>Phân công văn bản</span>
                     </button>
                   )}
                 </div>

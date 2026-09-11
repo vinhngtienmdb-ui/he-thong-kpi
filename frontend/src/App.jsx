@@ -606,6 +606,7 @@ export default function App() {
               onReloadDepartments={handleReloadDepartments}
               currentUser={currentUser}
               setCurrentTab={setCurrentTab}
+              onReloadUsers={handleReloadUsers}
             />
           )}
         </main>
