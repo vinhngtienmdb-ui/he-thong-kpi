@@ -591,6 +591,17 @@ export const api = {
     method: 'DELETE',
   }),
 
+  // Skip-level Authorizations (Quản lý vượt cấp)
+  getSkipLevelAuthorizations: () => fetchApi('/admin/skip-level-authorizations'),
+  createSkipLevelAuthorization: (data) => fetchApi('/admin/skip-level-authorizations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
+  deleteSkipLevelAuthorization: (id) => fetchApi(`/admin/skip-level-authorizations/${id}`, {
+    method: 'DELETE',
+  }),
+
   // Admin System Config & Periods
   getAdminConfigs: () => fetchApi('/admin/configs'),
   updateAdminConfigs: (data) => {

@@ -732,10 +732,12 @@ function attachPositionsToUsers(users) {
 
   const placeholders = userIds.map(() => '?').join(',');
   const allPositions = db.prepare(`
-    SELECT p.*, d.name as dept_name, d.code as dept_code, r.name as role_name
+    SELECT p.*, d.name as dept_name, d.code as dept_code, r.name as role_name,
+           mgr.full_name as manager_name, mgr.username as manager_username
     FROM user_positions p
     LEFT JOIN departments d ON p.dept_id = d.id
     LEFT JOIN roles r ON p.role_id = r.id
+    LEFT JOIN users mgr ON p.manager_id = mgr.id
     WHERE p.user_id IN (${placeholders})
     ORDER BY p.is_primary DESC, p.created_at ASC
   `).all(...userIds);
@@ -1112,8 +1114,8 @@ app.post('/api/admin/users', requireCanManageUsers, async (req, res) => {
   // Khởi tạo các chức vụ cho cán bộ mới
   if (Array.isArray(req.body.positions) && req.body.positions.length > 0) {
     const insertPos = db.prepare(`
-      INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, role_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, role_id, manager_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     let hasPrimary = false;
     for (const pos of req.body.positions) {
@@ -1128,7 +1130,8 @@ app.post('/api/admin/users', requireCanManageUsers, async (req, res) => {
           pos.position_type || 'chinh_quyen',
           isPrim,
           pos.management_role || effectiveMgmtRole || 'nhan_vien',
-          pos.role_id || effectiveRoleId || null
+          pos.role_id || effectiveRoleId || null,
+          pos.manager_id || (isPrim ? manager_id : null) || null
         );
       }
     }
@@ -1141,8 +1144,8 @@ app.post('/api/admin/users', requireCanManageUsers, async (req, res) => {
     }
   } else if (dept_id) {
     db.prepare(`
-      INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, role_id)
-      VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+      INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, role_id, manager_id)
+      VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)
     `).run(
       uuidv4(),
       id,
@@ -1150,7 +1153,8 @@ app.post('/api/admin/users', requireCanManageUsers, async (req, res) => {
       gov_title || party_title || union_title || 'Cán bộ',
       gov_title ? 'chinh_quyen' : (party_title ? 'dang' : 'doan_the'),
       effectiveMgmtRole || 'nhan_vien',
-      effectiveRoleId || null
+      effectiveRoleId || null,
+      manager_id || null
     );
   }
 
@@ -1218,8 +1222,8 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
   if (Array.isArray(positions) && positions.length > 0) {
     db.prepare('DELETE FROM user_positions WHERE user_id = ?').run(id);
     const insertPos = db.prepare(`
-      INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, role_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, role_id, manager_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     let primaryFound = false;
     for (const pos of positions) {
@@ -1239,7 +1243,8 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
           pos.position_type || 'chinh_quyen',
           isPrim,
           pos.management_role || targetMgmtRole,
-          pos.role_id || effectiveRoleId || null
+          pos.role_id || effectiveRoleId || null,
+          pos.manager_id || (isPrim ? (manager_id !== undefined ? manager_id : user.manager_id) : null) || null
         );
       }
     }
@@ -1261,14 +1266,15 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
         SET dept_id = COALESCE(?, dept_id),
             position_title = COALESCE(?, position_title),
             management_role = COALESCE(?, management_role),
+            manager_id = COALESCE(?, manager_id),
             updated_at = datetime('now', 'localtime')
         WHERE id = ?
-      `).run(dept_id, gov_title, management_role, primPos.id);
+      `).run(dept_id, gov_title, management_role, manager_id, primPos.id);
     } else if (dept_id) {
       db.prepare(`
-        INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role)
-        VALUES (?, ?, ?, ?, 'chinh_quyen', 1, ?)
-      `).run(uuidv4(), id, dept_id, gov_title || 'Cán bộ', targetMgmtRole);
+        INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, manager_id)
+        VALUES (?, ?, ?, ?, 'chinh_quyen', 1, ?, ?)
+      `).run(uuidv4(), id, dept_id, gov_title || 'Cán bộ', targetMgmtRole, manager_id || null);
     }
   }
 
@@ -1315,10 +1321,12 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
 app.get('/api/users/:id/positions', (req, res) => {
   const { id } = req.params;
   const positions = db.prepare(`
-    SELECT p.*, d.name as dept_name, d.code as dept_code, r.name as role_name
+    SELECT p.*, d.name as dept_name, d.code as dept_code, r.name as role_name,
+           mgr.full_name as manager_name, mgr.username as manager_username
     FROM user_positions p
     LEFT JOIN departments d ON p.dept_id = d.id
     LEFT JOIN roles r ON p.role_id = r.id
+    LEFT JOIN users mgr ON p.manager_id = mgr.id
     WHERE p.user_id = ?
     ORDER BY p.is_primary DESC, p.created_at ASC
   `).all(id);
@@ -1327,7 +1335,7 @@ app.get('/api/users/:id/positions', (req, res) => {
 
 app.post('/api/users/:id/positions', requireCanManageUsers, (req, res) => {
   const { id } = req.params;
-  const { dept_id, position_title, position_type, is_primary, management_role, role_id, notes } = req.body;
+  const { dept_id, position_title, position_type, is_primary, management_role, role_id, notes, manager_id } = req.body;
   if (!dept_id || !position_title) {
     return res.status(400).json({ success: false, message: 'Thiếu đơn vị hoặc chức danh công việc' });
   }
@@ -1337,16 +1345,16 @@ app.post('/api/users/:id/positions', requireCanManageUsers, (req, res) => {
     db.prepare('UPDATE users SET dept_id = ?, gov_title = ? WHERE id = ?').run(dept_id, position_title, id);
   }
   db.prepare(`
-    INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, role_id, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(posId, id, dept_id, position_title, position_type || 'chinh_quyen', is_primary ? 1 : 0, management_role || 'nhan_vien', role_id || null, notes || '');
+    INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, role_id, notes, manager_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(posId, id, dept_id, position_title, position_type || 'chinh_quyen', is_primary ? 1 : 0, management_role || 'nhan_vien', role_id || null, notes || '', manager_id || null);
   
   res.json({ success: true, id: posId, message: 'Đã thêm chức vụ thành công' });
 });
 
 app.put('/api/users/:id/positions/:posId', requireCanManageUsers, (req, res) => {
   const { id, posId } = req.params;
-  const { dept_id, position_title, position_type, is_primary, management_role, role_id, notes } = req.body;
+  const { dept_id, position_title, position_type, is_primary, management_role, role_id, notes, manager_id } = req.body;
   const existing = db.prepare('SELECT * FROM user_positions WHERE id = ? AND user_id = ?').get(posId, id);
   if (!existing) return res.status(404).json({ success: false, message: 'Không tìm thấy chức vụ' });
 
@@ -1363,9 +1371,10 @@ app.put('/api/users/:id/positions/:posId', requireCanManageUsers, (req, res) => 
         management_role = COALESCE(?, management_role),
         role_id = COALESCE(?, role_id),
         notes = COALESCE(?, notes),
+        manager_id = COALESCE(?, manager_id),
         updated_at = datetime('now', 'localtime')
     WHERE id = ? AND user_id = ?
-  `).run(dept_id, position_title, position_type, is_primary !== undefined ? (is_primary ? 1 : 0) : existing.is_primary, management_role, role_id, notes, posId, id);
+  `).run(dept_id, position_title, position_type, is_primary !== undefined ? (is_primary ? 1 : 0) : existing.is_primary, management_role, role_id, notes, manager_id, posId, id);
 
   res.json({ success: true, message: 'Đã cập nhật chức vụ thành công' });
 });
@@ -1382,6 +1391,53 @@ app.delete('/api/users/:id/positions/:posId', requireCanManageUsers, (req, res) 
   }
   db.prepare('DELETE FROM user_positions WHERE id = ? AND user_id = ?').run(posId, id);
   res.json({ success: true, message: 'Đã xóa chức vụ kiêm nhiệm thành công' });
+});
+
+// -------------------------------------------------------------
+// Skip-Level Management Authorizations API (Quản lý Vượt cấp)
+// -------------------------------------------------------------
+app.get('/api/admin/skip-level-authorizations', requireCanManageUsers, (req, res) => {
+  const list = db.prepare(`
+    SELECT a.*, 
+           u.full_name as manager_name, u.username as manager_username, u.gov_title as manager_title,
+           d.name as dept_name, d.code as dept_code, d.parent_agency
+    FROM skip_level_authorizations a
+    JOIN users u ON a.manager_id = u.id
+    JOIN departments d ON a.dept_id = d.id
+    ORDER BY a.created_at DESC
+  `).all();
+  res.json(list);
+});
+
+app.post('/api/admin/skip-level-authorizations', requireCanManageUsers, (req, res) => {
+  const { manager_id, dept_id, can_assign = 1, can_review = 1, can_view_reports = 1, notes = '' } = req.body;
+  if (!manager_id || !dept_id) {
+    return res.status(400).json({ success: false, message: 'Vui lòng chọn Cán bộ Lãnh đạo và Đơn vị được phân quyền vượt cấp' });
+  }
+
+  const existing = db.prepare('SELECT id FROM skip_level_authorizations WHERE manager_id = ? AND dept_id = ?').get(manager_id, dept_id);
+  if (existing) {
+    db.prepare(`
+      UPDATE skip_level_authorizations
+      SET can_assign = ?, can_review = ?, can_view_reports = ?, notes = ?, updated_at = datetime('now', 'localtime')
+      WHERE id = ?
+    `).run(can_assign ? 1 : 0, can_review ? 1 : 0, can_view_reports ? 1 : 0, notes, existing.id);
+    return res.json({ success: true, id: existing.id, message: 'Đã cập nhật phân quyền quản lý vượt cấp thành công' });
+  }
+
+  const id = uuidv4();
+  db.prepare(`
+    INSERT INTO skip_level_authorizations (id, manager_id, dept_id, can_assign, can_review, can_view_reports, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(id, manager_id, dept_id, can_assign ? 1 : 0, can_review ? 1 : 0, can_view_reports ? 1 : 0, notes);
+
+  res.json({ success: true, id, message: 'Đã thiết lập phân quyền quản lý vượt cấp thành công' });
+});
+
+app.delete('/api/admin/skip-level-authorizations/:id', requireCanManageUsers, (req, res) => {
+  const { id } = req.params;
+  db.prepare('DELETE FROM skip_level_authorizations WHERE id = ?').run(id);
+  res.json({ success: true, message: 'Đã xóa phân quyền quản lý vượt cấp thành công' });
 });
 
 // Admin / Unit Admin: Delete or deactivate user
@@ -2143,6 +2199,8 @@ app.get('/api/assigned-tasks', (req, res) => {
            eval_u.role as evaluator_role,
            eval_u.management_role as evaluator_management_role,
            del_by.full_name as delegated_by_name,
+           tp.position_title as target_position_title,
+           tpd.name as target_dept_name,
            CASE 
              WHEN eval_u.full_name IS NOT NULL THEN eval_u.full_name
              WHEN t.origin = 'assigned' AND assigner.full_name IS NOT NULL THEN assigner.full_name
@@ -2158,6 +2216,8 @@ app.get('/api/assigned-tasks', (req, res) => {
     LEFT JOIN users ext_rev ON t.extension_reviewed_by = ext_rev.id
     LEFT JOIN users eval_u ON t.evaluator_id = eval_u.id
     LEFT JOIN users del_by ON t.delegated_by = del_by.id
+    LEFT JOIN user_positions tp ON t.target_position_id = tp.id
+    LEFT JOIN departments tpd ON tp.dept_id = tpd.id
     WHERE 1=1
   `;
   const params = [];
@@ -2226,7 +2286,9 @@ app.get('/api/assigned-tasks/:id', (req, res) => {
            eval_u.gov_title as evaluator_title,
            eval_u.role as evaluator_role,
            eval_u.management_role as evaluator_management_role,
-           del_by.full_name as delegated_by_name
+           del_by.full_name as delegated_by_name,
+           tp.position_title as target_position_title,
+           tpd.name as target_dept_name
     FROM assigned_tasks t
     JOIN users u ON t.user_id = u.id
     LEFT JOIN departments d ON u.dept_id = d.id
@@ -2236,6 +2298,8 @@ app.get('/api/assigned-tasks/:id', (req, res) => {
     LEFT JOIN users ext_rev ON t.extension_reviewed_by = ext_rev.id
     LEFT JOIN users eval_u ON t.evaluator_id = eval_u.id
     LEFT JOIN users del_by ON t.delegated_by = del_by.id
+    LEFT JOIN user_positions tp ON t.target_position_id = tp.id
+    LEFT JOIN departments tpd ON tp.dept_id = tpd.id
     WHERE t.id = ?
   `).get(id);
 
@@ -2321,11 +2385,12 @@ app.post('/api/assigned-tasks/check-duplicates', requireManagerOrAdmin, (req, re
   }
 });
 
-// CBQL Giao việc (hỗ trợ giao cho 1 hoặc nhiều người cùng thực hiện - Kiểm tra trùng lặp)
+// CBQL Giao việc (hỗ trợ giao cho 1 hoặc nhiều người cùng thực hiện - Kiểm tra trùng lặp & Giao việc vượt cấp)
 app.post('/api/assigned-tasks/assign', requireManagerOrAdmin, (req, res) => {
   const {
     period_id, user_id, user_ids, standard_task_id, task_name, output_result,
-    deadline, task_type, standard_score, difficulty_weight, axis_code, assigned_by
+    deadline, task_type, standard_score, difficulty_weight, axis_code, assigned_by,
+    is_skip_level = 0, target_position_id = null, skip_level_notes = ''
   } = req.body;
 
   let targetUserIds = [];
@@ -2353,11 +2418,27 @@ app.post('/api/assigned-tasks/assign', requireManagerOrAdmin, (req, res) => {
     });
   }
 
-  // Guard: Phân quyền giao việc trong phạm vi quản lý
+  // Guard: Phân quyền giao việc trong phạm vi quản lý (Hỗ trợ phân quyền quản lý vượt cấp theo bảng skip_level_authorizations)
   const viewerId = getViewerId(req) || assigned_by;
   const accessibleUserIds = getAccessibleUserIds(viewerId);
   if (accessibleUserIds !== null) {
-    const unauthorized = targetUserIds.filter(uid => !accessibleUserIds.includes(uid));
+    let unauthorized = targetUserIds.filter(uid => !accessibleUserIds.includes(uid));
+    
+    // Nếu có cờ giao việc vượt cấp hoặc có cán bộ ngoài cây quản lý mặc định, kiểm tra bảng skip_level_authorizations
+    if (unauthorized.length > 0) {
+      const skipAuthDepts = db.prepare('SELECT dept_id FROM skip_level_authorizations WHERE manager_id = ? AND can_assign = 1').all(viewerId).map(a => a.dept_id);
+      if (skipAuthDepts.length > 0) {
+        const skipPlaceholders = skipAuthDepts.map(() => '?').join(',');
+        const authorizedSkipUsers = db.prepare(`
+          SELECT id FROM users 
+          WHERE id IN (${unauthorized.map(() => '?').join(',')}) 
+            AND (dept_id IN (${skipPlaceholders}) OR EXISTS (SELECT 1 FROM user_positions up WHERE up.user_id = users.id AND up.dept_id IN (${skipPlaceholders})))
+        `).all(...unauthorized, ...skipAuthDepts, ...skipAuthDepts).map(u => u.id);
+        
+        unauthorized = unauthorized.filter(uid => !authorizedSkipUsers.includes(uid));
+      }
+    }
+
     if (unauthorized.length > 0) {
       return res.status(403).json({ 
         success: false, 
@@ -2398,42 +2479,82 @@ app.post('/api/assigned-tasks/assign', requireManagerOrAdmin, (req, res) => {
   const diffWeight = parseFloat(difficulty_weight) || 1.0;
   const maxConv = Number((stdScore * diffWeight).toFixed(2));
   const groupId = targetUserIds.length > 1 ? uuidv4() : null;
+  const skipLevelFlag = is_skip_level ? 1 : 0;
 
   const insertStmt = db.prepare(`
     INSERT INTO assigned_tasks (
       id, period_id, user_id, standard_task_id, task_name, output_result,
       deadline, task_type, standard_score, difficulty_weight, max_converted_score,
-      axis_code, origin, status, assigned_by, group_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'assigned', ?, ?, ?)
+      axis_code, origin, status, assigned_by, group_id,
+      is_skip_level, target_position_id, skip_level_notes
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'assigned', ?, ?, ?, ?, ?, ?)
   `);
 
-  const createdIds = [];
+  const createdTasks = [];
   const runTransaction = db.transaction(() => {
     for (const uid of targetUserIds) {
       const id = uuidv4();
       const initialStatus = (uid === (assigned_by || viewerId)) ? 'in_progress' : 'pending_acceptance';
       insertStmt.run(
         id, period_id, uid, standard_task_id || null, task_name, output_result,
-        deadline, task_type, stdScore, diffWeight, maxConv, axis_code, initialStatus, assigned_by, groupId
+        deadline, task_type, stdScore, diffWeight, maxConv, axis_code, initialStatus, assigned_by, groupId,
+        skipLevelFlag, target_position_id || null, skip_level_notes || ''
       );
-      createdIds.push(id);
+      createdTasks.push({ id, user_id: uid });
     }
   });
 
   runTransaction();
 
+  // Nếu là Giao việc vượt cấp (is_skip_level = 1): Tự động tạo thông báo CC cho Lãnh đạo trực tiếp của cán bộ
+  if (skipLevelFlag === 1) {
+    try {
+      const assignerUser = db.prepare('SELECT id, full_name, gov_title FROM users WHERE id = ?').get(assigned_by || viewerId);
+      const assignerDisplay = assignerUser ? `${assignerUser.full_name} (${assignerUser.gov_title || 'Lãnh đạo cấp trên'})` : 'Lãnh đạo cấp trên';
+
+      for (const item of createdTasks) {
+        // Tìm Lãnh đạo trực tiếp của cán bộ: ưu tiên manager_id từ target_position_id, fallback về user.manager_id
+        let directLeaderId = null;
+        if (target_position_id) {
+          const pos = db.prepare('SELECT manager_id FROM user_positions WHERE id = ?').get(target_position_id);
+          if (pos?.manager_id) directLeaderId = pos.manager_id;
+        }
+        if (!directLeaderId) {
+          const u = db.prepare('SELECT manager_id FROM users WHERE id = ?').get(item.user_id);
+          if (u?.manager_id) directLeaderId = u.manager_id;
+        }
+
+        // Nếu tìm thấy Lãnh đạo trực tiếp và khác với người giao việc
+        if (directLeaderId && directLeaderId !== (assigned_by || viewerId)) {
+          const targetStaff = db.prepare('SELECT full_name FROM users WHERE id = ?').get(item.user_id);
+          createNotification({
+            userId: directLeaderId,
+            title: '⚡ Thông báo giao việc vượt cấp (CC Lãnh đạo trực tiếp)',
+            message: `${assignerDisplay} đã giao nhiệm vụ vượt cấp "${task_name}" cho cán bộ ${targetStaff?.full_name || 'cấp dưới của bạn'}. Thời hạn: ${deadline}. Ghi chú: ${skip_level_notes || 'Phối hợp theo dõi và đôn đốc thực hiện.'}`,
+            type: 'skip_level_cc',
+            taskId: item.id,
+            tab: 'assignment'
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error('[Skip-Level CC Notification] Error:', notifErr.message);
+    }
+  }
+
   const count = targetUserIds.length;
   res.json({
     success: true,
-    ids: createdIds,
+    ids: createdTasks.map(t => t.id),
     count,
+    is_skip_level: skipLevelFlag,
     message: count > 1 
-      ? `Đã giao việc thành công cho ${count} cán bộ/nhân viên cùng thực hiện!`
-      : 'Đã giao việc thành công cho cán bộ nhân viên!'
+      ? `Đã giao việc thành công cho ${count} cán bộ/nhân viên cùng thực hiện!${skipLevelFlag ? ' (Đã gửi thông báo CC đến Lãnh đạo trực tiếp)' : ''}`
+      : `Đã giao việc thành công cho cán bộ nhân viên!${skipLevelFlag ? ' (Đã gửi thông báo CC đến Lãnh đạo trực tiếp)' : ''}`
   });
 });
 
-// Bulk Assign multiple tasks to multiple users (Loại bỏ các lượt trùng lặp)
+// Bulk Assign multiple tasks to multiple users (Loại bỏ các lượt trùng lặp & Hỗ trợ giao việc vượt cấp)
 app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) => {
   const {
     period_id,
@@ -2441,7 +2562,9 @@ app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) =>
     tasks,
     user_ids,
     deadline,
-    assigned_by
+    assigned_by,
+    is_skip_level = 0,
+    skip_level_notes = ''
   } = req.body;
 
   if (!period_id) {
@@ -2482,7 +2605,23 @@ app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) =>
   const viewerId = getViewerId(req) || assigned_by;
   const accessibleUserIds = getAccessibleUserIds(viewerId);
   if (accessibleUserIds !== null) {
-    const unauthorized = targetUserIds.filter(uid => !accessibleUserIds.includes(uid));
+    let unauthorized = targetUserIds.filter(uid => !accessibleUserIds.includes(uid));
+
+    // Kiểm tra bảng skip_level_authorizations nếu có quyền vượt cấp
+    if (unauthorized.length > 0) {
+      const skipAuthDepts = db.prepare('SELECT dept_id FROM skip_level_authorizations WHERE manager_id = ? AND can_assign = 1').all(viewerId).map(a => a.dept_id);
+      if (skipAuthDepts.length > 0) {
+        const skipPlaceholders = skipAuthDepts.map(() => '?').join(',');
+        const authorizedSkipUsers = db.prepare(`
+          SELECT id FROM users 
+          WHERE id IN (${unauthorized.map(() => '?').join(',')}) 
+            AND (dept_id IN (${skipPlaceholders}) OR EXISTS (SELECT 1 FROM user_positions up WHERE up.user_id = users.id AND up.dept_id IN (${skipPlaceholders})))
+        `).all(...unauthorized, ...skipAuthDepts, ...skipAuthDepts).map(u => u.id);
+        
+        unauthorized = unauthorized.filter(uid => !authorizedSkipUsers.includes(uid));
+      }
+    }
+
     if (unauthorized.length > 0) {
       return res.status(403).json({ 
         success: false, 
@@ -2543,15 +2682,17 @@ app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) =>
     });
   }
 
+  const skipLevelFlag = is_skip_level ? 1 : 0;
   const insertStmt = db.prepare(`
     INSERT INTO assigned_tasks (
       id, period_id, user_id, standard_task_id, task_name, output_result,
       deadline, task_type, standard_score, difficulty_weight, max_converted_score,
-      axis_code, origin, status, assigned_by, group_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'assigned', ?, ?, ?)
+      axis_code, origin, status, assigned_by, group_id,
+      is_skip_level, skip_level_notes
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'assigned', ?, ?, ?, ?, ?)
   `);
 
-  const createdIds = [];
+  const createdTasks = [];
   const runTransaction = db.transaction(() => {
     for (const item of validAssignments) {
       const t = item.task;
@@ -2579,13 +2720,46 @@ app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) =>
         t.axis_code || 'TRUC_1',
         initialStatus,
         assigned_by || viewerId,
-        groupId
+        groupId,
+        skipLevelFlag,
+        skip_level_notes || ''
       );
-      createdIds.push(id);
+      createdTasks.push({ id, user_id: uid, task_name: t.task_name });
     }
   });
 
   runTransaction();
+
+  // Thông báo CC Lãnh đạo trực tiếp nếu giao việc vượt cấp
+  if (skipLevelFlag === 1) {
+    try {
+      const assignerUser = db.prepare('SELECT id, full_name, gov_title FROM users WHERE id = ?').get(assigned_by || viewerId);
+      const assignerDisplay = assignerUser ? `${assignerUser.full_name} (${assignerUser.gov_title || 'Lãnh đạo cấp trên'})` : 'Lãnh đạo cấp trên';
+
+      // Nhóm theo user_id để không gửi quá nhiều thông báo trùng
+      const userTaskMap = {};
+      for (const item of createdTasks) {
+        if (!userTaskMap[item.user_id]) userTaskMap[item.user_id] = [];
+        userTaskMap[item.user_id].push(item);
+      }
+
+      for (const [uid, items] of Object.entries(userTaskMap)) {
+        const u = db.prepare('SELECT manager_id, full_name FROM users WHERE id = ?').get(uid);
+        if (u?.manager_id && u.manager_id !== (assigned_by || viewerId)) {
+          createNotification({
+            userId: u.manager_id,
+            title: '⚡ Thông báo giao việc vượt cấp hàng loạt (CC Lãnh đạo trực tiếp)',
+            message: `${assignerDisplay} đã giao ${items.length} nhiệm vụ vượt cấp cho cán bộ ${u.full_name}. Ghi chú: ${skip_level_notes || 'Phối hợp theo dõi và đôn đốc thực hiện.'}`,
+            type: 'skip_level_cc',
+            taskId: items[0].id,
+            tab: 'assignment'
+          });
+        }
+      }
+    } catch (notifErr) {
+      console.error('[Bulk Skip-Level CC Notification] Error:', notifErr.message);
+    }
+  }
 
   const dupSummary = duplicatePairs.length > 0
     ? ` Đã tự động loại bỏ ${duplicatePairs.length} lượt trùng lặp do cán bộ đã có nhiệm vụ này trong kỳ (${duplicatePairs.slice(0, 3).map(d => `${d.user_name} - ${d.task_name}`).join('; ')}${duplicatePairs.length > 3 ? '...' : ''}).`
@@ -2593,12 +2767,13 @@ app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) =>
 
   res.json({
     success: true,
-    created_ids: createdIds,
+    created_ids: createdTasks.map(t => t.id),
     tasks_count: tasksToAssign.length,
     users_count: targetUserIds.length,
-    total_assignments: createdIds.length,
+    total_assignments: createdTasks.length,
     skipped_duplicates_count: duplicatePairs.length,
-    message: `Đã phân công thành công ${createdIds.length} lượt nhiệm vụ.${dupSummary}`
+    is_skip_level: skipLevelFlag,
+    message: `Đã phân công thành công ${createdTasks.length} lượt nhiệm vụ.${skipLevelFlag ? ' (Đã gửi thông báo CC đến Lãnh đạo trực tiếp)' : ''}${dupSummary}`
   });
 });
 

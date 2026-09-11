@@ -140,7 +140,10 @@ export default function AssignmentTab({
     task_type: 'Thường xuyên',
     standard_score: 10,
     difficulty_weight: 1.0,
-    axis_code: 'TRUC_1'
+    axis_code: 'TRUC_1',
+    is_skip_level: false,
+    target_position_id: '',
+    skip_level_notes: ''
   });
 
   // Multi-user selection state for CBQL
@@ -289,7 +292,10 @@ export default function AssignmentTab({
       task_type: 'Thường xuyên',
       standard_score: 10,
       difficulty_weight: 1.0,
-      axis_code: 'TRUC_1'
+      axis_code: 'TRUC_1',
+      is_skip_level: false,
+      target_position_id: '',
+      skip_level_notes: ''
     });
   }
 
@@ -414,6 +420,9 @@ export default function AssignmentTab({
 
         const payload = {
           ...formData,
+          is_skip_level: formData.is_skip_level ? 1 : 0,
+          target_position_id: formData.target_position_id || null,
+          skip_level_notes: formData.skip_level_notes || null,
           output_result: finalOutput,
           period_id: selectedPeriod,
           user_ids: selectedUserIds,
@@ -2391,7 +2400,20 @@ export default function AssignmentTab({
 
                             {/* Task name & Axis */}
                             <td className="px-4 py-3.5">
-                              <div className="font-bold text-slate-900 text-sm">{t.task_name}</div>
+                              <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5 flex-wrap">
+                                <span>{t.task_name}</span>
+                                {t.is_skip_level === 1 && (
+                                  <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[10px] inline-flex items-center gap-1 shrink-0" title={t.skip_level_notes ? `Giao việc vượt cấp: ${t.skip_level_notes}` : 'Giao việc vượt cấp (Đã tự động CC lãnh đạo trực tiếp)'}>
+                                    <Zap className="w-3 h-3 text-amber-600 fill-amber-500" />
+                                    <span>Vượt cấp</span>
+                                  </span>
+                                )}
+                                {t.target_position_title && (
+                                  <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 text-[10px] font-medium shrink-0" title={t.target_dept_name ? `Tại: ${t.target_dept_name}` : ''}>
+                                    Vị trí: {t.target_position_title}
+                                  </span>
+                                )}
+                              </div>
                               <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
                                 <span className="px-2 py-0.2 rounded bg-slate-100 text-slate-700 font-semibold">
                                   {t.axis_code}
@@ -2737,8 +2759,19 @@ export default function AssignmentTab({
 
                         {/* Task Title */}
                         <div>
-                          <h4 className="font-bold text-slate-900 text-sm leading-snug">
-                            {t.task_name}
+                          <h4 className="font-bold text-slate-900 text-sm leading-snug flex items-center gap-1.5 flex-wrap">
+                            <span>{t.task_name}</span>
+                            {t.is_skip_level === 1 && (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold text-[10px] inline-flex items-center gap-1 shrink-0" title={t.skip_level_notes ? `Giao việc vượt cấp: ${t.skip_level_notes}` : 'Giao việc vượt cấp (Đã tự động CC lãnh đạo trực tiếp)'}>
+                                <Zap className="w-3 h-3 text-amber-600 fill-amber-500" />
+                                <span>Vượt cấp</span>
+                              </span>
+                            )}
+                            {t.target_position_title && (
+                              <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 text-[10px] font-medium shrink-0" title={t.target_dept_name ? `Tại: ${t.target_dept_name}` : ''}>
+                                Vị trí: {t.target_position_title}
+                              </span>
+                            )}
                           </h4>
                           <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
                             <span className="px-2 py-0.2 rounded bg-slate-100 text-slate-700 font-semibold text-[11px]">
@@ -3246,6 +3279,78 @@ export default function AssignmentTab({
                     <span className="shrink-0 text-right">
                       Đã chọn: <strong className="text-red-700 text-xs font-bold">{selectedUserIds.length}</strong> / {assignableUsers.length} cán bộ
                     </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Tùy chọn vị trí tiếp nhận & Giao việc vượt cấp (khi Lãnh đạo giao việc) */}
+              {modalMode === 'assign' && (
+                <div className="space-y-3 p-3.5 bg-amber-50/50 rounded-xl border border-amber-200/70">
+                  {/* Nếu chọn 1 cán bộ và cán bộ đó có nhiều chức vụ/vị trí việc làm */}
+                  {selectedUserIds.length === 1 && (() => {
+                    const targetUser = assignableUsers.find(u => u.id === selectedUserIds[0]);
+                    const positions = targetUser?.positions || [];
+                    if (positions.length <= 1) return null;
+                    return (
+                      <div>
+                        <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center justify-between">
+                          <span>Giao việc theo Chức vụ / Vị trí kiêm nhiệm</span>
+                          <span className="text-[10px] text-amber-800 font-normal bg-amber-100 px-1.5 py-0.5 rounded">
+                            {positions.length} chức vụ
+                          </span>
+                        </label>
+                        <select
+                          value={formData.target_position_id || ''}
+                          onChange={(e) => setFormData({ ...formData, target_position_id: e.target.value })}
+                          className="w-full text-xs p-2 bg-white border border-slate-300 rounded-lg font-medium text-slate-800 focus:ring-1 focus:ring-amber-500"
+                        >
+                          <option value="">-- Mặc định (Chức vụ chính: {targetUser.gov_title || targetUser.dept_name || 'Đơn vị'}) --</option>
+                          {positions.map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.position_title} - {p.dept_name || 'Đơn vị khác'} {p.is_primary ? '(Chính)' : '(Kiêm nhiệm)'} {p.manager_name ? `[LĐ: ${p.manager_name}]` : ''}
+                            </option>
+                          ))}
+                        </select>
+                        {formData.target_position_id && (() => {
+                          const chosenPos = positions.find(p => p.id === formData.target_position_id);
+                          return chosenPos?.manager_name ? (
+                            <p className="text-[11px] text-amber-900 mt-1">
+                              👉 Lãnh đạo trực tiếp vị trí này: <strong>{chosenPos.manager_name}</strong>
+                            </p>
+                          ) : null;
+                        })()}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Toggle Giao việc vượt cấp */}
+                  <div className="space-y-1.5">
+                    <label className="flex items-center justify-between cursor-pointer select-none">
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-amber-600 fill-amber-500" />
+                        <span className="text-xs font-bold text-slate-800">⚡ Giao việc Vượt cấp (Skip-level)</span>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={formData.is_skip_level}
+                        onChange={(e) => setFormData({ ...formData, is_skip_level: e.target.checked })}
+                        className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500 cursor-pointer"
+                      />
+                    </label>
+                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                      Khi tích chọn, nhiệm vụ sẽ được giao trực tiếp cho cán bộ. Hệ thống sẽ <strong>tự động gửi thông báo đồng thời (CC)</strong> cho Lãnh đạo trực tiếp của cán bộ để nắm bắt và cùng đôn đốc theo quy chế iCPV TP.HCM.
+                    </p>
+                    {formData.is_skip_level && (
+                      <div className="pt-1.5 animate-in fade-in duration-150">
+                        <input
+                          type="text"
+                          value={formData.skip_level_notes || ''}
+                          onChange={(e) => setFormData({ ...formData, skip_level_notes: e.target.value })}
+                          placeholder="Ghi chú / Chỉ đạo vượt cấp (tùy chọn)..."
+                          className="w-full text-xs p-2 bg-white border border-amber-300 rounded-lg text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-amber-500"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

@@ -34,7 +34,8 @@ import {
   Trash2,
   ArrowRight,
   ShieldCheck,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Zap
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate, toInputDateFormat, parseDateOnly } from '../constants';
@@ -770,8 +771,19 @@ export default function ExecutionTab({
                         </div>
 
                         {/* Task Title */}
-                        <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-snug">
-                          {task.task_name}
+                        <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-snug flex items-center gap-2 flex-wrap">
+                          <span>{task.task_name}</span>
+                          {task.is_skip_level === 1 && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold text-xs inline-flex items-center gap-1 shrink-0" title={task.skip_level_notes ? `Giao việc vượt cấp: ${task.skip_level_notes}` : 'Giao việc vượt cấp'}>
+                              <Zap className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
+                              <span>Vượt cấp</span>
+                            </span>
+                          )}
+                          {task.target_position_title && (
+                            <span className="px-2.5 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 text-xs font-semibold shrink-0" title={task.target_dept_name ? `Tại đơn vị: ${task.target_dept_name}` : ''}>
+                              Chức vụ: {task.target_position_title}
+                            </span>
+                          )}
                         </h3>
                       </div>
                     </div>

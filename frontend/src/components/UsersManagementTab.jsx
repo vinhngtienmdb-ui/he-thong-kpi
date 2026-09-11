@@ -353,6 +353,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       position_title: 'Chuyên viên',
       position_type: 'chinh_quyen',
       management_role: 'nhan_vien',
+      manager_id: '',
       is_primary: 1,
       notes: ''
     }];
@@ -397,6 +398,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
         position_title: p.position_title || user.gov_title || 'Chuyên viên',
         position_type: p.position_type || 'chinh_quyen',
         management_role: p.management_role || user.management_role || 'nhan_vien',
+        manager_id: p.manager_id || (p.is_primary ? (user.manager_id || '') : '') || '',
         is_primary: p.is_primary ? 1 : 0,
         notes: p.notes || ''
       }));
@@ -411,6 +413,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
         position_title: user.gov_title || 'Chuyên viên',
         position_type: 'chinh_quyen',
         management_role: user.management_role || (user.role === 'cbql' ? 'quan_ly' : 'nhan_vien'),
+        manager_id: user.manager_id || '',
         is_primary: 1,
         notes: ''
       }];
@@ -424,7 +427,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       full_name: user.full_name,
       dept_id: primaryPos.dept_id,
       role_id: user.role_id || roles.find(r => r.code === user.role)?.id || '',
-      manager_id: user.manager_id || '',
+      manager_id: primaryPos.manager_id || user.manager_id || '',
       final_evaluator_id: user.final_evaluator_id || '',
       management_role: primaryPos.management_role || user.management_role || (user.role === 'cbql' ? 'quan_ly' : 'nhan_vien'),
       role: user.role || 'cbnv',
@@ -452,6 +455,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       position_title: 'Chuyên viên',
       position_type: 'chinh_quyen',
       management_role: 'nhan_vien',
+      manager_id: '',
       is_primary: 0,
       notes: ''
     };
@@ -1680,7 +1684,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
                           <div>
                             <label className="block text-xs font-semibold text-slate-700 mb-1">
                               Phân loại chức vụ
@@ -1714,6 +1718,32 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                           </div>
 
                           <div>
+                            <label className="block text-xs font-semibold text-indigo-900 mb-1 flex items-center justify-between">
+                              <span>LĐ trực tiếp vị trí này</span>
+                              {pos.is_primary === 1 && <span className="text-[10px] text-indigo-600 font-bold">(Chính)</span>}
+                            </label>
+                            <select
+                              value={pos.manager_id || ''}
+                              onChange={(e) => {
+                                handlePositionChange(idx, 'manager_id', e.target.value);
+                                if (pos.is_primary === 1) {
+                                  setFormData(prev => ({ ...prev, manager_id: e.target.value }));
+                                }
+                              }}
+                              className="w-full px-2.5 py-1.5 border border-indigo-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-indigo-50/30 text-slate-800 font-medium"
+                            >
+                              <option value="">-- Mặc định theo đơn vị --</option>
+                              {users
+                                .filter(u => !editingUser || u.id !== editingUser.id)
+                                .map(u => (
+                                  <option key={u.id} value={u.id}>
+                                    {u.management_role === 'lanh_dao' ? '👑' : u.management_role === 'quan_ly' ? '⭐' : '👔'} {u.full_name} ({u.gov_title || u.role})
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+
+                          <div>
                             <label className="block text-xs font-semibold text-slate-700 mb-1">
                               Ghi chú phân công
                             </label>
@@ -1722,7 +1752,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                               value={pos.notes || ''}
                               onChange={(e) => handlePositionChange(idx, 'notes', e.target.value)}
                               className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
-                              placeholder="vd: Theo QĐ số 45/QĐ-TU..."
+                              placeholder="vd: QĐ 45/QĐ-TU..."
                             />
                           </div>
                         </div>

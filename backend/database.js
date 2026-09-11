@@ -347,16 +347,34 @@ function initDatabase() {
       position_type TEXT DEFAULT 'chinh_quyen',
       role_id TEXT,
       management_role TEXT DEFAULT 'nhan_vien',
+      manager_id TEXT,
       is_primary INTEGER DEFAULT 0,
       notes TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY(dept_id) REFERENCES departments(id) ON DELETE CASCADE,
+      FOREIGN KEY(manager_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS skip_level_authorizations (
+      id TEXT PRIMARY KEY,
+      manager_id TEXT NOT NULL,
+      dept_id TEXT NOT NULL,
+      can_assign INTEGER DEFAULT 1,
+      can_review INTEGER DEFAULT 1,
+      can_view_reports INTEGER DEFAULT 1,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(manager_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY(dept_id) REFERENCES departments(id) ON DELETE CASCADE
     );
 
     CREATE INDEX IF NOT EXISTS idx_user_positions_user ON user_positions(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_positions_dept ON user_positions(dept_id);
+    CREATE INDEX IF NOT EXISTS idx_skip_level_mgr ON skip_level_authorizations(manager_id);
+    CREATE INDEX IF NOT EXISTS idx_skip_level_dept ON skip_level_authorizations(dept_id);
     CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
   `);
 
@@ -445,7 +463,11 @@ function initDatabase() {
     "ALTER TABLE assigned_tasks ADD COLUMN delegation_note TEXT;",
     "ALTER TABLE assigned_tasks ADD COLUMN submitted_for_eval_at TEXT;",
     "ALTER TABLE assigned_tasks ADD COLUMN document_number TEXT;",
-    "ALTER TABLE assigned_tasks ADD COLUMN document_date TEXT;"
+    "ALTER TABLE assigned_tasks ADD COLUMN document_date TEXT;",
+    "ALTER TABLE user_positions ADD COLUMN manager_id TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN is_skip_level INTEGER DEFAULT 0;",
+    "ALTER TABLE assigned_tasks ADD COLUMN target_position_id TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN skip_level_notes TEXT;"
   ];
 
   for (const m of migrations) {
@@ -934,8 +956,8 @@ function ensureUserPositionsPopulated() {
 
     if (usersWithoutPositions.length > 0) {
       const insertPos = db.prepare(`
-        INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, role_id)
-        VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+        INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, role_id, manager_id)
+        VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)
       `);
       for (const u of usersWithoutPositions) {
         if (u.dept_id) {
@@ -947,7 +969,8 @@ function ensureUserPositionsPopulated() {
             posTitle,
             u.gov_title ? 'chinh_quyen' : (u.party_title ? 'dang' : 'doan_the'),
             u.management_role || 'nhan_vien',
-            u.role_id || null
+            u.role_id || null,
+            u.manager_id || null
           );
         }
       }
