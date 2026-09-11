@@ -78,6 +78,8 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
   // Search and filter states for user table
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('ALL');
+  const [filterParty, setFilterParty] = useState('ALL'); // 'ALL' | 'PARTY' | 'NON_PARTY'
+  const [filterManagementRole, setFilterManagementRole] = useState('ALL'); // 'ALL' | 'lanh_dao' | 'quan_ly' | 'to_truong' | 'nhan_vien'
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterSecondary, setFilterSecondary] = useState('ALL'); // 'ALL' | 'HAS_SECONDARY' | 'PRIMARY_ONLY'
 
@@ -95,6 +97,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
     management_role: 'nhan_vien',
     role: 'cbnv',
     target_role: 'cbnv',
+    is_party_member: false,
     party_title: 'Đảng viên',
     gov_title: 'Chuyên viên',
     union_title: '',
@@ -116,6 +119,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
     name: '',
     parent_id: '',
     leader_id: '',
+    agency_type: 'su_nghiep',
     parent_agency: 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH',
     location_name: 'TP. Hồ Chí Minh',
     description: '',
@@ -124,7 +128,14 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
   const [deptModalError, setDeptModalError] = useState('');
   const [deptModalLoading, setDeptModalLoading] = useState(false);
 
-  // Import Excel Modal state
+  // Import Department from Excel Modal state (Giai đoạn 2)
+  const [isImportDeptModalOpen, setIsImportDeptModalOpen] = useState(false);
+  const [deptImportText, setDeptImportText] = useState('');
+  const [deptImportLoading, setDeptImportLoading] = useState(false);
+  const [deptImportResult, setDeptImportResult] = useState(null);
+  const [deptImportError, setDeptImportError] = useState('');
+
+  // Import Excel Users Modal state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [updateExisting, setUpdateExisting] = useState(true);
@@ -298,6 +309,16 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
         return false;
       }
 
+      // 3b. Party membership filter
+      if (filterParty === 'PARTY' && u.is_party_member !== 1) return false;
+      if (filterParty === 'NON_PARTY' && u.is_party_member === 1) return false;
+
+      // 3c. Management role filter
+      if (filterManagementRole !== 'ALL') {
+        const userMgmtRole = u.management_role || (u.positions && u.positions.find(p => p.is_primary)?.management_role) || 'nhan_vien';
+        if (userMgmtRole !== filterManagementRole) return false;
+      }
+
       // 4. Status filter
       if (filterStatus === 'ACTIVE' && u.is_active === 0) return false;
       if (filterStatus === 'INACTIVE' && u.is_active !== 0) return false;
@@ -313,7 +334,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
 
       return true;
     }).sort(compareUsersByPositionAndName);
-  }, [users, selectedDeptId, includeChildren, searchTerm, filterRole, filterStatus, filterSecondary, localDepts]);
+  }, [users, selectedDeptId, includeChildren, searchTerm, filterRole, filterParty, filterManagementRole, filterStatus, filterSecondary, localDepts]);
 
   // Handle Role selection in Add/Edit user form
   const handleRoleChange = (selRoleId) => {
@@ -369,6 +390,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       management_role: 'nhan_vien',
       role: 'cbnv',
       target_role: 'cbnv',
+      is_party_member: false,
       party_title: 'Đảng viên',
       gov_title: 'Chuyên viên',
       union_title: '',
@@ -432,7 +454,8 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       management_role: primaryPos.management_role || user.management_role || (user.role === 'cbql' ? 'quan_ly' : 'nhan_vien'),
       role: user.role || 'cbnv',
       target_role: isExempt ? 'admin' : (user.target_role || (user.role === 'cbnv' ? 'cbnv' : 'cbql')),
-      party_title: user.party_title || '',
+      is_party_member: user.is_party_member === 1 || Boolean(user.party_title && user.party_title !== 'Quần chúng' && user.party_title !== ''),
+      party_title: user.party_title || 'Đảng viên',
       gov_title: primaryPos.position_title || user.gov_title || '',
       union_title: user.union_title || '',
       birth_date: user.birth_date || '1990-01-01',
@@ -544,6 +567,8 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
         dept_id: primaryPos.dept_id,
         gov_title: primaryPos.position_title,
         management_role: primaryPos.management_role,
+        is_party_member: formData.is_party_member ? 1 : 0,
+        party_title: formData.is_party_member ? (formData.party_title || 'Đảng viên') : '',
         positions: finalPositions
       };
 
@@ -599,34 +624,30 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
     setResettingUser(user);
     setResetPasswordInput('123456');
     setShowResetPass(false);
-    setResetSuccessMessage('');
     setResetErrorMessage('');
+    setResetSuccessMessage('');
     setIsResetModalOpen(true);
   };
 
-  const handleResetPasswordSubmit = async (e) => {
+  const handleConfirmResetPassword = async (e) => {
     e.preventDefault();
-    if (!resettingUser) return;
-    if (!resetPasswordInput || resetPasswordInput.trim().length < 6) {
-      setResetErrorMessage('Mật khẩu cấp mới phải có tối thiểu 6 ký tự');
+    if (!resetPasswordInput || resetPasswordInput.length < 6) {
+      setResetErrorMessage('Mật khẩu mới phải có tối thiểu 6 ký tự');
       return;
     }
 
     setResetLoading(true);
     setResetErrorMessage('');
     setResetSuccessMessage('');
+
     try {
-      const res = await api.resetAdminUserPassword(resettingUser.id, {
-        new_password: resetPasswordInput.trim()
-      });
-      setResetSuccessMessage(res.message || `Đã cấp lại mật khẩu cho cán bộ "${resettingUser.full_name}" thành công!`);
+      const res = await api.resetAdminUserPassword(resettingUser.id, resetPasswordInput);
+      setResetSuccessMessage(res.message || `Đã đặt lại mật khẩu cho cán bộ ${resettingUser.full_name} thành công!`);
       setTimeout(() => {
         setIsResetModalOpen(false);
-        setResettingUser(null);
-        setResetSuccessMessage('');
-      }, 2000);
+      }, 1500);
     } catch (err) {
-      setResetErrorMessage(err.message || 'Có lỗi xảy ra khi cấp lại mật khẩu');
+      setResetErrorMessage(err.message || 'Lỗi khi đặt lại mật khẩu');
     } finally {
       setResetLoading(false);
     }
@@ -677,6 +698,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       name: '',
       parent_id: parentId || (selectedDeptId !== 'ALL' ? selectedDeptId : ''),
       leader_id: '',
+      agency_type: 'su_nghiep',
       parent_agency: 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH',
       location_name: 'TP. Hồ Chí Minh',
       description: '',
@@ -694,6 +716,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       name: dept.name || '',
       parent_id: dept.parent_id || '',
       leader_id: dept.leader_id || '',
+      agency_type: dept.agency_type || 'su_nghiep',
       parent_agency: dept.parent_agency || 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH',
       location_name: dept.location_name || 'TP. Hồ Chí Minh',
       description: dept.description || '',
@@ -749,6 +772,82 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       if (onReloadUsers) onReloadUsers();
     } catch (err) {
       alert('Lỗi khi xóa đơn vị: ' + err.message);
+    }
+  };
+
+  // Import Departments from Excel / TSV Parser & Submitter (Giai đoạn 2)
+  const handleImportDeptSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!deptImportText.trim()) {
+      setDeptImportError('Vui lòng dán dữ liệu bảng từ Excel vào khung bên dưới');
+      return;
+    }
+
+    try {
+      setDeptImportLoading(true);
+      setDeptImportError('');
+      setDeptImportResult(null);
+
+      const rawLines = deptImportText.trim().split(/\r?\n/);
+      const items = [];
+
+      for (let i = 0; i < rawLines.length; i++) {
+        const line = rawLines[i].trim();
+        if (!line) continue;
+        let parts = line.includes('\t') ? line.split('\t') : line.split(/[,;|]/);
+        parts = parts.map(p => p.trim());
+
+        // Skip header row if contains "Mã" or "Tên" or "STT"
+        if (i === 0 && (parts[0].toLowerCase().includes('mã') || parts[0].toLowerCase().includes('stt') || parts[0].toLowerCase().includes('code'))) {
+          continue;
+        }
+
+        let code = '';
+        let name = '';
+        let parent_code = '';
+        let agency_type = 'su_nghiep';
+        let description = '';
+
+        if (/^\d+$/.test(parts[0]) && parts.length > 2) {
+          // Format with STT: STT | Code | Name | ParentCode | AgencyType | Desc
+          code = parts[1] || '';
+          name = parts[2] || '';
+          parent_code = parts[3] || '';
+          agency_type = parts[4] || 'su_nghiep';
+          description = parts[5] || '';
+        } else {
+          // Format without STT: Code | Name | ParentCode | AgencyType | Desc
+          code = parts[0] || '';
+          name = parts[1] || '';
+          parent_code = parts[2] || '';
+          agency_type = parts[3] || 'su_nghiep';
+          description = parts[4] || '';
+        }
+
+        if (code && name) {
+          items.push({
+            code,
+            name,
+            parent_code,
+            agency_type,
+            description
+          });
+        }
+      }
+
+      if (items.length === 0) {
+        setDeptImportError('Không tìm thấy dòng đơn vị hợp lệ. Vui lòng đảm bảo tối thiểu Cột 1 là Mã đơn vị, Cột 2 là Tên đơn vị.');
+        return;
+      }
+
+      const res = await api.importDepartmentsExcel(items);
+      setDeptImportResult(res);
+      await loadInitialData();
+      if (onReloadUsers) onReloadUsers();
+    } catch (err) {
+      setDeptImportError(err.message || 'Lỗi khi nhập danh mục đơn vị');
+    } finally {
+      setDeptImportLoading(false);
     }
   };
 
@@ -883,6 +982,21 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
           >
             <UsersIcon className="w-4 h-4 text-slate-600" />
             <span>Nhóm ({userGroups.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setDeptImportText('');
+              setDeptImportResult(null);
+              setDeptImportError('');
+              setIsImportDeptModalOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-semibold px-3 py-2 rounded-xl shadow-2xs transition cursor-pointer"
+            title="Nhập cơ cấu đơn vị tổ chức hàng loạt từ Excel theo Hướng dẫn iCPV TP.HCM"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+            <span>Nhập Đơn vị Excel</span>
           </button>
 
           <button
@@ -1089,6 +1203,30 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                 </select>
 
                 <select
+                  value={filterManagementRole}
+                  onChange={(e) => setFilterManagementRole(e.target.value)}
+                  className="border border-purple-200 bg-purple-50/40 text-purple-900 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  title="Lọc phân cấp Lãnh đạo Trưởng / Phó / Tổ trưởng"
+                >
+                  <option value="ALL">Tất cả cấp bậc</option>
+                  <option value="lanh_dao">👑 Trưởng đơn vị / Đứng đầu</option>
+                  <option value="quan_ly">⭐ Cấp phó đơn vị</option>
+                  <option value="to_truong">🏷️ Tổ trưởng</option>
+                  <option value="nhan_vien">👤 Cán bộ, Nhân viên</option>
+                </select>
+
+                <select
+                  value={filterParty}
+                  onChange={(e) => setFilterParty(e.target.value)}
+                  className="border border-red-200 bg-red-50/40 text-red-900 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-red-500 focus:outline-none"
+                  title="Lọc cán bộ là Đảng viên Đảng Cộng sản Việt Nam"
+                >
+                  <option value="ALL">Tất cả thành phần</option>
+                  <option value="PARTY">🚩 Đảng viên</option>
+                  <option value="NON_PARTY">Quần chúng</option>
+                </select>
+
+                <select
                   value={filterSecondary}
                   onChange={(e) => setFilterSecondary(e.target.value)}
                   className="border border-indigo-200 bg-indigo-50/40 text-indigo-900 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-none"
@@ -1171,7 +1309,29 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
 
                           {/* Cán bộ / Username */}
                           <td className="px-3.5 py-3">
-                            <div className="font-bold text-slate-900 text-sm">{u.full_name}</div>
+                            <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5 flex-wrap">
+                              <span>{u.full_name}</span>
+                              {u.is_party_member === 1 && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-100 text-red-800 border border-red-200 text-[10px] font-bold" title={u.party_title || 'Đảng viên'}>
+                                  🚩 {u.party_title ? u.party_title : 'Đảng viên'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              {(primaryPos.management_role === 'lanh_dao' || u.management_role === 'lanh_dao') ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-purple-100 text-purple-900 border border-purple-200 text-[10px] font-bold">
+                                  👑 Trưởng đơn vị / Đứng đầu
+                                </span>
+                              ) : (primaryPos.management_role === 'quan_ly' || u.management_role === 'quan_ly') ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-blue-100 text-blue-900 border border-blue-200 text-[10px] font-bold">
+                                  ⭐ Cấp phó đơn vị
+                                </span>
+                              ) : (primaryPos.management_role === 'to_truong' || u.management_role === 'to_truong') ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-teal-100 text-teal-900 border border-teal-200 text-[10px] font-bold">
+                                  🏷️ Tổ trưởng
+                                </span>
+                              ) : null}
+                            </div>
                             <div className="text-slate-400 text-[11px] mt-0.5">
                               @{u.username} {u.phone ? `• 📞 ${u.phone}` : ''}
                             </div>
@@ -1373,7 +1533,29 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                     <div key={u.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
                       <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
                         <div>
-                          <div className="font-bold text-slate-900 text-sm">{u.full_name}</div>
+                          <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5 flex-wrap">
+                            <span>{u.full_name}</span>
+                            {u.is_party_member === 1 && (
+                              <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-800 border border-red-200 text-[10px] font-bold">
+                                🚩 {u.party_title || 'Đảng viên'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 mt-1 flex-wrap">
+                            {(primaryPos.management_role === 'lanh_dao' || u.management_role === 'lanh_dao') ? (
+                              <span className="px-1.5 py-0.2 rounded bg-purple-100 text-purple-900 border border-purple-200 text-[10px] font-bold">
+                                👑 Trưởng đơn vị
+                              </span>
+                            ) : (primaryPos.management_role === 'quan_ly' || u.management_role === 'quan_ly') ? (
+                              <span className="px-1.5 py-0.2 rounded bg-blue-100 text-blue-900 border border-blue-200 text-[10px] font-bold">
+                                ⭐ Cấp phó
+                              </span>
+                            ) : (primaryPos.management_role === 'to_truong' || u.management_role === 'to_truong') ? (
+                              <span className="px-1.5 py-0.2 rounded bg-teal-100 text-teal-900 border border-teal-200 text-[10px] font-bold">
+                                🏷️ Tổ trưởng
+                              </span>
+                            ) : null}
+                          </div>
                           <div className="text-xs text-slate-400 mt-0.5">
                             @{u.username} {u.phone ? `• 📞 ${u.phone}` : ''}
                           </div>
@@ -1839,6 +2021,54 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                       />
                     </div>
                   </div>
+
+                  {/* THÀNH PHẦN ĐẢNG & CHỨC VỤ ĐẢNG */}
+                  <div className="p-4 bg-red-50/60 border border-red-200 rounded-xl space-y-3">
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(formData.is_party_member)}
+                        onChange={(e) => setFormData({ 
+                          ...formData, 
+                          is_party_member: e.target.checked,
+                          party_title: e.target.checked ? (formData.party_title || 'Đảng viên') : ''
+                        })}
+                        className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500 cursor-pointer"
+                      />
+                      <span className="text-xs font-bold text-red-950 flex items-center gap-1.5">
+                        <span>🚩 Là Đảng viên Đảng Cộng sản Việt Nam</span>
+                      </span>
+                    </label>
+
+                    {formData.is_party_member && (
+                      <div className="pt-2 border-t border-red-200/60 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in">
+                        <div>
+                          <label className="block text-xs font-semibold text-red-900 mb-1">
+                            Chức vụ / Danh hiệu công tác Đảng
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.party_title}
+                            onChange={(e) => setFormData({ ...formData, party_title: e.target.value })}
+                            className="w-full px-3 py-2 border border-red-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-red-500 bg-white"
+                            placeholder="vd: Đảng viên, Bí thư Chi bộ, Phó Bí thư, Chi ủy viên..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                            Chức danh Đoàn thể (nếu có)
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.union_title}
+                            onChange={(e) => setFormData({ ...formData, union_title: e.target.value })}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 bg-white"
+                            placeholder="vd: Chủ tịch Công đoàn, Bí thư Đoàn..."
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* SECTION 4: TUYẾN QUẢN LÝ & ĐÁNH GIÁ */}
@@ -1994,6 +2224,24 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Loại hình cơ quan, đơn vị (Phục vụ xếp loại Nghị quyết 98)
+                </label>
+                <select
+                  value={deptFormData.agency_type || 'su_nghiep'}
+                  onChange={(e) => setDeptFormData({ ...deptFormData, agency_type: e.target.value })}
+                  className="w-full px-3 py-2 border border-indigo-200 bg-indigo-50/30 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="so_nganh">🏛️ Sở, ban, ngành TP.HCM</option>
+                  <option value="ubnd_quan_huyen">🏙️ UBND quận, huyện, TP Thủ Đức</option>
+                  <option value="phong_chuyen_mon">🏢 Phòng chuyên môn trực thuộc</option>
+                  <option value="su_nghiep">🎓 Đơn vị sự nghiệp công lập</option>
+                  <option value="doan_the">⭐ Cơ quan Đảng, Mặt trận, Đoàn thể</option>
+                  <option value="khac">Khác</option>
+                </select>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -2081,6 +2329,121 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Import Departments from Excel Modal (Giai đoạn 2) */}
+      {isImportDeptModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl w-[95%] sm:max-w-2xl border border-slate-200 overflow-hidden my-4 max-h-[92vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-900 to-emerald-950 text-white">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 rounded-lg">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">
+                    Nhập Cơ Cấu Đơn Vị Tổ Chức Hàng Loạt
+                  </h3>
+                  <p className="text-xs text-emerald-200">
+                    Theo mã chuẩn iCPV TP.HCM và phân loại loại hình cơ quan Nghị quyết 98
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsImportDeptModalOpen(false)}
+                className="text-white/70 hover:text-white p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 sm:p-6 overflow-y-auto space-y-4 flex-1">
+              <div className="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl text-xs text-emerald-950 space-y-1.5">
+                <div className="font-bold flex items-center gap-1.5 text-emerald-900">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+                  <span>Hướng dẫn định dạng nhập dữ liệu từ Excel / Clipboard:</span>
+                </div>
+                <p className="text-[11px] text-emerald-800 leading-relaxed">
+                  Bạn có thể sao chép trực tiếp các cột từ bảng tính Excel hoặc file CSV rồi dán vào ô bên dưới. Hệ thống tự động phân tách theo ký tự Tab hoặc dấu phẩy.
+                </p>
+                <div className="p-2 bg-white rounded-lg border border-emerald-300 font-mono text-[10px] text-slate-700 overflow-x-auto">
+                  Cột 1: Mã đơn vị (Bắt buộc) | Cột 2: Tên đơn vị (Bắt buộc) | Cột 3: Mã đơn vị cấp trên (parent_code) | Cột 4: Loại hình (so_nganh, ubnd_quan_huyen, phong_chuyen_mon, su_nghiep, doan_the) | Cột 5: Ghi chú
+                </div>
+                <div className="flex items-center justify-between pt-1 text-[11px]">
+                  <span className="text-slate-500 italic">* Hệ thống tự động liên kết cây phân cấp cha - con dựa theo Mã đơn vị cấp trên.</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeptImportText(`A29\tTHÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH\t\tdoan_the\tCơ quan chỉ đạo\nA29.01\tVăn phòng Thành ủy\tA29\tphong_chuyen_mon\tVăn phòng tham mưu\nA29.02\tBan Tổ chức Thành ủy\tA29\tphong_chuyen_mon\tBan tham mưu\nA29.03\tBan Tuyên giáo Thành ủy\tA29\tphong_chuyen_mon\tBan tham mưu\nA29.04\tTrường Cán bộ Thành phố\tA29\tsu_nghiep\tĐơn vị sự nghiệp công lập`);
+                    }}
+                    className="text-emerald-700 font-bold hover:underline cursor-pointer"
+                  >
+                    Điền dữ liệu mẫu iCPV
+                  </button>
+                </div>
+              </div>
+
+              {deptImportError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{deptImportError}</span>
+                </div>
+              )}
+
+              {deptImportResult && (
+                <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-900 space-y-2">
+                  <div className="flex items-center gap-2 font-bold text-sm text-emerald-800">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>{deptImportResult.message}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="bg-white p-2.5 rounded-lg border border-emerald-200 text-center">
+                      <span className="text-slate-500 block text-[11px]">Tạo mới</span>
+                      <span className="text-lg font-bold text-emerald-700">{deptImportResult.createdCount || 0}</span>
+                    </div>
+                    <div className="bg-white p-2.5 rounded-lg border border-emerald-200 text-center">
+                      <span className="text-slate-500 block text-[11px]">Cập nhật</span>
+                      <span className="text-lg font-bold text-indigo-700">{deptImportResult.updatedCount || 0}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Dán nội dung bảng tính Excel vào đây:
+                </label>
+                <textarea
+                  rows={8}
+                  value={deptImportText}
+                  onChange={(e) => setDeptImportText(e.target.value)}
+                  placeholder="Dán dữ liệu Excel (Ctrl+V) vào đây..."
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl font-mono text-xs focus:ring-2 focus:ring-emerald-500 bg-slate-50"
+                />
+              </div>
+            </div>
+
+            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsImportDeptModalOpen(false)}
+                className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-medium hover:bg-slate-100 transition cursor-pointer"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={handleImportDeptSubmit}
+                disabled={deptImportLoading}
+                className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {deptImportLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                <span>{deptImportLoading ? 'Đang nhập...' : 'Nhập vào Hệ thống'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

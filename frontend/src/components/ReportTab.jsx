@@ -50,6 +50,12 @@ export default function ReportTab({
   const [rowEditData, setRowEditData] = useState({});
   const [mau02SuccessMsg, setMau02SuccessMsg] = useState('');
 
+  // NQ98 state (Giai đoạn 3)
+  const [nq98Data, setNq98Data] = useState({ items: [], stats: { total: 0, excellent: 0, good: 0, completed: 0, failed: 0, excellent_pct: 0, is_quota_exceeded: false } });
+  const [nq98Loading, setNq98Loading] = useState(false);
+  const [nq98DeptFilter, setNq98DeptFilter] = useState('ALL');
+  const [nq98AgencyFilter, setNq98AgencyFilter] = useState('ALL');
+
   // Filter state for execution report
   const [originFilter, setOriginFilter] = useState('all'); // 'all', 'assigned', 'registered'
   const [axisFilter, setAxisFilter] = useState('all');
@@ -80,6 +86,27 @@ export default function ReportTab({
       loadMau02();
     }
   }, [activeReportView, activePeriodId, currentUser]);
+
+  async function loadNq98() {
+    try {
+      setNq98Loading(true);
+      const res = await api.getNq98ReportSummary({
+        period_id: activePeriodId,
+        dept_id: nq98DeptFilter !== 'ALL' ? nq98DeptFilter : undefined
+      });
+      setNq98Data(res || { items: [], stats: {} });
+    } catch (err) {
+      console.error('Error loading NQ98 report:', err);
+    } finally {
+      setNq98Loading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeReportView === 'nq98' && activePeriodId) {
+      loadNq98();
+    }
+  }, [activeReportView, activePeriodId, nq98DeptFilter]);
 
   async function loadData() {
     try {
@@ -284,7 +311,7 @@ export default function ReportTab({
             </div>
 
             {/* User selector (for personal reports) */}
-            {activeReportView !== 'mau_02' && (
+            {activeReportView !== 'mau_02' && activeReportView !== 'nq98' && (
               <div className="flex items-center space-x-2">
                 <span className="text-xs font-semibold text-slate-600">Cán bộ:</span>
                 <select
@@ -377,7 +404,21 @@ export default function ReportTab({
             }`}
           >
             <Award className="w-4 h-4" />
-            <span>Mẫu 02: Tổng hợp xếp loại & Đề xuất cán bộ toàn cơ quan</span>
+            <span>Mẫu 02: Tổng hợp xếp loại toàn cơ quan</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveReportView('nq98')}
+            className={`flex items-center space-x-2 py-2.5 px-4 text-xs font-bold border-b-2 whitespace-nowrap transition-all ${
+              activeReportView === 'nq98'
+                ? 'border-red-700 text-red-700 bg-red-50/40 rounded-t-lg'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+            title="Báo cáo xếp loại cán bộ theo Nghị quyết 98 TP.HCM (Khống chế Tỷ lệ Xuất sắc ≤ 20%)"
+          >
+            <Award className="w-4 h-4 text-amber-600" />
+            <span>Xếp loại Nghị quyết 98 TP.HCM (≤ 20% Xuất sắc)</span>
           </button>
         </div>
       </div>
@@ -1479,6 +1520,286 @@ export default function ReportTab({
               </div>
 
               {/* Col 2: Thủ trưởng cơ quan, đơn vị (Lấy Lãnh đạo đơn vị, loại bỏ chức danh bên dưới) */}
+              <div className="space-y-20">
+                <div>
+                  <p className="italic text-[14pt] text-black mb-1">
+                    {formatAdministrativeDate(new Date(), mau02LocationName)}
+                  </p>
+                  <p className="font-bold uppercase text-black leading-tight">
+                    THỦ TRƯỞNG CƠ QUAN, ĐƠN VỊ
+                  </p>
+                  <p className="italic text-[14pt] text-slate-700 mt-0.5">
+                    (Ký, ghi rõ họ tên và đóng dấu)
+                  </p>
+                </div>
+                <div>
+                  <p className="font-bold text-[14pt] text-black">
+                    {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* BÁO CÁO XẾP LOẠI NGHỊ QUYẾT 98 TP.HCM (Giai đoạn 3) */}
+      {activeReportView === 'nq98' && (
+        <div className="space-y-6">
+          {/* Controls & Filter Strip (No Print) */}
+          <div className="no-print bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-semibold text-slate-600">Lọc theo Đơn vị:</span>
+                <select
+                  value={nq98DeptFilter}
+                  onChange={(e) => setNq98DeptFilter(e.target.value)}
+                  className="text-xs font-semibold p-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                >
+                  <option value="ALL">Toàn bộ Cơ quan & Đơn vị</option>
+                  {departments.map(d => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} {d.code ? `[${d.code}]` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-semibold text-slate-600">Loại hình cơ quan:</span>
+                <select
+                  value={nq98AgencyFilter}
+                  onChange={(e) => setNq98AgencyFilter(e.target.value)}
+                  className="text-xs font-semibold p-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                >
+                  <option value="ALL">Tất cả loại hình</option>
+                  <option value="so_nganh">🏛️ Sở, ban, ngành</option>
+                  <option value="ubnd_quan_huyen">🏙️ UBND quận, huyện</option>
+                  <option value="phong_chuyen_mon">🏢 Phòng chuyên môn</option>
+                  <option value="su_nghiep">🎓 Đơn vị sự nghiệp</option>
+                  <option value="doan_the">⭐ Cơ quan Đảng, Đoàn thể</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="text-xs text-slate-500">
+              Cập nhật dữ liệu thẩm định: <b>{nq98Data.stats?.total || 0}</b> cán bộ
+            </div>
+          </div>
+
+          {/* Stats Cards (Nghị quyết 98 Khống chế Tỷ lệ Xuất sắc <= 20%) */}
+          <div className="no-print grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+            {/* Tổng số */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase">Tổng số CB, CC, VC</span>
+              <div className="text-2xl font-black text-slate-800 mt-1">
+                {nq98Data.stats?.total || 0}
+              </div>
+              <span className="text-[10px] text-slate-400">Tham gia đánh giá</span>
+            </div>
+
+            {/* Hoàn thành Xuất sắc */}
+            <div className={`p-4 rounded-xl border shadow-xs transition ${
+              nq98Data.stats?.is_quota_exceeded 
+                ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-400 text-rose-950' 
+                : 'bg-amber-50/70 border-amber-200 text-amber-950'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase">Xuất sắc (NQ 98)</span>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                  nq98Data.stats?.is_quota_exceeded ? 'bg-rose-600 text-white animate-pulse' : 'bg-amber-600 text-white'
+                }`}>
+                  {nq98Data.stats?.excellent_pct || 0}%
+                </span>
+              </div>
+              <div className="text-2xl font-black mt-1">
+                {nq98Data.stats?.excellent || 0} <span className="text-xs font-normal">cán bộ</span>
+              </div>
+              <p className="text-[10px] mt-0.5 font-medium">
+                {nq98Data.stats?.is_quota_exceeded 
+                  ? '⚠️ VƯỢT HẠN MỨC (Quy định ≤ 20%)' 
+                  : '✓ Đúng chỉ tiêu (Không quá 20%)'}
+              </p>
+            </div>
+
+            {/* Hoàn thành Tốt */}
+            <div className="bg-blue-50/70 p-4 rounded-xl border border-blue-200 text-blue-950 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase">Hoàn thành tốt</span>
+                <span className="text-[10px] font-extrabold bg-blue-600 text-white px-2 py-0.5 rounded-full">
+                  {nq98Data.stats?.total > 0 ? ((nq98Data.stats.good / nq98Data.stats.total) * 100).toFixed(1) : 0}%
+                </span>
+              </div>
+              <div className="text-2xl font-black mt-1 text-blue-900">
+                {nq98Data.stats?.good || 0} <span className="text-xs font-normal">cán bộ</span>
+              </div>
+              <p className="text-[10px] text-blue-800 mt-0.5">Mức hoàn thành tốt</p>
+            </div>
+
+            {/* Hoàn thành nhiệm vụ */}
+            <div className="bg-emerald-50/70 p-4 rounded-xl border border-emerald-200 text-emerald-950 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase">Hoàn thành NV</span>
+                <span className="text-[10px] font-extrabold bg-emerald-600 text-white px-2 py-0.5 rounded-full">
+                  {nq98Data.stats?.total > 0 ? ((nq98Data.stats.completed / nq98Data.stats.total) * 100).toFixed(1) : 0}%
+                </span>
+              </div>
+              <div className="text-2xl font-black mt-1 text-emerald-900">
+                {nq98Data.stats?.completed || 0} <span className="text-xs font-normal">cán bộ</span>
+              </div>
+              <p className="text-[10px] text-emerald-800 mt-0.5">Đạt yêu cầu công việc</p>
+            </div>
+
+            {/* Không hoàn thành nhiệm vụ */}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-slate-800 shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase text-slate-600">Không hoàn thành</span>
+                <span className="text-[10px] font-extrabold bg-slate-600 text-white px-2 py-0.5 rounded-full">
+                  {nq98Data.stats?.total > 0 ? ((nq98Data.stats.failed / nq98Data.stats.total) * 100).toFixed(1) : 0}%
+                </span>
+              </div>
+              <div className="text-2xl font-black mt-1 text-slate-800">
+                {nq98Data.stats?.failed || 0} <span className="text-xs font-normal">cán bộ</span>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-0.5">Chưa đạt yêu cầu</p>
+            </div>
+          </div>
+
+          {/* Formal Administrative Document (Times New Roman 14pt) */}
+          <div className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-4 sm:p-6 md:p-10 font-times text-[14pt] leading-relaxed w-full space-y-6 text-black">
+            
+            {/* National Header */}
+            <div className="grid grid-cols-2 text-center text-[14pt]">
+              <div>
+                <p className="uppercase text-black leading-tight">
+                  {mau02ParentAgency}
+                </p>
+                <p className="font-bold uppercase text-black leading-tight mt-1 border-b border-black inline-block pb-1">
+                  {mau02UnitName}
+                </p>
+              </div>
+
+              <div>
+                <p className="font-bold uppercase text-black leading-tight">
+                  CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+                </p>
+                <p className="font-bold text-black leading-tight mt-1 border-b border-black inline-block pb-1">
+                  Độc lập - Tự do - Hạnh phúc
+                </p>
+              </div>
+            </div>
+
+            {/* Title */}
+            <div className="text-center space-y-1 pt-3">
+              <h1 className="font-bold text-[16pt] uppercase text-black leading-snug">
+                BÁO CÁO TỔNG HỢP KẾT QUẢ ĐÁNH GIÁ, XẾP LOẠI CÁN BỘ
+              </h1>
+              <h2 className="font-bold text-[14pt] text-black">
+                THEO NGHỊ QUYẾT SỐ 98/2023/QH15 CỦA QUỐC HỘI
+              </h2>
+              <p className="italic text-[13pt] text-slate-700">
+                ({periodDisplayName} - Tỷ lệ Hoàn thành xuất sắc nhiệm vụ: <b>{nq98Data.stats?.excellent_pct || 0}%</b>, khống chế ≤ 20%)
+              </p>
+            </div>
+
+            {/* Cadres Table */}
+            <div className="overflow-x-auto pt-2">
+              <table className="w-full border-collapse border border-black text-[12pt]">
+                <thead>
+                  <tr className="bg-slate-100 text-center font-bold text-black">
+                    <th className="border border-black p-2 w-12">STT</th>
+                    <th className="border border-black p-2 min-w-[180px]">Họ và tên cán bộ</th>
+                    <th className="border border-black p-2 min-w-[200px]">Đơn vị & Chức vụ</th>
+                    <th className="border border-black p-2 min-w-[130px]">Loại hình cơ quan</th>
+                    <th className="border border-black p-2 w-28">Đảng viên</th>
+                    <th className="border border-black p-2 w-24">Điểm KPI</th>
+                    <th className="border border-black p-2 min-w-[160px]">Đề xuất xếp loại</th>
+                    <th className="border border-black p-2 min-w-[160px]">Xếp loại Nghị quyết 98</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {nq98Loading ? (
+                    <tr>
+                      <td colSpan="8" className="border border-black p-6 text-center text-slate-500 italic">
+                        Đang tải danh sách tổng hợp xếp loại cán bộ theo Nghị quyết 98...
+                      </td>
+                    </tr>
+                  ) : nq98Data.items.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" className="border border-black p-6 text-center text-slate-500 italic">
+                        Chưa có dữ liệu đánh giá cán bộ trong kỳ này
+                      </td>
+                    </tr>
+                  ) : (
+                    nq98Data.items
+                      .filter(it => nq98AgencyFilter === 'ALL' || it.agency_type === nq98AgencyFilter)
+                      .map((item, idx) => (
+                        <tr key={item.user_id || idx} className="hover:bg-slate-50">
+                          <td className="border border-black p-2 text-center">{idx + 1}</td>
+                          <td className="border border-black p-2">
+                            <div className="font-bold text-black">{item.full_name}</div>
+                            {item.management_role === 'lanh_dao' && (
+                              <span className="text-[10px] text-purple-700 font-bold block">👑 Trưởng đơn vị / Đứng đầu</span>
+                            )}
+                            {item.management_role === 'quan_ly' && (
+                              <span className="text-[10px] text-blue-700 font-bold block">⭐ Cấp phó đơn vị</span>
+                            )}
+                          </td>
+                          <td className="border border-black p-2">
+                            <div className="font-semibold text-black">{item.gov_title || 'Chuyên viên'}</div>
+                            <div className="text-[11pt] text-slate-600">{item.dept_name || 'Cơ quan'}</div>
+                          </td>
+                          <td className="border border-black p-2 text-center text-[11pt]">
+                            {item.agency_type === 'so_nganh' ? 'Sở, ban, ngành' :
+                             item.agency_type === 'ubnd_quan_huyen' ? 'UBND quận/huyện' :
+                             item.agency_type === 'phong_chuyen_mon' ? 'Phòng chuyên môn' :
+                             item.agency_type === 'su_nghiep' ? 'Đơn vị sự nghiệp' :
+                             item.agency_type === 'doan_the' ? 'Đảng, Đoàn thể' : 'Khác'}
+                          </td>
+                          <td className="border border-black p-2 text-center text-[11pt]">
+                            {item.is_party_member === 1 ? (
+                              <span className="font-bold text-red-700">✓ {item.party_title || 'Đảng viên'}</span>
+                            ) : (
+                              <span className="text-slate-500">Quần chúng</span>
+                            )}
+                          </td>
+                          <td className="border border-black p-2 text-center font-bold text-black">
+                            {Number(item.total_score).toFixed(1)}
+                          </td>
+                          <td className="border border-black p-2 text-center text-[11pt]">
+                            {item.superior_rank || 'Chưa xếp loại'}
+                          </td>
+                          <td className="border border-black p-2 text-center">
+                            <span className={`px-2 py-0.5 rounded text-[11pt] font-bold ${
+                              item.classification === 'Xuat_sac' ? 'bg-amber-100 text-amber-900' :
+                              item.classification === 'Tot' ? 'bg-blue-100 text-blue-900' :
+                              item.classification === 'Hoan_thanh' ? 'bg-emerald-100 text-emerald-900' :
+                              'bg-rose-100 text-rose-900'
+                            }`}>
+                              {item.classification === 'Xuat_sac' ? 'Hoàn thành xuất sắc' :
+                               item.classification === 'Tot' ? 'Hoàn thành tốt' :
+                               item.classification === 'Hoan_thanh' ? 'Hoàn thành nhiệm vụ' :
+                               'Không hoàn thành'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Signature block */}
+            <div className="grid grid-cols-2 text-center pt-8 text-[14pt] text-black">
+              <div className="space-y-20">
+                <div>
+                  <p className="font-bold uppercase text-black">NGƯỜI LẬP BIỂU</p>
+                  <p className="italic text-[14pt] text-slate-700">(Ký, ghi rõ họ tên)</p>
+                </div>
+                <div className="h-6"></div>
+              </div>
+
               <div className="space-y-20">
                 <div>
                   <p className="italic text-[14pt] text-black mb-1">

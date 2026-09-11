@@ -769,4 +769,22 @@ export const api = {
   getSupabaseStatus: () => fetchApi('/system/supabase/status'),
   pushToSupabase: () => fetchApi('/system/supabase/push', { method: 'POST' }),
   pullFromSupabase: () => fetchApi('/system/supabase/pull', { method: 'POST' }),
+
+  // Batch Import Departments from Excel
+  importDepartmentsExcel: (items) => fetchApi('/admin/departments/import-excel', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items })
+  }),
+
+  // Two-tier evaluation & NQ98 report
+  reviewEvaluationTwoTier: (data) => fetchApi('/evaluations/two-tier-review', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }),
+  getNq98ReportSummary: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return fetchApi(`/reports/nq98-summary${query ? `?${query}` : ''}`);
+  },
 };

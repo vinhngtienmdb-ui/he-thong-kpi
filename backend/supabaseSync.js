@@ -183,7 +183,46 @@ async function pushToSupabase() {
         ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS delegated_at TEXT;
         ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS delegation_note TEXT;
         ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS submitted_for_eval_at TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS is_skip_level INTEGER DEFAULT 0;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS target_position_id TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS skip_level_notes TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS level_1_reviewer_id TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS level_1_reviewed_at TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS level_1_comment TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS level_1_score NUMERIC;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS is_party_member INTEGER DEFAULT 0;
+        ALTER TABLE departments ADD COLUMN IF NOT EXISTS agency_type TEXT DEFAULT 'su_nghiep';
+        ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS final_classification TEXT;
+        ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS skip_level_reviewer_id TEXT;
+        ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS skip_level_status TEXT DEFAULT 'approved';
         UPDATE assigned_tasks SET axis_code = 'TRUC_1' WHERE axis_code = 'CHUYEN_MON' OR axis_code IS NULL OR axis_code = '';
+
+        CREATE TABLE IF NOT EXISTS user_positions (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          dept_id TEXT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+          position_title TEXT NOT NULL,
+          position_type TEXT DEFAULT 'chinh_quyen',
+          role_id TEXT,
+          management_role TEXT DEFAULT 'nhan_vien',
+          manager_id TEXT,
+          is_primary INTEGER DEFAULT 0,
+          notes TEXT,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS skip_level_authorizations (
+          id TEXT PRIMARY KEY,
+          manager_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          dept_id TEXT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
+          can_assign INTEGER DEFAULT 1,
+          can_review INTEGER DEFAULT 1,
+          can_view_reports INTEGER DEFAULT 1,
+          notes TEXT,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
 
         CREATE TABLE IF NOT EXISTS notifications (
           id TEXT PRIMARY KEY,
@@ -242,12 +281,12 @@ async function pushToSupabase() {
       client, 'users',
       ['id', 'username', 'password', 'full_name', 'role', 'party_title', 'gov_title', 'union_title', 'dept_id',
        'birth_date', 'gender', 'phone', 'email', 'is_active', 'target_role', 'role_id', 'manager_id',
-       'management_role', 'final_evaluator_id'],
+       'management_role', 'final_evaluator_id', 'is_party_member'],
       ['id'],
       ['username', 'password', 'full_name', 'role', 'party_title', 'gov_title', 'union_title', 'dept_id',
        'birth_date', 'gender', 'phone', 'email', 'is_active', 'target_role', 'role_id', 'manager_id',
-       'management_role', 'final_evaluator_id'],
-      users.map(u => ({ ...u, is_active: u.is_active ?? 1 }))
+       'management_role', 'final_evaluator_id', 'is_party_member'],
+      users.map(u => ({ ...u, is_active: u.is_active ?? 1, is_party_member: u.is_party_member ?? 0 }))
     );
     stats.users = users.length;
 
@@ -314,6 +353,11 @@ async function pushToSupabase() {
       standardTasks,
       100
     );
+    // Dọn sạch các công việc chuẩn đã xóa khỏi SQLite trên Supabase Cloud
+    const localStdIds = standardTasks.map(t => t.id);
+    if (localStdIds.length > 0) {
+      await client.query(`DELETE FROM standard_tasks WHERE NOT (id = ANY($1))`, [localStdIds]);
+    }
     stats.standard_tasks = standardTasks.length;
 
     // 9. documents
@@ -498,6 +542,46 @@ async function pushToSupabase() {
       stats.notifications = 0;
     }
 
+    // 18. user_positions
+    try {
+      const positions = db.prepare('SELECT * FROM user_positions').all();
+      await batchUpsert(
+        client, 'user_positions',
+        ['id', 'user_id', 'dept_id', 'position_title', 'position_type', 'role_id', 'management_role', 'manager_id', 'is_primary', 'notes'],
+        ['id'],
+        ['dept_id', 'position_title', 'position_type', 'role_id', 'management_role', 'manager_id', 'is_primary', 'notes'],
+        positions.filter(p => validUserIds.has(p.user_id)),
+        100
+      );
+      const localPosIds = positions.map(p => p.id);
+      if (localPosIds.length > 0) {
+        await client.query(`DELETE FROM user_positions WHERE NOT (id = ANY($1))`, [localPosIds]);
+      }
+      stats.user_positions = positions.length;
+    } catch (e) {
+      stats.user_positions = 0;
+    }
+
+    // 19. skip_level_authorizations
+    try {
+      const auths = db.prepare('SELECT * FROM skip_level_authorizations').all();
+      await batchUpsert(
+        client, 'skip_level_authorizations',
+        ['id', 'manager_id', 'dept_id', 'can_assign', 'can_review', 'can_view_reports', 'notes'],
+        ['id'],
+        ['can_assign', 'can_review', 'can_view_reports', 'notes'],
+        auths.filter(a => validUserIds.has(a.manager_id)),
+        100
+      );
+      const localAuthIds = auths.map(a => a.id);
+      if (localAuthIds.length > 0) {
+        await client.query(`DELETE FROM skip_level_authorizations WHERE NOT (id = ANY($1))`, [localAuthIds]);
+      }
+      stats.skip_level_authorizations = auths.length;
+    } catch (e) {
+      stats.skip_level_authorizations = 0;
+    }
+
     return { success: true, stats, message: 'Đã sao lưu thành công toàn bộ dữ liệu lên Supabase Cloud' };
   } finally {
     client.release();
@@ -589,8 +673,8 @@ async function pullFromSupabase() {
       INSERT OR REPLACE INTO users (
         id, username, password, full_name, role, party_title, gov_title, union_title, dept_id,
         birth_date, gender, phone, email, is_active, target_role, role_id, manager_id,
-        management_role, final_evaluator_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        management_role, final_evaluator_id, is_party_member
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
       for (const u of supUsers.rows) {
@@ -600,7 +684,8 @@ async function pullFromSupabase() {
           toSqliteVal(u.birth_date), toSqliteVal(u.gender), toSqliteVal(u.phone), toSqliteVal(u.email),
           u.is_active !== undefined && u.is_active !== null && u.is_active !== 0 ? 1 : 0,
           toSqliteVal(u.target_role), toSqliteVal(u.role_id), toSqliteVal(u.manager_id),
-          toSqliteVal(u.management_role || 'nhan_vien'), toSqliteVal(u.final_evaluator_id)
+          toSqliteVal(u.management_role || 'nhan_vien'), toSqliteVal(u.final_evaluator_id),
+          u.is_party_member ? 1 : 0
         );
       }
     })();
@@ -893,6 +978,53 @@ async function pullFromSupabase() {
       stats.notifications = 0;
     }
 
+    // 18. user_positions
+    try {
+      const supPositions = await client.query('SELECT * FROM user_positions');
+      const insPos = db.prepare(`
+        INSERT OR REPLACE INTO user_positions (
+          id, user_id, dept_id, position_title, position_type, role_id,
+          management_role, manager_id, is_primary, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      db.transaction(() => {
+        for (const p of supPositions.rows) {
+          insPos.run(
+            toSqliteVal(p.id), toSqliteVal(p.user_id), toSqliteVal(p.dept_id),
+            toSqliteVal(p.position_title), toSqliteVal(p.position_type), toSqliteVal(p.role_id),
+            toSqliteVal(p.management_role), toSqliteVal(p.manager_id),
+            p.is_primary ? 1 : 0, toSqliteVal(p.notes),
+            toSqliteVal(p.created_at), toSqliteVal(p.updated_at)
+          );
+        }
+      })();
+      stats.user_positions = supPositions.rows.length;
+    } catch (e) {
+      stats.user_positions = 0;
+    }
+
+    // 19. skip_level_authorizations
+    try {
+      const supAuths = await client.query('SELECT * FROM skip_level_authorizations');
+      const insAuth = db.prepare(`
+        INSERT OR REPLACE INTO skip_level_authorizations (
+          id, manager_id, dept_id, can_assign, can_review, can_view_reports, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      db.transaction(() => {
+        for (const a of supAuths.rows) {
+          insAuth.run(
+            toSqliteVal(a.id), toSqliteVal(a.manager_id), toSqliteVal(a.dept_id),
+            a.can_assign ? 1 : 0, a.can_review ? 1 : 0, a.can_view_reports ? 1 : 0,
+            toSqliteVal(a.notes), toSqliteVal(a.created_at), toSqliteVal(a.updated_at)
+          );
+        }
+      })();
+      stats.skip_level_authorizations = supAuths.rows.length;
+    } catch (e) {
+      stats.skip_level_authorizations = 0;
+    }
+
     checkpointDatabase();
     return { success: true, stats, message: 'Đã khôi phục thành công CSDL từ Supabase về máy chủ' };
   } finally {
@@ -948,8 +1080,8 @@ async function syncDirectUserToSupabase(user) {
       INSERT INTO users (
         id, username, password, full_name, role, party_title, gov_title, union_title, dept_id,
         birth_date, gender, phone, email, is_active, target_role, role_id, manager_id,
-        management_role, final_evaluator_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        management_role, final_evaluator_id, is_party_member
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       ON CONFLICT (id) DO UPDATE SET
         username = EXCLUDED.username,
         password = EXCLUDED.password,
@@ -968,13 +1100,14 @@ async function syncDirectUserToSupabase(user) {
         role_id = EXCLUDED.role_id,
         manager_id = EXCLUDED.manager_id,
         management_role = EXCLUDED.management_role,
-        final_evaluator_id = EXCLUDED.final_evaluator_id
+        final_evaluator_id = EXCLUDED.final_evaluator_id,
+        is_party_member = EXCLUDED.is_party_member
     `;
     await client.query(sql, [
       user.id, user.username, user.password, user.full_name, user.role, user.party_title,
       user.gov_title, user.union_title, user.dept_id, user.birth_date, user.gender, user.phone, user.email,
       user.is_active !== undefined ? user.is_active : 1, user.target_role, user.role_id, user.manager_id,
-      user.management_role || 'nhan_vien', user.final_evaluator_id
+      user.management_role || 'nhan_vien', user.final_evaluator_id, user.is_party_member ? 1 : 0
     ]);
     console.log(`[Supabase Direct Sync] ✓ Đã cập nhật tức thì cán bộ "${user.full_name}" (${user.username}) lên Supabase.`);
   } catch (err) {
@@ -1047,16 +1180,17 @@ async function syncWithSupabaseOnStartup() {
   const localUserCount = db.prepare('SELECT COUNT(*) as count FROM users').get()?.count || 0;
   console.log(`[Supabase Startup Sync] Kiểm tra trạng thái: Supabase = ${supUserCount} users | SQLite cục bộ = ${localUserCount} users.`);
 
-  if (supUserCount > 0) {
-    console.log(`[Supabase Startup Sync] Supabase Cloud chứa ${supUserCount} cán bộ. Bắt đầu kéo dữ liệu sống về SQLite...`);
+  if (supUserCount > 0 && localUserCount === 0) {
+    console.log(`[Supabase Startup Sync] SQLite cục bộ đang trống. Kéo dữ liệu từ Supabase về...`);
     const result = await pullFromSupabase();
-    console.log('[Supabase Startup Sync] ✓ Đã nạp thành công 100% CSDL sống từ Supabase vào SQLite:', result.stats);
+    console.log('[Supabase Startup Sync] ✓ Đã nạp thành công CSDL từ Supabase vào SQLite:', result.stats);
     ensureUserPositionsPopulated();
     return result;
   } else if (localUserCount > 0) {
-    console.log('[Supabase Startup Sync] Supabase Cloud đang trống. Tiến hành đẩy CSDL từ SQLite lên...');
+    console.log('[Supabase Startup Sync] SQLite cục bộ đã có dữ liệu. Đẩy dữ liệu đồng bộ lên Supabase Cloud...');
     const result = await pushToSupabase();
-    console.log('[Supabase Startup Sync] ✓ Đã khởi tạo thành công CSDL lên Supabase Cloud:', result.stats);
+    console.log('[Supabase Startup Sync] ✓ Đã đồng bộ thành công CSDL lên Supabase Cloud:', result.stats);
+    ensureUserPositionsPopulated();
     return result;
   }
 }

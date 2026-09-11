@@ -553,6 +553,7 @@ app.get('/api/periods', (req, res) => {
 app.get('/api/departments', (req, res) => {
   const depts = db.prepare(`
     SELECT d.*, 
+           COALESCE(d.agency_type, 'su_nghiep') as agency_type,
            p.name as parent_name,
            u.full_name as leader_name,
            (SELECT COUNT(*) FROM departments c WHERE c.parent_id = d.id AND (c.is_active IS NULL OR c.is_active = 1)) as sub_dept_count,
@@ -569,7 +570,7 @@ app.get('/api/departments', (req, res) => {
 
 // Admin: Create department
 app.post('/api/departments', requireAdmin, (req, res) => {
-  const { code, name, parent_id, leader_id, description, parent_agency, location_name } = req.body;
+  const { code, name, parent_id, leader_id, description, parent_agency, location_name, agency_type } = req.body;
   if (!code || !name) {
     return res.status(400).json({ success: false, message: 'Thiếu mã hoặc tên đơn vị/phòng ban' });
   }
@@ -579,21 +580,23 @@ app.post('/api/departments', requireAdmin, (req, res) => {
   }
   const id = uuidv4();
   db.prepare(`
-    INSERT INTO departments (id, code, name, parent_id, leader_id, description, is_active, parent_agency, location_name)
-    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+    INSERT INTO departments (id, code, name, parent_id, leader_id, description, is_active, parent_agency, location_name, agency_type)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
   `).run(
     id, code, name, parent_id || null, leader_id || null, description || '',
     parent_agency || 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH',
-    location_name || 'TP. Hồ Chí Minh'
+    location_name || 'TP. Hồ Chí Minh',
+    agency_type || 'su_nghiep'
   );
 
+  triggerBackgroundSupabaseSync(300);
   res.json({ success: true, id, message: 'Đã tạo đơn vị/phòng ban mới thành công' });
 });
 
 // Admin: Update department
 app.put('/api/departments/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
-  const { code, name, parent_id, leader_id, description, is_active, parent_agency, location_name } = req.body;
+  const { code, name, parent_id, leader_id, description, is_active, parent_agency, location_name, agency_type } = req.body;
   const dept = db.prepare('SELECT * FROM departments WHERE id = ?').get(id);
   if (!dept) return res.status(404).json({ success: false, message: 'Không tìm thấy phòng ban' });
 
@@ -610,7 +613,8 @@ app.put('/api/departments/:id', requireAdmin, (req, res) => {
         description = ?,
         is_active = ?,
         parent_agency = ?,
-        location_name = ?
+        location_name = ?,
+        agency_type = ?
     WHERE id = ?
   `).run(
     code !== undefined ? code : dept.code,
@@ -621,9 +625,11 @@ app.put('/api/departments/:id', requireAdmin, (req, res) => {
     is_active !== undefined ? (is_active ? 1 : 0) : dept.is_active,
     parent_agency !== undefined ? parent_agency : dept.parent_agency,
     location_name !== undefined ? location_name : dept.location_name,
+    agency_type !== undefined ? agency_type : (dept.agency_type || 'su_nghiep'),
     id
   );
 
+  triggerBackgroundSupabaseSync(300);
   res.json({ success: true, message: 'Đã cập nhật thông tin phòng ban thành công' });
 });
 
@@ -640,7 +646,76 @@ app.delete('/api/departments/:id', requireAdmin, (req, res) => {
   }
 
   db.prepare('DELETE FROM departments WHERE id = ?').run(id);
+  triggerBackgroundSupabaseSync(300);
   res.json({ success: true, message: 'Đã xóa đơn vị thành công' });
+});
+
+// Admin: Import danh mục đơn vị hàng loạt từ Excel chuẩn iCPV TP.HCM
+app.post('/api/admin/departments/import-excel', requireAdmin, (req, res) => {
+  const { items } = req.body;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ success: false, message: 'Danh sách đơn vị nhập không hợp lệ hoặc rỗng' });
+  }
+
+  let createdCount = 0;
+  let updatedCount = 0;
+
+  try {
+    const upsertDept = db.transaction(() => {
+      for (const item of items) {
+        const code = (item.code || '').trim();
+        const name = (item.name || '').trim();
+        if (!code || !name) continue;
+
+        const agencyType = item.agency_type || 'su_nghiep';
+        const parentAgency = item.parent_agency || 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH';
+        const locationName = item.location_name || 'TP. Hồ Chí Minh';
+        const desc = item.description || '';
+
+        const existing = db.prepare('SELECT id FROM departments WHERE code = ?').get(code);
+        if (existing) {
+          db.prepare(`
+            UPDATE departments
+            SET name = ?, agency_type = ?, parent_agency = ?, location_name = ?, description = COALESCE(NULLIF(?, ''), description)
+            WHERE id = ?
+          `).run(name, agencyType, parentAgency, locationName, desc, existing.id);
+          updatedCount++;
+        } else {
+          const id = uuidv4();
+          db.prepare(`
+            INSERT INTO departments (id, code, name, agency_type, parent_agency, location_name, description, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+          `).run(id, code, name, agencyType, parentAgency, locationName, desc);
+          createdCount++;
+        }
+      }
+
+      // Liên kết parent_id dựa trên parent_code
+      for (const item of items) {
+        const code = (item.code || '').trim();
+        const parentCode = (item.parent_code || '').trim();
+        if (!code || !parentCode) continue;
+
+        const currentDept = db.prepare('SELECT id FROM departments WHERE code = ?').get(code);
+        const parentDept = db.prepare('SELECT id FROM departments WHERE code = ?').get(parentCode);
+        if (currentDept && parentDept && currentDept.id !== parentDept.id) {
+          db.prepare('UPDATE departments SET parent_id = ? WHERE id = ?').run(parentDept.id, currentDept.id);
+        }
+      }
+    });
+
+    upsertDept();
+    triggerBackgroundSupabaseSync(300);
+    res.json({
+      success: true,
+      createdCount,
+      updatedCount,
+      message: `Đã nhập thành công ${createdCount + updatedCount} đơn vị (Thêm mới: ${createdCount}, Cập nhật: ${updatedCount})!`
+    });
+  } catch (err) {
+    console.error('Lỗi nhập đơn vị từ Excel:', err);
+    res.status(500).json({ success: false, message: 'Lỗi nhập đơn vị: ' + err.message });
+  }
 });
 
 // -------------------------------------------------------------
@@ -762,6 +837,7 @@ app.get('/api/users', (req, res) => {
     SELECT u.id, u.username, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.union_title, u.dept_id,
            u.role_id, u.manager_id, u.management_role, u.final_evaluator_id,
            u.birth_date, u.gender, u.phone, u.email, COALESCE(u.is_active, 1) as is_active,
+           COALESCE(u.is_party_member, 0) as is_party_member,
            d.name as dept_name,
            r.name as role_name, r.code as role_code, r.data_scope,
            mgr.full_name as manager_name,
@@ -1100,13 +1176,14 @@ app.post('/api/admin/users', requireCanManageUsers, async (req, res) => {
   }
 
   db.prepare(`
-    INSERT INTO users (id, username, password, full_name, role, target_role, role_id, manager_id, management_role, final_evaluator_id, party_title, gov_title, union_title, dept_id, birth_date, gender, phone, email, is_active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    INSERT INTO users (id, username, password, full_name, role, target_role, role_id, manager_id, management_role, final_evaluator_id, party_title, gov_title, union_title, dept_id, birth_date, gender, phone, email, is_active, is_party_member)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
   `).run(
     id, username, password || '123456', full_name, effectiveRole, effectiveTargetRole,
     effectiveRoleId || null, manager_id || null, effectiveMgmtRole || 'nhan_vien', final_evaluator_id || null,
-    party_title || 'Đảng viên', gov_title || 'Chuyên viên', union_title || '', dept_id || null,
-    birth_date || '1985-01-01', gender || 'Nam', phone || '', email || ''
+    party_title || '', gov_title || 'Chuyên viên', union_title || '', dept_id || null,
+    birth_date || '1985-01-01', gender || 'Nam', phone || '', email || '',
+    req.body.is_party_member ? 1 : (party_title && party_title.trim() && !party_title.toLowerCase().includes('quần chúng') ? 1 : 0)
   );
 
   const newUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
@@ -1283,8 +1360,12 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
     SET full_name = ?, role = ?, target_role = ?, role_id = ?, manager_id = ?,
         management_role = ?, final_evaluator_id = ?,
         party_title = ?, gov_title = ?, union_title = ?, dept_id = ?,
-        birth_date = ?, gender = ?, phone = ?, email = ?, is_active = ?
+        birth_date = ?, gender = ?, phone = ?, email = ?, is_active = ?, is_party_member = ?
   `;
+  const partyMemberVal = req.body.is_party_member !== undefined
+    ? (req.body.is_party_member ? 1 : 0)
+    : (party_title !== undefined ? (party_title && party_title.trim() && !party_title.toLowerCase().includes('quần chúng') ? 1 : 0) : user.is_party_member);
+
   const params = [
     full_name || user.full_name, effectiveRole, effectiveTargetRole,
     effectiveRoleId || null, manager_id !== undefined ? manager_id : user.manager_id,
@@ -1295,7 +1376,8 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
     union_title !== undefined ? union_title : user.union_title,
     targetDeptId,
     birth_date || user.birth_date, gender || user.gender, phone !== undefined ? phone : user.phone,
-    email !== undefined ? email : user.email, is_active !== undefined ? is_active : user.is_active
+    email !== undefined ? email : user.email, is_active !== undefined ? is_active : user.is_active,
+    partyMemberVal
   ];
 
   if (password) {
@@ -2082,7 +2164,7 @@ app.put('/api/standard-tasks/:id/status', requireManagerOrAdmin, (req, res) => {
 });
 
 // Delete standard task
-app.delete('/api/standard-tasks/:id', requireManagerOrAdmin, (req, res) => {
+app.delete('/api/standard-tasks/:id', requireManagerOrAdmin, async (req, res) => {
   const { id } = req.params;
   const existing = db.prepare('SELECT * FROM standard_tasks WHERE id = ?').get(id);
   if (!existing) {
@@ -2090,13 +2172,15 @@ app.delete('/api/standard-tasks/:id', requireManagerOrAdmin, (req, res) => {
   }
 
   db.prepare('DELETE FROM standard_tasks WHERE id = ?').run(id);
-  deleteStandardTasksFromSupabase([id]);
-  triggerBackgroundSupabaseSync();
+  try {
+    await deleteStandardTasksFromSupabase([id]);
+  } catch (e) {}
+  triggerBackgroundSupabaseSync(100);
   res.json({ success: true, message: 'Đã xóa công việc chuẩn khỏi danh mục thành công' });
 });
 
 // Bulk delete standard tasks (Xóa nhiều công việc chuẩn cùng lúc)
-app.post('/api/standard-tasks/bulk-delete', requireManagerOrAdmin, (req, res) => {
+app.post('/api/standard-tasks/bulk-delete', requireManagerOrAdmin, async (req, res) => {
   const { ids } = req.body || {};
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ success: false, message: 'Vui lòng chọn ít nhất một công việc chuẩn để xóa' });
@@ -2112,8 +2196,10 @@ app.post('/api/standard-tasks/bulk-delete', requireManagerOrAdmin, (req, res) =>
   const result = runBulkDelete();
 
   // Async delete from Supabase Cloud and trigger background sync
-  deleteStandardTasksFromSupabase(ids);
-  triggerBackgroundSupabaseSync();
+  try {
+    await deleteStandardTasksFromSupabase(ids);
+  } catch (e) {}
+  triggerBackgroundSupabaseSync(100);
 
   res.json({ 
     success: true, 
@@ -3635,7 +3721,7 @@ app.put('/api/assigned-tasks/:id/reassign', requireManagerOrAdmin, (req, res) =>
 });
 
 // Lãnh đạo / Admin xóa hoặc hủy nhiệm vụ đã giao hoặc bị trả lại
-app.delete('/api/assigned-tasks/:id', requireManagerOrAdmin, (req, res) => {
+app.delete('/api/assigned-tasks/:id', requireManagerOrAdmin, async (req, res) => {
   const { id } = req.params;
   const viewer = getViewer(req);
   const viewerId = viewer?.id || getViewerId(req);
@@ -3673,16 +3759,18 @@ app.delete('/api/assigned-tasks/:id', requireManagerOrAdmin, (req, res) => {
   db.prepare('DELETE FROM assigned_tasks WHERE id = ?').run(id);
 
   // Xóa trực tiếp khỏi Supabase Cloud để ngăn ngừa hồi sinh dữ liệu khi restart/pull
-  deleteAssignedTasksFromSupabase([id]).catch(err => {
+  try {
+    await deleteAssignedTasksFromSupabase([id]);
+  } catch (err) {
     console.error('[Supabase Delete Task Error]:', err.message);
-  });
-  triggerBackgroundSupabaseSync();
+  }
+  triggerBackgroundSupabaseSync(100);
 
   res.json({ success: true, message: `Đã xóa nhiệm vụ "${task.task_name}" thành công!` });
 });
 
 // Admin / Lãnh đạo xóa nhiều nhiệm vụ đã giao cùng lúc
-app.post('/api/assigned-tasks/bulk-delete', requireManagerOrAdmin, (req, res) => {
+app.post('/api/assigned-tasks/bulk-delete', requireManagerOrAdmin, async (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ success: false, message: 'Danh sách ID công việc không hợp lệ' });
@@ -3724,10 +3812,12 @@ app.post('/api/assigned-tasks/bulk-delete', requireManagerOrAdmin, (req, res) =>
   const result = db.prepare(deleteQuery).run(...params);
 
   // Xóa trực tiếp các IDs khỏi Supabase Cloud
-  deleteAssignedTasksFromSupabase(ids).catch(err => {
+  try {
+    await deleteAssignedTasksFromSupabase(ids);
+  } catch (err) {
     console.error('[Supabase Bulk Delete Error]:', err.message);
-  });
-  triggerBackgroundSupabaseSync();
+  }
+  triggerBackgroundSupabaseSync(100);
 
   res.json({ 
     success: true, 
@@ -4734,6 +4824,111 @@ app.post('/api/reports/mau-02/save', (req, res) => {
   `).run(superior_rank, summary_reason || '', cadre_proposal_note || '', evalId);
 
   res.json({ success: true, message: 'Đã lưu thông tin Báo cáo Mẫu 02 thành công' });
+});
+
+// Giai đoạn 3: Phê duyệt đánh giá 2 cấp (Lãnh đạo trực tiếp -> Người đứng đầu đơn vị)
+app.post('/api/evaluations/two-tier-review', requireManagerOrAdmin, (req, res) => {
+  const { evaluation_id, tier, action, comment } = req.body;
+  if (!evaluation_id) return res.status(400).json({ success: false, message: 'Thiếu evaluation_id' });
+
+  const viewer = getViewer(req);
+  const viewerId = viewer?.id || getViewerId(req);
+
+  const evalRec = db.prepare('SELECT * FROM evaluations WHERE id = ?').get(evaluation_id);
+  if (!evalRec) return res.status(404).json({ success: false, message: 'Không tìm thấy hồ sơ đánh giá' });
+
+  if (tier === 1) {
+    db.prepare(`
+      UPDATE evaluations
+      SET skip_level_status = ?,
+          skip_level_reviewer_id = ?,
+          superior_comment = COALESCE(?, superior_comment),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      action === 'approve' ? 'level_1_approved' : 'revision_requested',
+      viewerId,
+      comment || null,
+      evaluation_id
+    );
+    triggerBackgroundSupabaseSync(300);
+    return res.json({ success: true, message: action === 'approve' ? 'Đã thẩm định Cấp 1 thành công. Chuyển Lãnh đạo đơn vị phê duyệt.' : 'Đã yêu cầu điều chỉnh hồ sơ.' });
+  } else {
+    db.prepare(`
+      UPDATE evaluations
+      SET skip_level_status = ?,
+          skip_level_reviewer_id = ?,
+          status = ?,
+          superior_comment = COALESCE(?, superior_comment),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      action === 'approve' ? 'approved' : 'revision_requested',
+      viewerId,
+      action === 'approve' ? 'approved' : 'draft',
+      comment || null,
+      evaluation_id
+    );
+    triggerBackgroundSupabaseSync(300);
+    return res.json({ success: true, message: action === 'approve' ? 'Đã phê duyệt kết luận đánh giá Cấp 2 thành công!' : 'Đã yêu cầu phúc tra lại hồ sơ đánh giá.' });
+  }
+});
+
+// Giai đoạn 3: Báo cáo xếp loại đánh giá theo Nghị quyết 98 TP.HCM
+app.get('/api/reports/nq98-summary', (req, res) => {
+  const { period_id, dept_id } = req.query;
+  const pId = period_id || db.prepare('SELECT id FROM periods WHERE is_active = 1 LIMIT 1').get()?.id;
+  if (!pId) return res.json({ items: [], stats: { total: 0, excellent: 0, good: 0, completed: 0, failed: 0, excellent_pct: 0 } });
+
+  let query = `
+    SELECT u.id as user_id, u.full_name, u.gov_title, u.party_title, u.is_party_member, u.management_role,
+           d.name as dept_name, d.code as dept_code, d.agency_type,
+           COALESCE(e.total_score, 0) as total_score,
+           e.status as eval_status,
+           e.superior_rank,
+           COALESCE(e.final_classification, 
+             CASE 
+               WHEN e.superior_rank = 'Hoàn thành xuất sắc nhiệm vụ' OR e.total_score >= 90 THEN 'Xuat_sac'
+               WHEN e.superior_rank = 'Hoàn thành tốt nhiệm vụ' OR (e.total_score >= 70 AND e.total_score < 90) THEN 'Tot'
+               WHEN e.superior_rank = 'Hoàn thành nhiệm vụ' OR (e.total_score >= 50 AND e.total_score < 70) THEN 'Hoan_thanh'
+               ELSE 'Khong_hoan_thanh'
+             END
+           ) as classification
+    FROM users u
+    LEFT JOIN departments d ON u.dept_id = d.id
+    LEFT JOIN evaluations e ON e.user_id = u.id AND e.period_id = ?
+    WHERE (u.is_active IS NULL OR u.is_active = 1) AND u.role != 'admin'
+  `;
+  const params = [pId];
+  if (dept_id && dept_id !== 'ALL') {
+    const descendantIds = getDepartmentDescendantIds(dept_id);
+    const placeholders = descendantIds.map(() => '?').join(',');
+    query += ` AND u.dept_id IN (${placeholders})`;
+    params.push(...descendantIds);
+  }
+
+  query += ` ORDER BY d.name ASC, u.management_role ASC, total_score DESC`;
+  const items = db.prepare(query).all(...params);
+
+  const total = items.length;
+  const excellent = items.filter(i => i.classification === 'Xuat_sac').length;
+  const good = items.filter(i => i.classification === 'Tot').length;
+  const completed = items.filter(i => i.classification === 'Hoan_thanh').length;
+  const failed = items.filter(i => i.classification === 'Khong_hoan_thanh').length;
+  const excellent_pct = total > 0 ? Math.round((excellent / total) * 1000) / 10 : 0;
+
+  res.json({
+    items,
+    stats: {
+      total,
+      excellent,
+      good,
+      completed,
+      failed,
+      excellent_pct,
+      is_quota_exceeded: excellent_pct > 20
+    }
+  });
 });
 
 // -------------------------------------------------------------

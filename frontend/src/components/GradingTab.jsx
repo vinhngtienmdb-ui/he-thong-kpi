@@ -335,6 +335,41 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
     }
   }
 
+  // Thẩm định đánh giá 2 cấp (Giai đoạn 3: Hướng dẫn 06-HD/BTCTU)
+  async function handleTwoTierReview(tier, action) {
+    if (!evalData?.evaluation?.id) return;
+    if (isSelf) {
+      alert('Theo quy định, bạn không được tự thẩm định/phê duyệt hồ sơ cho chính bản thân mình!');
+      return;
+    }
+    if (isGradingLocked) {
+      alert('Kỳ đánh giá đã bị khóa hoặc hết hạn chấm điểm!');
+      return;
+    }
+    try {
+      setSavingConclusion(true);
+      await api.saveSuperiorConclusion({
+        evaluation_id: evalData.evaluation.id,
+        superior_rank: superiorRank,
+        superior_comment: superiorComment,
+        status: tier === 2 && action === 'approve' ? 'approved' : (evalData.evaluation.status || 'submitted')
+      });
+
+      const res = await api.reviewEvaluationTwoTier({
+        evaluation_id: evalData.evaluation.id,
+        tier,
+        action,
+        comment: superiorComment
+      });
+      alert(res.message || 'Đã thực hiện thẩm định thành công!');
+      loadEvaluationData();
+    } catch (err) {
+      alert(err.message || 'Lỗi khi thẩm định');
+    } finally {
+      setSavingConclusion(false);
+    }
+  }
+
   async function handleReturnEvaluation(e) {
     e.preventDefault();
     if (!evalData?.evaluation?.id) return;
@@ -1266,6 +1301,33 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
           </div>
         </div>
 
+        {/* Two-tier status badge */}
+        {evalData?.evaluation?.skip_level_status && (
+          <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-indigo-950">Quy trình thẩm định 2 cấp (Hướng dẫn 06-HD/BTCTU):</span>
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                evalData.evaluation.skip_level_status === 'approved'
+                  ? 'bg-emerald-600 text-white'
+                  : evalData.evaluation.skip_level_status === 'level_1_approved'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-amber-600 text-white'
+              }`}>
+                {evalData.evaluation.skip_level_status === 'approved'
+                  ? '✓ Cấp 2: Người đứng đầu đã phê duyệt chính thức'
+                  : evalData.evaluation.skip_level_status === 'level_1_approved'
+                  ? '⏳ Cấp 1 đã duyệt (Chờ Người đứng đầu phê duyệt Cấp 2)'
+                  : '⚠️ Cấp trên yêu cầu điều chỉnh / phúc tra'}
+              </span>
+            </div>
+            {evalData.evaluation.skip_level_reviewer_name && (
+              <span className="text-slate-500 text-[11px]">
+                Người xử lý: <b>{evalData.evaluation.skip_level_reviewer_name}</b>
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
           <div className="text-xs text-slate-500 italic">
             {!canGrade 
@@ -1273,14 +1335,41 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
               : 'Thẩm định kết quả và quyết định xếp loại công chức, viên chức, người lao động theo Quy định 366.'}
           </div>
           {canGrade && (
-            <button
-              onClick={handleSaveConclusion}
-              disabled={savingConclusion}
-              className="flex items-center space-x-1.5 bg-purple-700 hover:bg-purple-800 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-xs transition-colors shrink-0"
-            >
-              <Save className="w-4 h-4" />
-              <span>{savingConclusion ? 'Đang lưu...' : 'Lưu kết luận & Hoàn tất đánh giá'}</span>
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleSaveConclusion}
+                disabled={savingConclusion}
+                className="flex items-center space-x-1.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow-xs transition-colors shrink-0 cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>{savingConclusion ? 'Đang lưu...' : 'Lưu kết luận'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTwoTierReview(1, 'approve')}
+                disabled={savingConclusion}
+                className="flex items-center space-x-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-xs transition-colors shrink-0 cursor-pointer"
+                title="Cấp 1: Lãnh đạo trực tiếp / CBQL thẩm định minh chứng và đề xuất chuyển Người đứng đầu"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Thẩm định Cấp 1 (Chuyển Trưởng đơn vị)</span>
+              </button>
+
+              {(isUnitLeader || currentUser?.role === 'admin' || currentUser?.management_role === 'lanh_dao') && (
+                <button
+                  type="button"
+                  onClick={() => handleTwoTierReview(2, 'approve')}
+                  disabled={savingConclusion}
+                  className="flex items-center space-x-1.5 bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-xs transition-colors shrink-0 cursor-pointer"
+                  title="Cấp 2: Người đứng đầu cơ quan/đơn vị ký duyệt kết luận xếp loại chính thức"
+                >
+                  <Award className="w-4 h-4" />
+                  <span>Phê duyệt Cấp 2 (Người đứng đầu)</span>
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

@@ -467,7 +467,16 @@ function initDatabase() {
     "ALTER TABLE user_positions ADD COLUMN manager_id TEXT;",
     "ALTER TABLE assigned_tasks ADD COLUMN is_skip_level INTEGER DEFAULT 0;",
     "ALTER TABLE assigned_tasks ADD COLUMN target_position_id TEXT;",
-    "ALTER TABLE assigned_tasks ADD COLUMN skip_level_notes TEXT;"
+    "ALTER TABLE assigned_tasks ADD COLUMN skip_level_notes TEXT;",
+    "ALTER TABLE users ADD COLUMN is_party_member INTEGER DEFAULT 0;",
+    "ALTER TABLE departments ADD COLUMN agency_type TEXT DEFAULT 'su_nghiep';",
+    "ALTER TABLE assigned_tasks ADD COLUMN level_1_reviewer_id TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN level_1_reviewed_at TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN level_1_comment TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN level_1_score REAL;",
+    "ALTER TABLE evaluations ADD COLUMN final_classification TEXT;",
+    "ALTER TABLE evaluations ADD COLUMN skip_level_reviewer_id TEXT;",
+    "ALTER TABLE evaluations ADD COLUMN skip_level_status TEXT DEFAULT 'approved';"
   ];
 
   for (const m of migrations) {
@@ -486,6 +495,15 @@ function initDatabase() {
         ELSE 'nhan_vien'
       END
       WHERE management_role IS NULL
+    `).run();
+  } catch (e) {}
+
+  // Backfill is_party_member
+  try {
+    db.prepare(`
+      UPDATE users 
+      SET is_party_member = 1 
+      WHERE (party_title IS NOT NULL AND TRIM(party_title) != '' AND LOWER(TRIM(party_title)) != 'quần chúng' AND LOWER(TRIM(party_title)) != 'quan chung')
     `).run();
   } catch (e) {}
 
