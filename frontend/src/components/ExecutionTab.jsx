@@ -16,13 +16,43 @@ import {
   X,
   Download,
   Check,
-  Info
+  Info,
+  RefreshCw,
+  Layers,
+  Filter
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate, toInputDateFormat, parseDateOnly } from '../constants';
 
-export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
+export function compareTasksByAxisAndDeadline(a, b) {
+  // 1. Ưu tiên 1: Sắp xếp theo Trục (TRUC_1 -> TRUC_6 -> Khác)
+  const getAxisOrder = (code) => {
+    if (!code) return 99;
+    const m = String(code).match(/TRUC_(\d+)/i);
+    if (m) return parseInt(m[1], 10);
+    return 98;
+  };
+
+  const orderA = getAxisOrder(a.axis_code);
+  const orderB = getAxisOrder(b.axis_code);
+  if (orderA !== orderB) {
+    return orderA - orderB;
+  }
+
+  // 2. Ưu tiên 2: Sắp xếp theo ngày đến hạn (Sắp đến hạn trước - Deadline ASC)
+  const dlA = a.deadline || '9999-12-31';
+  const dlB = b.deadline || '9999-12-31';
+  if (dlA !== dlB) {
+    return dlA.localeCompare(dlB);
+  }
+
+  // 3. Phụ trợ: Nếu cùng hạn chót thì sắp xếp theo tên công việc
+  return (a.task_name || '').localeCompare(b.task_name || '', 'vi');
+}
+
+export default function ExecutionTab({ selectedPeriod, currentUser, axes = [] }) {
   const [tasks, setTasks] = useState([]);
+  const [selectedAxisFilter, setSelectedAxisFilter] = useState('ALL');
   const [loading, setLoading] = useState(true);
   const [activeTask, setActiveTask] = useState(null); // Task currently opening evidence modal
 
@@ -104,10 +134,6 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
     }
   }
 
-  useEffect(() => {
-    loadMyTasks();
-  }, [selectedPeriod, currentUser]);
-
   async function loadMyTasks() {
     if (!currentUser) return;
     try {
@@ -116,13 +142,39 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
         period_id: selectedPeriod,
         user_id: currentUser.id
       });
-      setTasks(data);
+      const sorted = (data || []).slice().sort(compareTasksByAxisAndDeadline);
+      setTasks(sorted);
     } catch (err) {
       console.error('Error fetching my tasks:', err);
     } finally {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    loadMyTasks();
+
+    // Tự động đồng bộ khi người dùng quay lại tab trình duyệt
+    const handleFocus = () => loadMyTasks();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadMyTasks();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    // Chu kỳ tự động đồng bộ ngầm định kỳ 30 giây
+    const timer = setInterval(() => {
+      loadMyTasks();
+    }, 30000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      clearInterval(timer);
+    };
+  }, [selectedPeriod, currentUser]);
 
   function openEvidenceModal(task) {
     setActiveTask(task);
@@ -238,22 +290,96 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
     return { pct: 0.0, text: `Hoàn thành chậm ${lateDays} ngày làm việc (> 5 ngày): 0%`, lateDays };
   }
 
+  const defaultAxesList = [
+    { code: 'TRUC_1', name: 'Trục 1 - Thực hiện mục tiêu phát triển kinh tế - xã hội và nhiệm vụ chính trị được giao', shortName: 'Trục 1' },
+    { code: 'TRUC_2', name: 'Trục 2 - Hoàn thiện thể chế, đẩy mạnh phân cấp, phân quyền gắn với kiểm tra, giám sát', shortName: 'Trục 2' },
+    { code: 'TRUC_3', name: 'Trục 3 - Thúc đẩy phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số', shortName: 'Trục 3' },
+    { code: 'TRUC_4', name: 'Trục 4 - Xây dựng Đảng và hệ thống chính trị trong sạch, vững mạnh; giữ gìn đoàn kết, thống nhất nội bộ', shortName: 'Trục 4' },
+    { code: 'TRUC_5', name: 'Trục 5 - Phát triển văn hóa, con người, bảo đảm an sinh xã hội, nâng cao đời sống nhân dân', shortName: 'Trục 5' },
+    { code: 'TRUC_6', name: 'Trục 6 - Củng cố quốc phòng, an ninh, giữ vững ổn định chính trị - xã hội', shortName: 'Trục 6' }
+  ];
+  const effectiveAxesList = (axes && axes.length > 0) ? axes.map(a => ({
+    ...a,
+    shortName: a.name.includes(' - ') ? a.name.split(' - ')[0] : a.code
+  })) : defaultAxesList;
+
+  const filteredTasks = tasks.filter(t => {
+    if (selectedAxisFilter !== 'ALL' && (t.axis_code || 'TRUC_1') !== selectedAxisFilter) return false;
+    return true;
+  });
+
   return (
     <div className="space-y-6">
       
       {/* Header */}
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">
-            Nhiệm vụ của tôi & Cập nhật Minh chứng
+          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <span>Nhiệm vụ của tôi & Cập nhật Minh chứng</span>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 font-bold border border-red-200">
+              Bước 2
+            </span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
             Cán bộ: <b className="text-slate-800">{currentUser?.full_name}</b> • Cập nhật ngày hoàn thành thực tế, đính kèm văn bản minh chứng và tự đánh giá
           </p>
         </div>
-        <div className="text-xs text-slate-500">
-          Tổng số công việc: <span className="font-bold text-red-700">{tasks.length}</span>
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-slate-500">
+            Tổng số công việc: <span className="font-bold text-red-700">{tasks.length}</span>
+          </div>
+          <button
+            type="button"
+            onClick={loadMyTasks}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold border border-slate-300 transition cursor-pointer active:scale-95 shadow-2xs"
+            title="Đồng bộ dữ liệu mới nhất từ máy chủ (tránh sót công việc bị điều chỉnh/xóa)"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-red-600' : 'text-slate-600'}`} />
+            <span>Đồng bộ</span>
+          </button>
         </div>
+      </div>
+
+      {/* Axis Filter Pills */}
+      <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mr-1">
+          <Filter className="w-3.5 h-3.5 text-red-700" />
+          <span>Lọc theo trục:</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setSelectedAxisFilter('ALL')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+            selectedAxisFilter === 'ALL'
+              ? 'bg-red-700 text-white shadow-xs'
+              : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+          }`}
+        >
+          Tất cả các trục ({tasks.length})
+        </button>
+        {effectiveAxesList.map(ax => {
+          const count = tasks.filter(t => (t.axis_code || 'TRUC_1') === ax.code).length;
+          return (
+            <button
+              key={ax.code}
+              type="button"
+              onClick={() => setSelectedAxisFilter(ax.code)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                selectedAxisFilter === ax.code
+                  ? 'bg-red-700 text-white shadow-xs'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+              }`}
+            >
+              <span>{ax.shortName || ax.code.replace('_', ' ')}</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+                selectedAxisFilter === ax.code ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-800'
+              }`}>
+                {count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Notice Banner: Thẩm quyền chấm điểm */}
@@ -275,25 +401,44 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
       <div className="space-y-3">
         {loading ? (
           <div className="text-center py-10 text-slate-500">Đang tải nhiệm vụ...</div>
-        ) : tasks.length === 0 ? (
+        ) : filteredTasks.length === 0 ? (
           <div className="bg-white p-12 text-center rounded-xl border border-slate-200 text-slate-500">
             <CheckSquare className="w-12 h-12 text-slate-300 mx-auto mb-2" />
-            <p className="font-medium text-slate-700">Chưa có công việc nào được phân công trong kỳ này.</p>
-            <p className="text-xs text-slate-400 mt-1">Hãy chuyển sang tab "Giao & Đăng ký việc" để đăng ký nhiệm vụ.</p>
+            <p className="font-medium text-slate-700">Chưa có công việc nào trong danh mục đã chọn.</p>
+            <p className="text-xs text-slate-400 mt-1">Hãy kiểm tra bộ lọc trục hoặc chuyển sang tab "Giao & Đăng ký việc" để đăng ký nhiệm vụ.</p>
           </div>
         ) : (
-          tasks.map((task, idx) => {
+          filteredTasks.map((task, idx) => {
             const isApproved = task.status === 'approved';
             const isSubmitted = task.status === 'submitted';
             const isPending = task.status === 'pending_approval';
 
             const axisObj = axes.find(a => a.code === task.axis_code);
+            const prevTask = idx > 0 ? filteredTasks[idx - 1] : null;
+            const isFirstInAxis = selectedAxisFilter === 'ALL' && (!prevTask || prevTask.axis_code !== task.axis_code);
+            const tasksInCurrentAxis = tasks.filter(t => (t.axis_code || 'TRUC_1') === (task.axis_code || 'TRUC_1')).length;
 
             return (
-              <div 
-                key={task.id} 
-                className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs hover:border-slate-300 transition-all flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4"
-              >
+              <React.Fragment key={task.id}>
+                {isFirstInAxis && (
+                  <div className="flex items-center justify-between gap-2 pt-5 pb-2 border-b-2 border-red-700/80 mb-1 mt-3 first:mt-0">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-red-700 shadow-2xs" />
+                      <h3 className="text-xs font-extrabold uppercase tracking-wide text-slate-900">
+                        {axisObj ? axisObj.name : `Trục ${task.axis_code || '1'}`}
+                      </h3>
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200">
+                        {tasksInCurrentAxis} nhiệm vụ
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-500 italic hidden sm:inline">
+                      Ưu tiên: Sắp đến hạn trước
+                    </span>
+                  </div>
+                )}
+                <div 
+                  className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs hover:border-slate-300 transition-all flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4"
+                >
                 {/* Left info */}
                 <div className="space-y-2 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -349,8 +494,24 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
                   <div className="flex flex-wrap text-xs text-slate-600 gap-y-1 gap-x-4">
                     <span>Kết quả đầu ra yêu cầu: <b className="text-slate-800">{task.output_result}</b></span>
                     <span className="flex items-center space-x-1.5 flex-wrap">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Hạn chót: <b>{formatDate(task.deadline)}</b></span>
+                      <Clock className={`w-3.5 h-3.5 ${
+                        task.deadline && task.deadline < todayStr && !isApproved && !isSubmitted
+                          ? 'text-rose-600'
+                          : task.deadline && task.deadline <= new Date(Date.now() + 3 * 86400000 + 7 * 3600000).toISOString().split('T')[0] && !isApproved && !isSubmitted
+                            ? 'text-amber-600'
+                            : 'text-slate-400'
+                      }`} />
+                      {task.deadline && task.deadline < todayStr && !isApproved && !isSubmitted ? (
+                        <span className="px-1.5 py-0.5 rounded bg-rose-50 border border-rose-200 text-rose-700 font-bold text-[11px] inline-flex items-center gap-1">
+                          ⚠️ Quá hạn: <b>{formatDate(task.deadline)}</b>
+                        </span>
+                      ) : task.deadline && task.deadline <= new Date(Date.now() + 3 * 86400000 + 7 * 3600000).toISOString().split('T')[0] && !isApproved && !isSubmitted ? (
+                        <span className="px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-800 font-bold text-[11px] inline-flex items-center gap-1">
+                          ⏳ Sắp đến hạn: <b>{formatDate(task.deadline)}</b>
+                        </span>
+                      ) : (
+                        <span>Hạn chót: <b>{formatDate(task.deadline)}</b></span>
+                      )}
                       {task.extension_count > 0 && (
                         <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200">
                           (Đã gia hạn: {task.extension_count} lần)
@@ -562,7 +723,8 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
                 </div>
 
               </div>
-            );
+            </React.Fragment>
+          );
           })
         )}
       </div>

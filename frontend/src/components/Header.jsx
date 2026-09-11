@@ -1239,12 +1239,47 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 4.3 */}
+              {/* Version 4.4 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.3</span>
-                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Chuẩn hóa Thứ tự Ưu tiên Danh sách Người dùng)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.4</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Đồng bộ Dữ liệu Tức thì & Tối ưu Màn hình B2)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Đồng Bộ Dữ Liệu Tức Thì Khi Admin Xóa Công Việc Bị Giao Sai & Ưu Tiên Sắp Xếp Theo Trục (Trục 1 - 6) Rồi Đến Hạn Sớm Nhất Tại Màn Hình B2 Nộp Sản Phẩm
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Đồng bộ Xóa Dữ liệu Hai Chiều (SQLite & Supabase Cloud):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Khi Quản trị viên (Admin) hoặc Lãnh đạo xóa công việc bị giao sai (xóa đơn lẻ hoặc xóa hàng loạt), lệnh xóa sẽ lập tức được thực thi đồng thời trên SQLite cục bộ và xóa trực tiếp trên Supabase Cloud PostgreSQL.</li>
+                      <li>Khắc phục triệt để hiện tượng nhiệm vụ đã xóa nhưng bị "hồi sinh" khi khởi động lại máy chủ hoặc khi kéo đồng bộ ngược từ Cloud.</li>
+                      <li>Hủy liên kết tài liệu điều phối (dispatches) an toàn, tránh lỗi khóa ngoại (foreign key constraint).</li>
+                    </ul>
+                  </li>
+                  <li><strong>Tự động Đồng bộ Phía Người dùng (Client-side Realtime Refresh):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Bổ sung cơ chế tự động cập nhật lại danh sách công việc khi người dùng chuyển đổi cửa sổ/tab trình duyệt quay lại hệ thống (Window Focus & Visibility Change).</li>
+                      <li>Thêm cơ chế tự động thăm dò (polling) định kỳ và nút <em>"Đồng bộ"</em> thủ công (biểu tượng xoay) tại thanh công cụ Màn hình B2 giúp cán bộ cập nhật danh sách nhiệm vụ tức thì mà không cần tải lại toàn bộ trang.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Màn hình B2 Nộp Sản Phẩm Công Việc - Ưu tiên Sắp xếp Theo Trục & Ngày Đến Hạn:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li><strong>Ưu tiên 1 - Phân nhóm theo Trục:</strong> Toàn bộ nhiệm vụ được gom nhóm và sắp xếp tuần tự theo 6 Trục kết quả trọng tâm (Trục 1 → Trục 2 → Trục 3 → Trục 4 → Trục 5 → Trục 6).</li>
+                      <li><strong>Ưu tiên 2 - Sắp đến hạn trước:</strong> Trong từng trục, các công việc có ngày đến hạn (deadline) sớm nhất sẽ tự động được xếp lên đầu để cán bộ ưu tiên xử lý trước.</li>
+                      <li><strong>Bộ lọc Trục nhanh & Phân chia Trực quan:</strong> Bổ sung thanh công cụ lọc theo từng Trục (kèm số lượng nhiệm vụ) và tiêu đề phân chia ranh giới giữa các trục rõ ràng.</li>
+                      <li><strong>Cảnh báo trực quan Hạn chót:</strong> Hiển thị huy hiệu đỏ nổi bật đối với việc <em>Đã quá hạn</em> và huy hiệu vàng đối với việc <em>Sắp đến hạn</em> (trong vòng 3 ngày).</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 4.3 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-300 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 4.3</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Chuẩn Hóa Thứ Tự Ưu Tiên Hiển Thị Người Dùng Theo Chức Vụ (Lãnh Đạo - Quản Lý - Giáo Viên - Nhân Viên) & Sắp Xếp Theo Tên Chính Tiếng Việt

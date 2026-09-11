@@ -359,6 +359,16 @@ async function pushToSupabase() {
       })),
       100
     );
+    // Dọn sạch các công việc đã xóa khỏi SQLite trên Supabase Cloud (tránh việc hồi sinh dữ liệu cũ)
+    const localAssignedIds = assignedTasks.map(t => t.id);
+    if (localAssignedIds.length > 0) {
+      await client.query(`
+        UPDATE document_dispatches SET task_id = NULL WHERE task_id IS NOT NULL AND NOT (task_id = ANY($1))
+      `, [localAssignedIds]);
+      await client.query(`
+        DELETE FROM assigned_tasks WHERE NOT (id = ANY($1))
+      `, [localAssignedIds]);
+    }
     stats.assigned_tasks = assignedTasks.length;
 
     // 11. document_dispatches
@@ -1046,6 +1056,31 @@ async function deleteStandardTasksFromSupabase(ids) {
 }
 
 /**
+ * Xóa danh sách công việc đã giao khỏi Supabase Cloud
+ */
+async function deleteAssignedTasksFromSupabase(ids) {
+  if (!isSupabaseConfigured() || !ids || ids.length === 0) return;
+  const pool = getPool();
+  if (!pool) return;
+  let client;
+  try {
+    client = await pool.connect();
+    for (let i = 0; i < ids.length; i += 100) {
+      const chunk = ids.slice(i, i + 100);
+      const placeholders = chunk.map((_, idx) => `$${idx + 1}`).join(', ');
+      await client.query(`UPDATE document_dispatches SET task_id = NULL WHERE task_id IN (${placeholders})`, chunk);
+      await client.query(`DELETE FROM assigned_tasks WHERE id IN (${placeholders})`, chunk);
+    }
+    console.log(`[Supabase Delete] Đã xóa ${ids.length} công việc đã giao trên Supabase Cloud.`);
+  } catch (err) {
+    console.error('[Supabase Delete] Lỗi xóa công việc đã giao trên Supabase:', err.message);
+  } finally {
+    if (client) client.release();
+    if (pool) await pool.end();
+  }
+}
+
+/**
  * Xóa hoàn toàn một người dùng và các dữ liệu liên quan khỏi Supabase Cloud
  */
 async function deleteUserFromSupabase(userId) {
@@ -1086,6 +1121,7 @@ module.exports = {
   syncWithSupabaseOnStartup,
   autoRestoreFromSupabaseIfFresh,
   deleteStandardTasksFromSupabase,
+  deleteAssignedTasksFromSupabase,
   deleteUserFromSupabase
 };
 

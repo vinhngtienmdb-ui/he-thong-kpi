@@ -35,6 +35,7 @@ const {
   syncWithSupabaseOnStartup,
   autoRestoreFromSupabaseIfFresh,
   deleteStandardTasksFromSupabase,
+  deleteAssignedTasksFromSupabase,
   deleteUserFromSupabase
 } = require('./supabaseSync');
 
@@ -1905,7 +1906,10 @@ app.get('/api/assigned-tasks', (req, res) => {
     query += ' AND t.origin = ?';
     params.push(origin);
   }
-  query += ' ORDER BY t.deadline ASC, t.created_at DESC';
+  query += ` ORDER BY 
+    CASE WHEN t.axis_code IS NULL OR t.axis_code = '' THEN 'ZZZ' ELSE t.axis_code END ASC,
+    CASE WHEN t.deadline IS NULL OR t.deadline = '' THEN '9999-12-31' ELSE t.deadline END ASC,
+    t.created_at DESC`;
 
   const tasks = db.prepare(query).all(...params);
   res.json(tasks);
@@ -2828,6 +2832,7 @@ app.delete('/api/assigned-tasks/:id', requireManagerOrAdmin, (req, res) => {
       viewer.target_role === 'admin_donvi' || 
       viewer.role_id === 'role-admin' || 
       viewer.role_id === 'role-admin-donvi' || 
+      viewer.management_role === 'lanh_dao' ||
       viewer.username === 'admin' || 
       viewer.username === 'mnhy.andong'
     )
@@ -2849,8 +2854,14 @@ app.delete('/api/assigned-tasks/:id', requireManagerOrAdmin, (req, res) => {
     }
   }
 
+  // Cập nhật ngắt liên kết dispatch (nếu có) và xóa khỏi SQLite
+  db.prepare('UPDATE document_dispatches SET task_id = NULL WHERE task_id = ?').run(id);
   db.prepare('DELETE FROM assigned_tasks WHERE id = ?').run(id);
 
+  // Xóa trực tiếp khỏi Supabase Cloud để ngăn ngừa hồi sinh dữ liệu khi restart/pull
+  deleteAssignedTasksFromSupabase([id]).catch(err => {
+    console.error('[Supabase Delete Task Error]:', err.message);
+  });
   triggerBackgroundSupabaseSync();
 
   res.json({ success: true, message: `Đã xóa nhiệm vụ "${task.task_name}" thành công!` });
@@ -2872,6 +2883,7 @@ app.post('/api/assigned-tasks/bulk-delete', requireManagerOrAdmin, (req, res) =>
       viewer.target_role === 'admin_donvi' || 
       viewer.role_id === 'role-admin' || 
       viewer.role_id === 'role-admin-donvi' || 
+      viewer.management_role === 'lanh_dao' ||
       viewer.username === 'admin' || 
       viewer.username === 'mnhy.andong'
     )
@@ -2891,7 +2903,16 @@ app.post('/api/assigned-tasks/bulk-delete', requireManagerOrAdmin, (req, res) =>
     }
   }
 
+  // Ngắt liên kết task_id trong document_dispatches
+  const unlinkPlaceholders = ids.map(() => '?').join(',');
+  db.prepare(`UPDATE document_dispatches SET task_id = NULL WHERE task_id IN (${unlinkPlaceholders})`).run(...ids);
+
   const result = db.prepare(deleteQuery).run(...params);
+
+  // Xóa trực tiếp các IDs khỏi Supabase Cloud
+  deleteAssignedTasksFromSupabase(ids).catch(err => {
+    console.error('[Supabase Bulk Delete Error]:', err.message);
+  });
   triggerBackgroundSupabaseSync();
 
   res.json({ 
@@ -4972,8 +4993,23 @@ app.delete('/api/documents/:id', async (req, res) => {
       await deleteUploadedFile(existing.file_url);
     }
 
+    // Xóa tất cả các công việc KPI đã tạo ra từ văn bản này để tránh để lại nhiệm vụ rác cho người dùng
+    const linkedTasks = db.prepare('SELECT id FROM assigned_tasks WHERE document_id = ?').all(id);
+    if (linkedTasks.length > 0) {
+      const taskIds = linkedTasks.map(t => t.id);
+      const placeholders = taskIds.map(() => '?').join(',');
+      db.prepare(`DELETE FROM assigned_tasks WHERE id IN (${placeholders})`).run(...taskIds);
+      deleteAssignedTasksFromSupabase(taskIds).catch(err => {
+        console.error('[Supabase Delete Linked Tasks Error]:', err.message);
+      });
+    }
+
+    // Xóa lịch sử phân bổ văn bản
+    db.prepare('DELETE FROM document_dispatches WHERE document_id = ?').run(id);
     db.prepare('DELETE FROM documents WHERE id = ?').run(id);
-    res.json({ success: true, message: 'Đã xóa văn bản và lịch sử phân bổ thành công!' });
+
+    triggerBackgroundSupabaseSync();
+    res.json({ success: true, message: 'Đã xóa văn bản, các nhiệm vụ liên quan và lịch sử phân bổ thành công!' });
   } catch (err) {
     console.error('Error deleting document:', err);
     res.status(500).json({ error: 'Lỗi xóa văn bản: ' + err.message });

@@ -190,6 +190,24 @@ export default function AssignmentTab({
 
   useEffect(() => {
     loadData();
+
+    // Auto-refresh when user switches back to this browser window / tab
+    const handleFocus = () => {
+      loadData();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadData();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [selectedPeriod, currentUser, users]);
 
   useEffect(() => {
