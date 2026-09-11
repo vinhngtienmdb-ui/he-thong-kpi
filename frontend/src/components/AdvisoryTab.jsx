@@ -186,11 +186,11 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
   // Trình biểu quyết cho 1 cán bộ
   const handleSubmitSingle = async (item) => {
     if (!item.superior_rank) {
-      alert(`CẢNH BÁO TIẾN ĐỘ:\n\nHồ sơ của cán bộ "${item.full_name}" chưa được Lãnh đạo trực tiếp hoàn tất đánh giá và xếp loại ở Bước 5.\nTheo quy định, chỉ những hồ sơ đã kết luận Bước 5 mới được cơ quan tham mưu tổng hợp trình biểu quyết.`);
+      alert(`CẢNH BÁO TIẾN ĐỘ:\n\nHồ sơ của cán bộ "${item.full_name}" chưa được Lãnh đạo trực tiếp hoàn tất đánh giá và xếp loại ở Bước 4.\nTheo quy định, chỉ những hồ sơ đã kết luận Bước 4 mới được cơ quan tham mưu tổng hợp trình biểu quyết.`);
       return;
     }
 
-    if (!window.confirm(`Xác nhận Trình biểu quyết hồ sơ của đ/c "${item.full_name}" lên Hội đồng Tập thể Lãnh đạo?`)) return;
+    if (!window.confirm(`Xác nhận Trình biểu quyết hồ sơ của đ/c "${item.full_name}" lên Hội đồng Tập thể Lãnh đạo (Bước 6)?`)) return;
     try {
       setSavingId(item.evaluation_id || item.user_id);
       
@@ -250,11 +250,11 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
     const selectedItems = advisoryList.filter(i => selectedIds.includes(i.user_id));
     const notReadyItems = selectedItems.filter(i => !i.superior_rank);
     if (notReadyItems.length > 0) {
-      alert(`CẢNH BÁO TIẾN ĐỘ:\n\nCó ${notReadyItems.length} cán bộ chưa hoàn tất đánh giá ở Bước 5 (chưa có kết luận của Lãnh đạo trực tiếp):\n${notReadyItems.map(i => '- ' + i.full_name).join('\n')}\n\nTheo quy trình chuẩn, chỉ những cán bộ đã hoàn tất Bước 5 mới được cơ quan tham mưu trình lên Tập thể Lãnh đạo biểu quyết (Bước 7). Vui lòng bỏ chọn các hồ sơ này.`);
+      alert(`CẢNH BÁO TIẾN ĐỘ:\n\nCó ${notReadyItems.length} cán bộ chưa hoàn tất đánh giá ở Bước 4 (chưa có kết luận của Lãnh đạo trực tiếp):\n${notReadyItems.map(i => '- ' + i.full_name).join('\n')}\n\nTheo quy trình chuẩn, chỉ những cán bộ đã hoàn tất Bước 4 mới được cơ quan tham mưu trình lên Tập thể Lãnh đạo biểu quyết (Bước 6). Vui lòng bỏ chọn các hồ sơ này.`);
       return;
     }
 
-    if (!window.confirm(`XÁC NHẬN TRÌNH BIỂU QUYẾT HÀNG LOẠT?\n\nBạn đang chọn ${selectedItems.length} hồ sơ đã hoàn tất Bước 5 để trình lên Tập thể Lãnh đạo biểu quyết tại Bước 7. Tiếp tục?`)) {
+    if (!window.confirm(`XÁC NHẬN TRÌNH BIỂU QUYẾT HÀNG LOẠT?\n\nBạn đang chọn ${selectedItems.length} hồ sơ đã hoàn tất Bước 4 để trình lên Tập thể Lãnh đạo biểu quyết tại Bước 6. Tiếp tục?`)) {
       return;
     }
 
@@ -299,12 +299,12 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200">
         <div className="flex items-center gap-2 text-xs">
           <div className="w-6 h-6 rounded-full bg-red-700 text-white flex items-center justify-center font-bold text-[10px] shadow-xs shrink-0">
-            6
+            5
           </div>
           <div className="flex items-center gap-1 font-semibold truncate">
             <span className="text-slate-500">Quản lý đánh giá</span>
             <span className="text-slate-400">&gt;</span>
-            <span className="text-red-700 font-bold">Bước 6: Tổng hợp tham mưu & Thẩm tra hồ sơ</span>
+            <span className="text-red-700 font-bold">Bước 5: Tổng hợp tham mưu & Thẩm tra hồ sơ</span>
           </div>
         </div>
 
@@ -353,7 +353,7 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
 
         <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Đã hoàn tất Bước 5</span>
+            <span className="text-xs font-semibold text-slate-500">Đã hoàn tất Bước 4</span>
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="text-xl font-black text-emerald-700 mt-1">{stats.hasSuperiorEval} / {stats.total}</div>
@@ -413,10 +413,10 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
             className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 focus:ring-2 focus:ring-red-500"
           >
             <option value="all">Tất cả trạng thái ({advisoryList.length})</option>
-            <option value="step5_done">Đã hoàn tất Bước 5 (Sẵn sàng: {stats.hasSuperiorEval})</option>
-            <option value="step5_pending">Chưa hoàn tất Bước 5 (Chờ CBQL: {stats.pendingSuperior})</option>
+            <option value="step5_done">Đã hoàn tất Bước 4 (Sẵn sàng: {stats.hasSuperiorEval})</option>
+            <option value="step5_pending">Chưa hoàn tất Bước 4 (Chờ CBQL: {stats.pendingSuperior})</option>
             <option value="pending">Chờ trình biểu quyết ({stats.pendingCount})</option>
-            <option value="submitted">Đã trình biểu quyết Bước 7 ({stats.submittedCount})</option>
+            <option value="submitted">Đã trình biểu quyết Bước 6 ({stats.submittedCount})</option>
             <option value="has_comment">Đã nhập ý kiến tham mưu</option>
           </select>
         </div>
@@ -439,14 +439,14 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
                     checked={selectableList.length > 0 && selectedIds.length === selectableList.length}
                     onChange={handleToggleSelectAll}
                     disabled={selectableList.length === 0}
-                    title="Chọn tất cả hồ sơ đã hoàn tất Bước 5"
+                    title="Chọn tất cả hồ sơ đã hoàn tất Bước 4"
                     className="rounded text-red-600 focus:ring-red-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                   />
                 </th>
                 <th className="py-2.5 px-3 min-w-[170px]">Cán bộ / Đơn vị</th>
-                <th className="py-2.5 px-3 min-w-[150px] bg-slate-100/50">Tự đánh giá (B4)</th>
-                <th className="py-2.5 px-3 min-w-[170px] bg-blue-50/40">Lãnh đạo trực tiếp (B5)</th>
-                <th className="py-2.5 px-3 min-w-[240px] bg-red-50/30">Ý kiến & Đề xuất Tham mưu (B6)</th>
+                <th className="py-2.5 px-3 min-w-[150px] bg-slate-100/50">Tự đánh giá (B3)</th>
+                <th className="py-2.5 px-3 min-w-[170px] bg-blue-50/40">Lãnh đạo trực tiếp (B4)</th>
+                <th className="py-2.5 px-3 min-w-[240px] bg-red-50/30">Ý kiến & Đề xuất Tham mưu (B5)</th>
                 <th className="py-2.5 px-3 min-w-[140px] text-center">Trạng thái / Thao tác</th>
               </tr>
             </thead>
@@ -521,7 +521,7 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
                         </div>
                       </td>
 
-                      {/* Kết quả Lãnh đạo trực tiếp (Bước 5) */}
+                      {/* Kết quả Lãnh đạo trực tiếp (Bước 4) */}
                       <td className="py-3 px-3 align-top bg-blue-50/20">
                         {item.superior_rank ? (
                           <>
@@ -543,7 +543,7 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
                         ) : (
                           <div className="py-2 space-y-1">
                             <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
-                              Chưa hoàn tất Bước 5
+                              Chưa hoàn tất Bước 4
                             </span>
                             <div className="text-[11px] text-slate-400 italic">
                               Đang chờ CBQL trực tiếp đánh giá & kết luận
@@ -552,7 +552,7 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
                         )}
                       </td>
 
-                      {/* Cơ quan Tham mưu (Bước 6) */}
+                      {/* Cơ quan Tham mưu (Bước 5) */}
                       <td className="py-3 px-3 align-top bg-red-50/10">
                         <div className="space-y-1.5">
                           <div>
@@ -621,14 +621,14 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
                                 : 'bg-slate-100 text-slate-500 border-slate-200'
                             }`}>
                               <Clock className="w-2.5 h-2.5" />
-                              {item.superior_rank ? 'Chờ trình BQ' : 'Chờ B5'}
+                              {item.superior_rank ? 'Chờ trình BQ' : 'Chờ B4'}
                             </span>
                             <div>
                               <button
                                 type="button"
                                 onClick={() => handleSubmitSingle(item)}
                                 disabled={isSaving || !item.superior_rank}
-                                title={!item.superior_rank ? 'Cần hoàn tất Bước 5 trước khi trình biểu quyết' : 'Trình Tập thể Lãnh đạo biểu quyết (Bước 7)'}
+                                title={!item.superior_rank ? 'Cần hoàn tất Bước 4 trước khi trình biểu quyết' : 'Trình Tập thể Lãnh đạo biểu quyết (Bước 6)'}
                                 className={`inline-flex items-center justify-center gap-1 w-full px-2.5 py-1.5 rounded-lg text-xs font-bold transition shadow-2xs ${
                                   !item.superior_rank
                                     ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
@@ -655,8 +655,8 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-600 flex items-start gap-2.5">
         <Sparkles className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
         <div className="space-y-0.5">
-          <p className="font-bold text-slate-800">Quy định Bước 6 theo Hướng dẫn 06-HD/BTCTU:</p>
-          <p>Cơ quan/bộ phận tham mưu (Phòng Tổ chức cán bộ, Văn phòng) có trách nhiệm rà soát toàn bộ kết quả tự đánh giá và điểm số của Lãnh đạo trực tiếp, tổng hợp hồ sơ và trình Tập thể Lãnh đạo biểu quyết tại Bước 7. Người thực hiện tham mưu không phải là người quyết định xếp loại cuối cùng.</p>
+          <p className="font-bold text-slate-800">Quy định Bước 5 theo Hướng dẫn 06-HD/BTCTU:</p>
+          <p>Cơ quan/bộ phận tham mưu (Phòng Tổ chức cán bộ, Văn phòng) có trách nhiệm rà soát toàn bộ kết quả tự đánh giá và điểm số của Lãnh đạo trực tiếp, tổng hợp hồ sơ và trình Tập thể Lãnh đạo biểu quyết tại Bước 6. Người thực hiện tham mưu không phải là người quyết định xếp loại cuối cùng.</p>
         </div>
       </div>
     </div>

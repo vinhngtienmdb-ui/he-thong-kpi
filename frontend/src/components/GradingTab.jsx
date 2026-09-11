@@ -43,7 +43,7 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
   const [loading, setLoading] = useState(false);
   const [isFinalizeModalOpen, setIsFinalizeModalOpen] = useState(false);
 
-  // Điều kiện chuyển lên Bước 5 (Đánh giá, nhận xét của CBQL):
+  // Điều kiện chuyển lên Bước 4 (Đánh giá, nhận xét của CBQL):
   // 1. CBNV đã nộp tự đánh giá cuối kỳ (status === 'submitted' || 'approved')
   // 2. CBNV đã hoàn tất nộp sản phẩm công việc (tất cả nhiệm vụ đã nộp MC hoặc đã duyệt, không còn việc dang dở)
   const isSelfEvalSubmitted = Boolean(evalData?.evaluation && (evalData.evaluation.status === 'submitted' || evalData.evaluation.status === 'approved'));
@@ -227,9 +227,9 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
     }
     if (!isReadyForStep5) {
       if (!isSelfEvalSubmitted) {
-        alert('Cán bộ chưa hoàn tất nộp bản tự đánh giá cuối kỳ (Bước 3). Chưa đủ điều kiện kết luận xếp loại Bước 5!');
+        alert('Cán bộ chưa hoàn tất nộp bản tự đánh giá cuối kỳ (Bước 3). Chưa đủ điều kiện kết luận xếp loại Bước 4!');
       } else {
-        alert(`Cán bộ còn ${unsubmittedTasks.length} nhiệm vụ chưa hoàn tất nộp sản phẩm/minh chứng (Bước 2). Cán bộ phải hoàn tất nộp toàn bộ sản phẩm công việc thì mới đủ điều kiện kết luận xếp loại Bước 5!`);
+        alert(`Cán bộ còn ${unsubmittedTasks.length} nhiệm vụ chưa hoàn tất nộp sản phẩm/minh chứng (Bước 2). Cán bộ phải hoàn tất nộp toàn bộ sản phẩm công việc thì mới đủ điều kiện kết luận xếp loại Bước 4!`);
       }
       return;
     }
@@ -241,7 +241,7 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
         superior_comment: superiorComment,
         status: 'approved'
       });
-      alert('Đã lưu kết luận đánh giá Bước 5 thành công! Hồ sơ đã được chuyển tiếp lên Bước 6 (Tổng hợp tham mưu).');
+      alert('Đã lưu kết luận đánh giá Bước 4 thành công! Hồ sơ đã được chuyển tiếp lên Bước 5 (Tổng hợp tham mưu).');
       loadEvaluationData();
     } catch (err) {
       alert(err.message);
@@ -510,7 +510,7 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
               LƯU Ý QUY ĐỊNH: Không được trực tiếp đánh giá hoặc kết luận xếp loại cho bản thân
             </div>
             <p className="text-xs text-amber-800 leading-relaxed">
-              Căn cứ Quy định số 366-QĐ/TW và Hướng dẫn số 06-HD/BTCTU, cán bộ quản lý và nhân viên tuyệt đối không được tự chấm điểm hoặc kết luận xếp loại cho chính mình. Hồ sơ KPI của bạn sẽ do Quản lý trực tiếp hoặc Lãnh đạo cấp trên đánh giá. Hãy chuyển sang phân hệ <strong>Tự đánh giá cuối quý (Bước 5)</strong> để nộp bản tự kê khai.
+              Căn cứ Quy định số 366-QĐ/TW và Hướng dẫn số 06-HD/BTCTU, cán bộ quản lý và nhân viên tuyệt đối không được tự chấm điểm hoặc kết luận xếp loại cho chính mình. Hồ sơ KPI của bạn sẽ do Quản lý trực tiếp hoặc Lãnh đạo cấp trên đánh giá. Hãy chuyển sang phân hệ <strong>Tự đánh giá cuối quý (Bước 3)</strong> để nộp bản tự kê khai.
             </p>
             {setCurrentTab && (
               <button
@@ -518,19 +518,19 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                 onClick={() => setCurrentTab('self_eval')}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs rounded-lg transition shadow-xs cursor-pointer"
               >
-                <span>👉 Chuyển sang phân hệ Tự đánh giá</span>
+                <span>Chuyển sang Bước 3: Tự đánh giá →</span>
               </button>
             )}
           </div>
         </div>
       )}
 
-      {/* Step 5 Prerequisite Status Banner */}
-      {selectedUserObj && !isSelf && (
-        <div className={`p-4 rounded-xl border flex items-start gap-3 shadow-2xs ${
+      {/* BANNER ĐIỀU KIỆN TIÊN QUYẾT BƯỚC 4: CBNV ĐÃ NỘP TỰ ĐÁNH GIÁ & HOÀN TẤT NỘP SẢN PHẨM */}
+      {selectedUser && !isSelf && (
+        <div className={`p-4 rounded-xl border flex items-start gap-3 transition-colors ${
           isReadyForStep5 
-            ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900' 
-            : 'bg-amber-50/90 border-amber-300 text-amber-950'
+            ? 'bg-emerald-50 border-emerald-300 text-emerald-900' 
+            : 'bg-amber-50 border-amber-300 text-amber-900'
         }`}>
           {isReadyForStep5 ? (
             <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
@@ -539,11 +539,11 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
           )}
           <div className="text-xs space-y-1">
             <div className="font-bold text-sm flex items-center gap-2 flex-wrap">
-              <span>Điều kiện chuyển dữ liệu lên Bước 5 (Đánh giá, nhận xét của CBQL):</span>
+              <span>Điều kiện chuyển dữ liệu lên Bước 4 (Đánh giá, nhận xét của CBQL):</span>
               <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
                 isReadyForStep5 ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'
               }`}>
-                {isReadyForStep5 ? '✓ ĐỦ ĐIỀU KIỆN BƯỚC 5' : '⏳ CHƯA ĐỦ ĐIỀU KIỆN'}
+                {isReadyForStep5 ? '✓ ĐỦ ĐIỀU KIỆN BƯỚC 4' : '⏳ CHƯA ĐỦ ĐIỀU KIỆN'}
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-700 pt-0.5">
@@ -565,7 +565,7 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
             </div>
             {!isReadyForStep5 && (
               <p className="text-[11px] text-amber-800 italic pt-1">
-                Theo quy chế, hệ thống chỉ cho phép CBQL kết luận xếp loại Bước 5 khi cán bộ đã tự đánh giá cuối kỳ và hoàn tất nộp minh chứng tất cả sản phẩm công việc. Sau khi hoàn tất Bước 5, hồ sơ mới được đẩy lên Bước 6 (Tổng hợp tham mưu).
+                Theo quy chế, hệ thống chỉ cho phép CBQL kết luận xếp loại Bước 4 khi cán bộ đã tự đánh giá cuối kỳ và hoàn tất nộp minh chứng tất cả sản phẩm công việc. Sau khi hoàn tất Bước 4, hồ sơ mới được đẩy lên Bước 5 (Tổng hợp tham mưu).
               </p>
             )}
           </div>

@@ -53,8 +53,8 @@ export default function Sidebar({
     { id: 'assignment', label: 'B1. Giao & Tiếp nhận việc', icon: UserCheck },
     { id: 'execution', label: 'B2. Nộp sản phẩm công việc', icon: CheckSquare },
     { id: 'self_eval', label: 'B3. Tự đánh giá cuối kỳ', icon: Award },
-    { id: 'grading', label: 'B5. Đánh giá, nhận xét (CBQL)', icon: ShieldCheck },
-    { id: 'advisory', label: 'B6. Tổng hợp tham mưu', icon: ClipboardCheck },
+    { id: 'grading', label: 'B4. Đánh giá, nhận xét (CBQL)', icon: ShieldCheck },
+    { id: 'advisory', label: 'B5. Tổng hợp tham mưu', icon: ClipboardCheck },
     { id: 'voting', label: 'B6. Biểu quyết xếp loại', icon: Vote },
     { id: 'charts', label: 'Biểu đồ thống kê', icon: BarChart3 },
     { id: 'reports', label: 'Xuất báo cáo & biểu mẫu', icon: FileText }
