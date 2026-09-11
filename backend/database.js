@@ -104,7 +104,10 @@ function initDatabase() {
       code TEXT UNIQUE NOT NULL,
       name TEXT NOT NULL,
       parent_agency TEXT,
-      location_name TEXT
+      location_name TEXT,
+      agency_type TEXT DEFAULT 'su_nghiep',
+      manager_title TEXT DEFAULT 'TRƯỞNG ĐƠN VỊ',
+      leader_title TEXT DEFAULT 'THỦ TRƯỞNG ĐƠN VỊ'
     );
 
     CREATE TABLE IF NOT EXISTS users (
@@ -421,6 +424,8 @@ function initDatabase() {
     "ALTER TABLE assigned_tasks ADD COLUMN is_returned INTEGER DEFAULT 0;",
     "ALTER TABLE departments ADD COLUMN parent_agency TEXT;",
     "ALTER TABLE departments ADD COLUMN location_name TEXT;",
+    "ALTER TABLE departments ADD COLUMN manager_title TEXT DEFAULT 'TRƯỞNG ĐƠN VỊ';",
+    "ALTER TABLE departments ADD COLUMN leader_title TEXT DEFAULT 'THỦ TRƯỞNG ĐƠN VỊ';",
     "ALTER TABLE assigned_tasks ADD COLUMN feedback_reason TEXT;",
     "ALTER TABLE assigned_tasks ADD COLUMN feedback_count INTEGER DEFAULT 0;",
     "ALTER TABLE assigned_tasks ADD COLUMN reassigned_at TEXT;",

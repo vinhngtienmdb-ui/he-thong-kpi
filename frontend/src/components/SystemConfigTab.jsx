@@ -29,7 +29,8 @@ import {
   Download,
   UploadCloud,
   RefreshCw,
-  HardDrive
+  HardDrive,
+  FileText
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate } from '../constants';
@@ -426,6 +427,8 @@ export default function SystemConfigTab({
       leader_id: '',
       parent_agency: 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH',
       location_name: 'TP. Hồ Chí Minh',
+      manager_title: 'TRƯỞNG ĐƠN VỊ',
+      leader_title: 'THỦ TRƯỞNG ĐƠN VỊ',
       description: '',
       is_active: 1
     });
@@ -441,6 +444,8 @@ export default function SystemConfigTab({
       leader_id: dept.leader_id || '',
       parent_agency: dept.parent_agency || '',
       location_name: dept.location_name || '',
+      manager_title: dept.manager_title || 'TRƯỞNG ĐƠN VỊ',
+      leader_title: dept.leader_title || 'THỦ TRƯỞNG ĐƠN VỊ',
       description: dept.description || '',
       is_active: dept.is_active !== 0 ? 1 : 0
     });
@@ -690,115 +695,6 @@ export default function SystemConfigTab({
 
         return (
           <div className="space-y-6">
-            {/* THÔNG TIN CƠ QUAN, ĐỊA PHƯƠNG & THẨM QUYỀN KÝ BÁO CÁO (CHUẨN NGHỊ ĐỊNH 30/2020/NĐ-CP) */}
-            <form onSubmit={handleSaveConfigs} className="bg-white rounded-xl shadow-xs border border-slate-200 p-6 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                <div>
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5 text-red-800">
-                    <Building2 className="w-4 h-4 text-red-600" />
-                    Thông tin Cơ quan, Địa phương & Thẩm quyền ký Báo cáo (Chuẩn NĐ 30/2020/NĐ-CP)
-                  </h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Các thông tin này sẽ được tự động đồng bộ lên tiêu ngữ, đầu trang và chân trang chữ ký của các biểu mẫu Mẫu 01-A, Mẫu 01-B, Báo cáo công việc và Mẫu 02 (cả trên giao diện xem trước, bản in PDF và file Excel xuất ra).
-                  </p>
-                </div>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="bg-red-700 hover:bg-red-800 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-xs transition flex items-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  {saving ? 'Đang lưu...' : 'Lưu Thông tin Cơ quan & Thẩm quyền ký'}
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1 text-xs">
-                    Tên Cơ quan chủ quản / Cấp trên
-                  </label>
-                  <input
-                    type="text"
-                    value={configs.PARENT_AGENCY_NAME || ''}
-                    onChange={(e) => handleConfigChange('PARENT_AGENCY_NAME', e.target.value)}
-                    placeholder="THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH"
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-red-500 uppercase"
-                  />
-                  <span className="text-slate-400 text-[10px]">Tiêu đề góc trái dòng 1 (in hoa)</span>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1 text-xs">
-                    Tên Cơ quan, Đơn vị
-                  </label>
-                  <input
-                    type="text"
-                    value={configs.UNIT_NAME || ''}
-                    onChange={(e) => handleConfigChange('UNIT_NAME', e.target.value)}
-                    placeholder="BAN TỔ CHỨC THÀNH ỦY TP. HỒ CHÍ MINH"
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-red-500 uppercase"
-                  />
-                  <span className="text-slate-400 text-[10px]">Tiêu đề góc trái dòng 2 (in hoa đậm)</span>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1 text-xs">
-                    Địa danh lập văn bản
-                  </label>
-                  <input
-                    type="text"
-                    value={configs.LOCATION_NAME || ''}
-                    onChange={(e) => handleConfigChange('LOCATION_NAME', e.target.value)}
-                    placeholder="TP. Hồ Chí Minh"
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-red-500"
-                  />
-                  <span className="text-slate-400 text-[10px]">Xuất hiện ở dòng: [Địa phương], ngày ...</span>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1 text-xs">
-                    Chức danh Người quản lý đơn vị / Cấp phòng
-                  </label>
-                  <input
-                    type="text"
-                    value={configs.DEPT_LEADER_TITLE || ''}
-                    onChange={(e) => handleConfigChange('DEPT_LEADER_TITLE', e.target.value)}
-                    placeholder="TRƯỞNG PHÒNG"
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:ring-2 focus:ring-red-500 uppercase"
-                  />
-                  <span className="text-slate-400 text-[10px]">Chức danh ký duyệt tại đơn vị / CBQL</span>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1 text-xs">
-                    Chức danh Thủ trưởng / Lãnh đạo cơ quan ký
-                  </label>
-                  <input
-                    type="text"
-                    value={configs.LEADER_SIGNER_TITLE || ''}
-                    onChange={(e) => handleConfigChange('LEADER_SIGNER_TITLE', e.target.value)}
-                    placeholder="PHÓ TRƯỞNG BAN THƯỜNG TRỰC"
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:ring-2 focus:ring-red-500 uppercase"
-                  />
-                  <span className="text-slate-400 text-[10px]">Chức vụ in hoa đậm dưới chữ ký bên phải</span>
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1 text-xs">
-                    Họ và tên Thủ trưởng / Lãnh đạo cơ quan ký
-                  </label>
-                  <input
-                    type="text"
-                    value={configs.LEADER_SIGNER_NAME || ''}
-                    onChange={(e) => handleConfigChange('LEADER_SIGNER_NAME', e.target.value)}
-                    placeholder="Thái Thị Bích Liên"
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-red-500"
-                  />
-                  <span className="text-slate-400 text-[10px]">Họ tên đầy đủ người ký duyệt</span>
-                </div>
-              </div>
-            </form>
-
             <div className="bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden space-y-0">
               <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div>
@@ -875,18 +771,18 @@ export default function SystemConfigTab({
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1250px] text-left text-sm border-collapse">
+              <table className="w-full min-w-[1300px] text-left text-sm border-collapse">
                 <thead>
                   <tr className="bg-slate-100/75 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-xs">
-                    <th className="py-3.5 px-4 w-32">Mã đơn vị</th>
-                    <th className="py-3.5 px-4 min-w-[260px]">Tên đơn vị / Phòng ban</th>
-                    <th className="py-3.5 px-4 min-w-[220px]">Cơ quan cấp trên (In BC) & Địa phương</th>
-                    <th className="py-3.5 px-4 min-w-[180px]">Đơn vị cấp trên (Cha)</th>
-                    <th className="py-3.5 px-4 min-w-[180px]">Trưởng đơn vị / Phụ trách</th>
-                    <th className="py-3.5 px-4 w-24 text-center">Đơn vị con</th>
-                    <th className="py-3.5 px-4 w-24 text-center">Số CBNV</th>
-                    <th className="py-3.5 px-4 w-36 text-center">Chế độ hoạt động</th>
-                    <th className="py-3.5 px-4 w-32 text-right">Thao tác</th>
+                    <th className="py-3.5 px-4 w-28">Mã đơn vị</th>
+                    <th className="py-3.5 px-4 min-w-[240px]">Tên đơn vị / Phòng ban</th>
+                    <th className="py-3.5 px-4 min-w-[170px]">Đơn vị cấp trên</th>
+                    <th className="py-3.5 px-4 min-w-[200px]">Người đứng đầu (Được gán)</th>
+                    <th className="py-3.5 px-4 min-w-[220px]">Thẩm quyền ký (Chuẩn NĐ 30)</th>
+                    <th className="py-3.5 px-4 min-w-[200px]">Tiêu ngữ in BC & Địa danh</th>
+                    <th className="py-3.5 px-4 w-28 text-center">ĐV con / CBNV</th>
+                    <th className="py-3.5 px-4 w-32 text-center">Chế độ hoạt động</th>
+                    <th className="py-3.5 px-4 w-28 text-right">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -924,37 +820,56 @@ export default function SystemConfigTab({
                               </div>
                             )}
                           </td>
-                          <td className="py-3 px-4">
-                            <div className="font-semibold text-slate-800 text-xs">{d.parent_agency || <span className="text-slate-400 italic">Mặc định</span>}</div>
-                            <div className="text-[11px] text-slate-500 mt-0.5">📍 {d.location_name || 'TP. Hồ Chí Minh'}</div>
-                          </td>
                           <td className="py-3 px-4 text-slate-600">
                             {d.parent_name ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-medium">
                                 {d.parent_name}
                               </span>
                             ) : (
-                              <span className="text-slate-400 italic">Cấp cao nhất</span>
+                              <span className="text-slate-400 italic text-[11px]">Cấp cao nhất</span>
                             )}
                           </td>
                           <td className="py-3 px-4">
                             {d.leader_name ? (
-                              <span className="font-bold text-slate-800 flex items-center gap-1">
-                                👤 {d.leader_name}
-                              </span>
+                              <div>
+                                <div className="font-bold text-slate-900 text-xs flex items-center gap-1">
+                                  👤 {d.leader_name}
+                                </div>
+                                {d.leader_gov_title && (
+                                  <div className="text-[10px] text-slate-500 font-medium mt-0.5">
+                                    {d.leader_gov_title}
+                                  </div>
+                                )}
+                              </div>
                             ) : (
-                              <span className="text-slate-400 italic">Chưa chỉ định</span>
+                              <span className="text-slate-400 italic text-xs">Chưa gán</span>
                             )}
                           </td>
-                          <td className="py-3 px-4 text-center">
-                            <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                              {d.sub_dept_count || 0}
-                            </span>
+                          <td className="py-3 px-4">
+                            <div className="space-y-0.5 text-xs">
+                              <div className="text-slate-700 font-medium">
+                                <span className="text-slate-400 text-[11px]">Quản lý:</span> <strong className="text-slate-900">{d.manager_title || 'TRƯỞNG ĐƠN VỊ'}</strong>
+                              </div>
+                              <div className="text-slate-700 font-medium">
+                                <span className="text-slate-400 text-[11px]">Thủ trưởng:</span> <strong className="text-slate-900">{d.leader_title || 'THỦ TRƯỞNG ĐƠN VỊ'}</strong>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-slate-800 text-xs truncate max-w-[220px]" title={d.parent_agency}>
+                              {d.parent_agency || <span className="text-slate-400 italic">Mặc định</span>}
+                            </div>
+                            <div className="text-[11px] text-slate-500 mt-0.5">📍 {d.location_name || 'TP. Hồ Chí Minh'}</div>
                           </td>
                           <td className="py-3 px-4 text-center">
-                            <span className="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              {d.user_count || 0}
-                            </span>
+                            <div className="inline-flex items-center gap-1.5 text-xs">
+                              <span className="px-1.5 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200" title="Đơn vị con trực thuộc">
+                                {d.sub_dept_count || 0} con
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200" title="Số lượng CBNV">
+                                {d.user_count || 0} ng
+                              </span>
+                            </div>
                           </td>
                           <td className="py-3 px-4 text-center whitespace-nowrap">
                             <button
@@ -1683,104 +1598,197 @@ export default function SystemConfigTab({
       {/* MODAL: ADD/EDIT DEPARTMENT */}
       {isDeptModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl w-[95%] sm:max-w-lg p-4 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl w-[95%] sm:max-w-2xl p-4 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b pb-3">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-red-600" />
-                {editingDept ? 'Cập nhật Đơn vị / Phòng ban' : 'Thêm mới Đơn vị / Phòng ban'}
-              </h3>
-              <button onClick={() => setIsDeptModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Building2 className="w-5 h-5 text-red-600" />
+                  {editingDept ? 'Cập nhật Đơn vị / Phòng ban' : 'Thêm mới Đơn vị / Phòng ban'}
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Thiết lập phân cấp, chỉ định người đứng đầu và thông tin ký báo cáo chuẩn NĐ 30/2020/NĐ-CP
+                </p>
+              </div>
+              <button onClick={() => setIsDeptModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSaveDept} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Mã đơn vị / Ký hiệu *</label>
-                <input
-                  type="text"
-                  required
-                  value={deptForm.code}
-                  onChange={(e) => setDeptForm({ ...deptForm, code: e.target.value })}
-                  placeholder="VD: BTC.TU.TC-CB hoặc A29.01"
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Tên Đơn vị / Phòng ban *</label>
-                <input
-                  type="text"
-                  required
-                  value={deptForm.name}
-                  onChange={(e) => setDeptForm({ ...deptForm, name: e.target.value })}
-                  placeholder="VD: Phòng Tổ chức Cán bộ"
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 font-medium"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Cơ quan cấp trên (In báo cáo)</label>
+              {/* PHẦN 1: THÔNG TIN CƠ BẢN */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-1">
+                  <label className="block font-bold text-slate-700 mb-1">Mã đơn vị / Ký hiệu *</label>
                   <input
                     type="text"
-                    value={deptForm.parent_agency}
-                    onChange={(e) => setDeptForm({ ...deptForm, parent_agency: e.target.value })}
-                    placeholder="VD: THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH"
-                    className="w-full px-3 py-1.5 border rounded-lg focus:ring-2 focus:ring-red-500 font-medium bg-white text-xs"
+                    required
+                    value={deptForm.code}
+                    onChange={(e) => setDeptForm({ ...deptForm, code: e.target.value })}
+                    placeholder="VD: BTC.TU.TC-CB"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 font-mono font-bold uppercase text-slate-800"
                   />
-                  <p className="text-[10px] text-slate-400 mt-0.5">Tiêu ngữ đơn vị cấp trên (góc trái trên biểu mẫu)</p>
                 </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Địa phương / Địa danh</label>
+
+                <div className="sm:col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">Tên Đơn vị / Phòng ban *</label>
                   <input
                     type="text"
-                    value={deptForm.location_name}
-                    onChange={(e) => setDeptForm({ ...deptForm, location_name: e.target.value })}
-                    placeholder="VD: TP. Hồ Chí Minh"
-                    className="w-full px-3 py-1.5 border rounded-lg focus:ring-2 focus:ring-red-500 font-medium bg-white text-xs"
+                    required
+                    value={deptForm.name}
+                    onChange={(e) => setDeptForm({ ...deptForm, name: e.target.value })}
+                    placeholder="VD: Phòng Tổ chức Cán bộ"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 font-semibold text-slate-900"
                   />
-                  <p className="text-[10px] text-slate-400 mt-0.5">Dùng cho dòng ngày tháng ký: "...ngày...tháng...năm..."</p>
                 </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Đơn vị Cấp trên (Đơn vị Cha)</label>
-                <select
-                  value={deptForm.parent_id}
-                  onChange={(e) => setDeptForm({ ...deptForm, parent_id: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg bg-slate-50 focus:ring-2 focus:ring-red-500"
-                >
-                  <option value="">-- Là Cơ quan / Đơn vị cấp cao nhất (Không có cha) --</option>
-                  {localDepts
-                    .filter(d => !editingDept || d.id !== editingDept.id)
-                    .map(d => (
-                      <option key={d.id} value={d.id}>
-                        {d.name} ({d.code})
-                      </option>
-                    ))}
-                </select>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Đơn vị cấp trên sẽ có thẩm quyền quản lý gián tiếp các cán bộ trong đơn vị này.
-                </p>
+              {/* PHẦN 2: PHÂN CẤP QUẢN LÝ & NGƯỜI ĐỨNG ĐẦU */}
+              <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200 space-y-3">
+                <h4 className="font-bold text-slate-800 flex items-center gap-1.5 uppercase text-[11px] tracking-wide text-red-800">
+                  <Users className="w-4 h-4 text-red-600" />
+                  Cơ quan Cấp trên & Người đứng đầu (Phân bổ nhân sự)
+                </h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Cơ quan Cấp trên (Lấy từ danh sách)
+                    </label>
+                    <select
+                      value={deptForm.parent_id}
+                      onChange={(e) => {
+                        const pId = e.target.value;
+                        const pDept = localDepts.find(d => d.id === pId);
+                        setDeptForm(prev => ({
+                          ...prev,
+                          parent_id: pId,
+                          // Tự động gán cơ quan cấp trên in báo cáo theo tên đơn vị được chọn
+                          parent_agency: pDept ? pDept.name : (prev.parent_agency || 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH')
+                        }));
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-red-500 font-medium"
+                    >
+                      <option value="">-- Cơ quan cấp cao nhất (Không có cha) --</option>
+                      {localDepts
+                        .filter(d => !editingDept || d.id !== editingDept.id)
+                        .map(d => (
+                          <option key={d.id} value={d.id}>
+                            {d.name} ({d.code})
+                          </option>
+                        ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Đơn vị cấp trên trực tiếp quản lý trong cây cơ cấu tổ chức.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Người đứng đầu / Thủ trưởng (Lấy từ danh sách)
+                    </label>
+                    <select
+                      value={deptForm.leader_id}
+                      onChange={(e) => {
+                        const lId = e.target.value;
+                        const leaderUser = users.find(u => u.id === lId);
+                        setDeptForm(prev => ({
+                          ...prev,
+                          leader_id: lId,
+                          // Nếu có chức vụ chính quyền, tự động gợi ý chức vụ ký duyệt NĐ 30
+                          leader_title: leaderUser?.gov_title ? leaderUser.gov_title.toUpperCase() : (prev.leader_title || 'THỦ TRƯỞNG ĐƠN VỊ')
+                        }));
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-red-500 font-medium"
+                    >
+                      <option value="">-- Chưa gán người đứng đầu (Để trống) --</option>
+                      {users.map(u => {
+                        const uDept = localDepts.find(d => d.id === u.dept_id);
+                        return (
+                          <option key={u.id} value={u.id}>
+                            {u.full_name} ({u.gov_title || u.role || 'Cán bộ'}) {uDept ? `[${uDept.name}]` : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Nếu chưa gán thì để trống; hệ thống sẽ lấy theo cấp cha hoặc để trống khi in.
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Trưởng đơn vị / Người phụ trách</label>
-                <select
-                  value={deptForm.leader_id}
-                  onChange={(e) => setDeptForm({ ...deptForm, leader_id: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg bg-slate-50 focus:ring-2 focus:ring-red-500"
-                >
-                  <option value="">-- Chưa chỉ định trưởng đơn vị --</option>
-                  {users.map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.full_name} ({u.gov_title || u.role})
-                    </option>
-                  ))}
-                </select>
+              {/* PHẦN 3: CẤU HÌNH THÔNG TIN VĂN BẢN & THẨM QUYỀN KÝ (CHUẨN NGHỊ ĐỊNH 30/2020/NĐ-CP) */}
+              <div className="bg-red-50/40 p-3.5 rounded-xl border border-red-200/80 space-y-3">
+                <div>
+                  <h4 className="font-bold text-red-900 flex items-center gap-1.5 uppercase text-[11px] tracking-wide">
+                    <FileText className="w-4 h-4 text-red-700" />
+                    Thông tin Cơ quan, Địa phương & Thẩm quyền ký Báo cáo (Chuẩn NĐ 30/2020/NĐ-CP)
+                  </h4>
+                  <p className="text-[10px] text-red-700/80 mt-0.5">
+                    Các thông tin này phục vụ xuất báo cáo Mẫu 01-A, Mẫu 01-B, Báo cáo công việc và Mẫu 02 của riêng đơn vị này.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Tên Cơ quan cấp trên / Chủ quản (Tiêu ngữ in BC)
+                    </label>
+                    <input
+                      type="text"
+                      value={deptForm.parent_agency}
+                      onChange={(e) => setDeptForm({ ...deptForm, parent_agency: e.target.value })}
+                      placeholder="THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH"
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 font-semibold bg-white uppercase text-slate-900"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-0.5">Tiêu đề góc trái dòng 1 (in hoa)</p>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Địa danh lập văn bản
+                    </label>
+                    <input
+                      type="text"
+                      value={deptForm.location_name}
+                      onChange={(e) => setDeptForm({ ...deptForm, location_name: e.target.value })}
+                      placeholder="TP. Hồ Chí Minh"
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 font-medium bg-white text-slate-900"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-0.5">Xuất hiện ở dòng: [Địa phương], ngày ...</p>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Chức danh Người quản lý đơn vị / Cấp phòng
+                    </label>
+                    <input
+                      type="text"
+                      value={deptForm.manager_title}
+                      onChange={(e) => setDeptForm({ ...deptForm, manager_title: e.target.value })}
+                      placeholder="TRƯỞNG ĐƠN VỊ"
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 font-bold bg-white uppercase text-slate-900"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-0.5">Chức danh ký duyệt tại đơn vị / CBQL (chân trang giữa/trái)</p>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      Chức danh Thủ trưởng / Lãnh đạo cơ quan ký
+                    </label>
+                    <input
+                      type="text"
+                      value={deptForm.leader_title}
+                      onChange={(e) => setDeptForm({ ...deptForm, leader_title: e.target.value })}
+                      placeholder="THỦ TRƯỞNG ĐƠN VỊ"
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 font-bold bg-white uppercase text-slate-900"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-0.5">Chức vụ in hoa đậm dưới chữ ký bên phải của Thủ trưởng</p>
+                  </div>
+                </div>
               </div>
 
+              {/* PHẦN 4: MÔ TẢ & CHẾ ĐỘ HOẠT ĐỘNG */}
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Mô tả / Chức năng nhiệm vụ</label>
                 <textarea
@@ -1788,7 +1796,7 @@ export default function SystemConfigTab({
                   value={deptForm.description}
                   onChange={(e) => setDeptForm({ ...deptForm, description: e.target.value })}
                   placeholder="Mô tả tóm tắt chức năng nhiệm vụ của phòng ban..."
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 bg-white"
                 />
               </div>
 
@@ -1829,13 +1837,13 @@ export default function SystemConfigTab({
                 <button
                   type="button"
                   onClick={() => setIsDeptModalOpen(false)}
-                  className="px-4 py-2 border rounded-lg text-slate-600 hover:bg-slate-50 font-medium"
+                  className="px-4 py-2 border rounded-lg text-slate-600 hover:bg-slate-50 font-medium cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-red-700 hover:bg-red-800 text-white rounded-lg font-bold shadow-sm"
+                  className="px-5 py-2 bg-red-700 hover:bg-red-800 text-white rounded-lg font-bold shadow-sm cursor-pointer"
                 >
                   {editingDept ? 'Cập nhật' : 'Tạo mới'}
                 </button>

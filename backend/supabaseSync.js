@@ -192,6 +192,8 @@ async function pushToSupabase() {
         ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS level_1_score NUMERIC;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS is_party_member INTEGER DEFAULT 0;
         ALTER TABLE departments ADD COLUMN IF NOT EXISTS agency_type TEXT DEFAULT 'su_nghiep';
+        ALTER TABLE departments ADD COLUMN IF NOT EXISTS manager_title TEXT DEFAULT 'TRƯỞNG ĐƠN VỊ';
+        ALTER TABLE departments ADD COLUMN IF NOT EXISTS leader_title TEXT DEFAULT 'THỦ TRƯỞNG ĐƠN VỊ';
         ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS final_classification TEXT;
         ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS skip_level_reviewer_id TEXT;
         ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS skip_level_status TEXT DEFAULT 'approved';
@@ -268,10 +270,16 @@ async function pushToSupabase() {
     const depts = db.prepare('SELECT * FROM departments').all();
     await batchUpsert(
       client, 'departments',
-      ['id', 'code', 'name', 'is_active', 'description', 'parent_agency', 'location_name'],
+      ['id', 'code', 'name', 'is_active', 'description', 'parent_agency', 'location_name', 'agency_type', 'manager_title', 'leader_title'],
       ['id'],
-      ['code', 'name', 'is_active', 'description', 'parent_agency', 'location_name'],
-      depts.map(d => ({ ...d, is_active: d.is_active ?? 1 }))
+      ['code', 'name', 'is_active', 'description', 'parent_agency', 'location_name', 'agency_type', 'manager_title', 'leader_title'],
+      depts.map(d => ({
+        ...d,
+        is_active: d.is_active ?? 1,
+        agency_type: d.agency_type || 'su_nghiep',
+        manager_title: d.manager_title || 'TRƯỞNG ĐƠN VỊ',
+        leader_title: d.leader_title || 'THỦ TRƯỞNG ĐƠN VỊ'
+      }))
     );
     stats.departments = depts.length;
 
@@ -653,15 +661,18 @@ async function pullFromSupabase() {
     const supDepts = await client.query('SELECT * FROM departments');
     const insDept = db.prepare(`
       INSERT OR REPLACE INTO departments (
-        id, code, name, parent_id, leader_id, is_active, description, parent_agency, location_name
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, code, name, parent_id, leader_id, is_active, description, parent_agency, location_name, agency_type, manager_title, leader_title
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
       for (const d of supDepts.rows) {
         insDept.run(
           toSqliteVal(d.id), toSqliteVal(d.code), toSqliteVal(d.name), toSqliteVal(d.parent_id),
           toSqliteVal(d.leader_id), d.is_active ? 1 : 0, toSqliteVal(d.description),
-          toSqliteVal(d.parent_agency), toSqliteVal(d.location_name)
+          toSqliteVal(d.parent_agency), toSqliteVal(d.location_name),
+          toSqliteVal(d.agency_type || 'su_nghiep'),
+          toSqliteVal(d.manager_title || 'TRƯỞNG ĐƠN VỊ'),
+          toSqliteVal(d.leader_title || 'THỦ TRƯỞNG ĐƠN VỊ')
         );
       }
     })();

@@ -1059,9 +1059,12 @@ function getSystemConfigs() {
 async function exportCBQLWorkbook(periodId, userId) {
   const period = db.prepare('SELECT * FROM periods WHERE id = ?').get(periodId);
   const user = db.prepare(`
-    SELECT u.*, d.name as dept_name, d.parent_agency, d.location_name
+    SELECT u.*, d.name as dept_name, d.parent_agency, d.location_name,
+           d.manager_title, d.leader_title,
+           u_leader.full_name as dept_leader_name
     FROM users u 
     LEFT JOIN departments d ON u.dept_id = d.id 
+    LEFT JOIN users u_leader ON d.leader_id = u_leader.id
     WHERE u.id = ?
   `).get(userId);
 
@@ -1073,9 +1076,9 @@ async function exportCBQLWorkbook(periodId, userId) {
   const parentAgency = user.parent_agency || sysConfigs.PARENT_AGENCY_NAME || 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH';
   const unitName = user.dept_name ? user.dept_name.toUpperCase() : (sysConfigs.UNIT_NAME || 'BAN TỔ CHỨC THÀNH ỦY TP. HỒ CHÍ MINH');
   const locationName = user.location_name || sysConfigs.LOCATION_NAME || 'TP. Hồ Chí Minh';
-  const leaderName = sysConfigs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên';
-  const leaderTitle = sysConfigs.LEADER_SIGNER_TITLE || 'PHÓ TRƯỞNG BAN THƯỜNG TRỰC';
-  const deptLeaderTitle = sysConfigs.DEPT_LEADER_TITLE || 'TRƯỞNG PHÒNG';
+  const leaderName = user.dept_leader_name || sysConfigs.LEADER_SIGNER_NAME || '';
+  const leaderTitle = user.leader_title || sysConfigs.LEADER_SIGNER_TITLE || 'THỦ TRƯỞNG ĐƠN VỊ';
+  const deptLeaderTitle = user.manager_title || sysConfigs.DEPT_LEADER_TITLE || 'TRƯỞNG ĐƠN VỊ';
 
   const isCbnv = (user.target_role === 'cbnv') || (user.role === 'cbnv' && user.target_role !== 'cbql');
   const roleFilter = isCbnv ? 'cbnv' : 'cbql';
@@ -1710,12 +1713,19 @@ async function exportMau02Workbook(periodId) {
   const period = db.prepare('SELECT * FROM periods WHERE id = ?').get(periodId) || { name: 'Quý III/2026', id: periodId };
 
   const sysConfigs = getSystemConfigs();
-  const topDept = db.prepare('SELECT parent_agency, location_name, name FROM departments WHERE is_active = 1 ORDER BY parent_id IS NULL DESC, code ASC LIMIT 1').get();
+  const topDept = db.prepare(`
+    SELECT d.parent_agency, d.location_name, d.name, d.leader_title, d.manager_title,
+           u_leader.full_name as leader_name
+    FROM departments d
+    LEFT JOIN users u_leader ON d.leader_id = u_leader.id
+    WHERE d.is_active = 1 
+    ORDER BY d.parent_id IS NULL DESC, d.code ASC LIMIT 1
+  `).get();
   const parentAgency = topDept?.parent_agency || sysConfigs.PARENT_AGENCY_NAME || 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH';
   const unitName = topDept?.name ? topDept.name.toUpperCase() : (sysConfigs.UNIT_NAME || 'BAN TỔ CHỨC THÀNH ỦY TP. HỒ CHÍ MINH');
   const locationName = topDept?.location_name || sysConfigs.LOCATION_NAME || 'TP. Hồ Chí Minh';
-  const leaderName = sysConfigs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên';
-  const leaderTitle = sysConfigs.LEADER_SIGNER_TITLE || 'PHÓ TRƯỞNG BAN THƯỜNG TRỰC';
+  const leaderName = topDept?.leader_name || sysConfigs.LEADER_SIGNER_NAME || '';
+  const leaderTitle = topDept?.leader_title || sysConfigs.LEADER_SIGNER_TITLE || 'THỦ TRƯỞNG ĐƠN VỊ';
 
   const rows = db.prepare(`
     SELECT u.id as user_id, u.full_name, u.role, u.target_role, u.management_role, u.party_title, u.gov_title, u.union_title, d.name as dept_name,

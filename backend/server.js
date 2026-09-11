@@ -556,8 +556,11 @@ app.get('/api/departments', (req, res) => {
   const depts = db.prepare(`
     SELECT d.*, 
            COALESCE(d.agency_type, 'su_nghiep') as agency_type,
+           COALESCE(d.manager_title, 'TRƯỞNG ĐƠN VỊ') as manager_title,
+           COALESCE(d.leader_title, 'THỦ TRƯỞNG ĐƠN VỊ') as leader_title,
            p.name as parent_name,
            u.full_name as leader_name,
+           u.gov_title as leader_gov_title,
            (SELECT COUNT(*) FROM departments c WHERE c.parent_id = d.id AND (c.is_active IS NULL OR c.is_active = 1)) as sub_dept_count,
            (SELECT COUNT(DISTINCT m.id) FROM users m 
             LEFT JOIN user_positions up ON up.user_id = m.id
@@ -572,7 +575,7 @@ app.get('/api/departments', (req, res) => {
 
 // Admin: Create department
 app.post('/api/departments', requireAdmin, (req, res) => {
-  const { code, name, parent_id, leader_id, description, parent_agency, location_name, agency_type } = req.body;
+  const { code, name, parent_id, leader_id, description, parent_agency, location_name, agency_type, manager_title, leader_title } = req.body;
   if (!code || !name) {
     return res.status(400).json({ success: false, message: 'Thiếu mã hoặc tên đơn vị/phòng ban' });
   }
@@ -582,13 +585,15 @@ app.post('/api/departments', requireAdmin, (req, res) => {
   }
   const id = uuidv4();
   db.prepare(`
-    INSERT INTO departments (id, code, name, parent_id, leader_id, description, is_active, parent_agency, location_name, agency_type)
-    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+    INSERT INTO departments (id, code, name, parent_id, leader_id, description, is_active, parent_agency, location_name, agency_type, manager_title, leader_title)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
   `).run(
     id, code, name, parent_id || null, leader_id || null, description || '',
     parent_agency || 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH',
     location_name || 'TP. Hồ Chí Minh',
-    agency_type || 'su_nghiep'
+    agency_type || 'su_nghiep',
+    manager_title || 'TRƯỞNG ĐƠN VỊ',
+    leader_title || 'THỦ TRƯỞNG ĐƠN VỊ'
   );
 
   triggerBackgroundSupabaseSync(300);
@@ -598,7 +603,7 @@ app.post('/api/departments', requireAdmin, (req, res) => {
 // Admin: Update department
 app.put('/api/departments/:id', requireAdmin, (req, res) => {
   const { id } = req.params;
-  const { code, name, parent_id, leader_id, description, is_active, parent_agency, location_name, agency_type } = req.body;
+  const { code, name, parent_id, leader_id, description, is_active, parent_agency, location_name, agency_type, manager_title, leader_title } = req.body;
   const dept = db.prepare('SELECT * FROM departments WHERE id = ?').get(id);
   if (!dept) return res.status(404).json({ success: false, message: 'Không tìm thấy phòng ban' });
 
@@ -616,7 +621,9 @@ app.put('/api/departments/:id', requireAdmin, (req, res) => {
         is_active = ?,
         parent_agency = ?,
         location_name = ?,
-        agency_type = ?
+        agency_type = ?,
+        manager_title = ?,
+        leader_title = ?
     WHERE id = ?
   `).run(
     code !== undefined ? code : dept.code,
@@ -628,6 +635,8 @@ app.put('/api/departments/:id', requireAdmin, (req, res) => {
     parent_agency !== undefined ? parent_agency : dept.parent_agency,
     location_name !== undefined ? location_name : dept.location_name,
     agency_type !== undefined ? agency_type : (dept.agency_type || 'su_nghiep'),
+    manager_title !== undefined ? manager_title : (dept.manager_title || 'TRƯỞNG ĐƠN VỊ'),
+    leader_title !== undefined ? leader_title : (dept.leader_title || 'THỦ TRƯỞNG ĐƠN VỊ'),
     id
   );
 

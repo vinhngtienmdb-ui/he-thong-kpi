@@ -175,16 +175,6 @@ export default function ReportTab({
 
   const targetUser = users.find(u => u.id === selectedUser) || evalData?.user || currentUser || {};
   const isCbnv = (targetUser?.target_role === 'cbnv') || (targetUser?.role === 'cbnv' && targetUser?.target_role !== 'cbql');
-  const isUnitLeader = Boolean(
-    (configs.LEADER_SIGNER_NAME && targetUser.full_name?.trim().toLowerCase() === configs.LEADER_SIGNER_NAME.trim().toLowerCase()) ||
-    (targetUser.management_role === 'lanh_dao' && (!targetUser.manager_id || targetUser.role === 'admin')) ||
-    (/\b(trưởng ban|giám đốc|hiệu trưởng|bí thư)\b/i.test(targetUser.gov_title || '') && !/\bphó\b/i.test(targetUser.gov_title || ''))
-  );
-  const canEditMau02 = currentUser?.role === 'admin' || currentUser?.role === 'cbql' || (currentUser?.data_scope && currentUser?.data_scope !== 'personal');
-  const evaluation = evalData?.evaluation || {};
-  const criteria = evalData?.criteria || [];
-  const exportUrl = api.getExportUrl(activePeriodId, selectedUser);
-  const exportMau02Url = api.getExportMau02Url(activePeriodId);
 
   // Match targetUser's department from departments list or evalData.user
   const targetUserDept = departments.find(d => d.id === targetUser?.department_id)
@@ -207,11 +197,36 @@ export default function ReportTab({
     || configs.UNIT_NAME
     || 'BAN TỔ CHỨC THÀNH ỦY TP. HỒ CHÍ MINH';
 
+  const deptLeaderTitle = targetUserDept.manager_title
+    || configs.DEPT_LEADER_TITLE
+    || 'TRƯỞNG ĐƠN VỊ';
+
+  const leaderSignerTitle = targetUserDept.leader_title
+    || configs.LEADER_SIGNER_TITLE
+    || 'THỦ TRƯỞNG ĐƠN VỊ';
+
+  const leaderSignerName = targetUserDept.leader_name
+    || configs.LEADER_SIGNER_NAME
+    || '';
+
   // For Mẫu 02 (toàn cơ quan)
   const rootDept = departments.find(d => !d.parent_id) || departments[0] || {};
   const mau02ParentAgency = rootDept.parent_agency || parentAgency;
   const mau02LocationName = rootDept.location_name || locationName;
   const mau02UnitName = rootDept.name || configs.UNIT_NAME || 'BAN TỔ CHỨC THÀNH ỦY TP. HỒ CHÍ MINH';
+  const mau02LeaderSignerName = rootDept.leader_name || leaderSignerName;
+  const mau02LeaderSignerTitle = rootDept.leader_title || leaderSignerTitle;
+
+  const isUnitLeader = Boolean(
+    (leaderSignerName && targetUser.full_name?.trim().toLowerCase() === leaderSignerName.trim().toLowerCase()) ||
+    (targetUser.management_role === 'lanh_dao' && (!targetUser.manager_id || targetUser.role === 'admin')) ||
+    (/\b(trưởng ban|giám đốc|hiệu trưởng|bí thư)\b/i.test(targetUser.gov_title || '') && !/\bphó\b/i.test(targetUser.gov_title || ''))
+  );
+  const canEditMau02 = currentUser?.role === 'admin' || currentUser?.role === 'cbql' || (currentUser?.data_scope && currentUser?.data_scope !== 'personal');
+  const evaluation = evalData?.evaluation || {};
+  const criteria = evalData?.criteria || [];
+  const exportUrl = api.getExportUrl(activePeriodId, selectedUser);
+  const exportMau02Url = api.getExportMau02Url(activePeriodId);
 
   const part1Score = criteria.reduce((sum, c) => sum + (c.is_satisfied === 1 ? c.max_score : 0), 0);
   const part2Score = evaluation.part2_score !== undefined && evaluation.part2_score !== null ? evaluation.part2_score : 0;
@@ -773,7 +788,7 @@ export default function ReportTab({
                 </div>
                 <div>
                   <p className="font-bold text-[14pt] text-black uppercase">
-                    {configs.DEPT_LEADER_TITLE || 'TRƯỞNG PHÒNG'}
+                    {deptLeaderTitle}
                   </p>
                 </div>
               </div>
@@ -801,7 +816,7 @@ export default function ReportTab({
                 <div className="space-y-20">
                   <div>
                     <p className="font-bold uppercase text-black leading-tight">
-                      THỦ TRƯỞNG CƠ QUAN, ĐƠN VỊ
+                      {leaderSignerTitle || 'THỦ TRƯỞNG CƠ QUAN, ĐƠN VỊ'}
                     </p>
                     <p className="italic text-[14pt] text-slate-700 mt-0.5">
                       (Xác lập thời điểm, ký, ghi rõ họ tên và đóng dấu)
@@ -810,7 +825,7 @@ export default function ReportTab({
                   <div>
                     {!isUnitLeader && (
                       <p className="font-bold text-[14pt] text-black">
-                        {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
+                        {leaderSignerName}
                       </p>
                     )}
                   </div>
@@ -856,8 +871,7 @@ export default function ReportTab({
                 <div className="space-y-20">
                   <div>
                     <p className="font-bold uppercase text-black leading-tight">
-                      XÁC NHẬN CỦA BAN THƯỜNG VỤ CẤP ỦY<br />
-                      HOẶC TẬP THỂ LÃNH ĐẠO CƠ QUAN, ĐƠN VỊ
+                      {leaderSignerTitle || 'XÁC NHẬN CỦA BAN THƯỜNG VỤ CẤP ỦY\nHOẶC TẬP THỂ LÃNH ĐẠO CƠ QUAN, ĐƠN VỊ'}
                     </p>
                     <p className="italic text-[14pt] text-slate-700 mt-0.5">
                       (Xác lập thời điểm, ký, ghi rõ họ tên và đóng dấu)
@@ -866,7 +880,7 @@ export default function ReportTab({
                   <div>
                     {!isUnitLeader && (
                       <p className="font-bold text-[14pt] text-black">
-                        {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
+                        {leaderSignerName}
                       </p>
                     )}
                   </div>
@@ -1222,8 +1236,7 @@ export default function ReportTab({
                     {formatAdministrativeDate(new Date(), locationName)}
                   </p>
                   <p className="font-bold uppercase text-black leading-tight">
-                    XÁC NHẬN CỦA BAN THƯỜNG VỤ CẤP ỦY<br />
-                    HOẶC TẬP THỂ LÃNH ĐẠO CƠ QUAN, ĐƠN VỊ
+                    {leaderSignerTitle || 'XÁC NHẬN CỦA BAN THƯỜNG VỤ CẤP ỦY\nHOẶC TẬP THỂ LÃNH ĐẠO CƠ QUAN, ĐƠN VỊ'}
                   </p>
                   <p className="italic text-[14pt] text-slate-700 mt-0.5">
                     (Xác lập thời điểm, ký, ghi rõ họ tên và đóng dấu)
@@ -1232,7 +1245,7 @@ export default function ReportTab({
                 <div>
                   {!isUnitLeader && (
                     <p className="font-bold text-[14pt] text-black">
-                      {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
+                      {leaderSignerName}
                     </p>
                   )}
                 </div>
@@ -1526,7 +1539,7 @@ export default function ReportTab({
                     {formatAdministrativeDate(new Date(), mau02LocationName)}
                   </p>
                   <p className="font-bold uppercase text-black leading-tight">
-                    THỦ TRƯỞNG CƠ QUAN, ĐƠN VỊ
+                    {mau02LeaderSignerTitle || 'THỦ TRƯỞNG CƠ QUAN, ĐƠN VỊ'}
                   </p>
                   <p className="italic text-[14pt] text-slate-700 mt-0.5">
                     (Ký, ghi rõ họ tên và đóng dấu)
@@ -1534,7 +1547,7 @@ export default function ReportTab({
                 </div>
                 <div>
                   <p className="font-bold text-[14pt] text-black">
-                    {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
+                    {mau02LeaderSignerName}
                   </p>
                 </div>
               </div>
@@ -1806,7 +1819,7 @@ export default function ReportTab({
                     {formatAdministrativeDate(new Date(), mau02LocationName)}
                   </p>
                   <p className="font-bold uppercase text-black leading-tight">
-                    THỦ TRƯỞNG CƠ QUAN, ĐƠN VỊ
+                    {mau02LeaderSignerTitle || 'THỦ TRƯỞNG CƠ QUAN, ĐƠN VỊ'}
                   </p>
                   <p className="italic text-[14pt] text-slate-700 mt-0.5">
                     (Ký, ghi rõ họ tên và đóng dấu)
@@ -1814,7 +1827,7 @@ export default function ReportTab({
                 </div>
                 <div>
                   <p className="font-bold text-[14pt] text-black">
-                    {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
+                    {mau02LeaderSignerName}
                   </p>
                 </div>
               </div>
