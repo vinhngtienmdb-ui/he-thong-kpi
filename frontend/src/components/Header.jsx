@@ -1176,12 +1176,56 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 3.8 */}
+              {/* Version 3.9 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.8</span>
-                  <span className="text-xs text-slate-500 font-medium">10/09/2026 (Bản phát hành mới nhất - Tối ưu hóa Toàn diện Mobile & Tablet)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.9</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Chuẩn hóa Quy trình Đánh giá 6 Bước & Phân quyền Quản trị)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Chuẩn Hóa Đánh Số Quy Trình 6 Bước (B1 - B6), Phân Quyền Admin Xóa Công Việc Đã Giao, Thu Hồi & Trả Lại Nhiệm Vụ, Loại Bỏ Tài Khoản Chức Năng Khỏi Hội Đồng Biểu Quyết
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Chuẩn hóa & Đánh số Quy trình Đánh giá 6 Bước Liền Mạch (B1 - B6):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Đánh số rõ ràng thứ tự các bước trên Sidebar menu: <em>B1. Giao & Tiếp nhận việc</em> → <em>B2. Nộp sản phẩm công việc</em> → <em>B3. Tự đánh giá cuối kỳ</em> → <em>B4. Đánh giá, nhận xét (CBQL)</em> → <em>B5. Tổng hợp tham mưu</em> → <em>B6. Biểu quyết xếp loại</em>.</li>
+                      <li>Đồng bộ toàn diện các điều kiện tiên quyết và thông báo liên thông giữa Bước 4 và Bước 5: CBQL chỉ được kết luận Bước 4 khi cán bộ hoàn tất nộp tự đánh giá (B3) và nộp đủ minh chứng sản phẩm (B2); hoàn tất Bước 4 dữ liệu mới được đẩy lên Bước 5 (Tổng hợp tham mưu).</li>
+                    </ul>
+                  </li>
+                  <li><strong>Phân quyền Admin Xóa & Xóa Hàng Loạt Công Việc Đã Giao:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Cho phép Quản trị viên (Admin hệ thống và Admin đơn vị) được phép xóa các công việc đã giao ở bất kỳ trạng thái nào (kể cả đã duyệt kết quả) và không bị giới hạn phạm vi người giao.</li>
+                      <li>Bổ sung nút <em>Xóa</em> riêng biệt (màu đỏ kèm biểu tượng thùng rác) trên Bảng tổng hợp theo nhân sự, Bảng chi tiết dạng phẳng, Thẻ di động và Danh sách gần đây tại Dashboard.</li>
+                      <li>Tích hợp hộp chọn Checkbox và thanh công cụ Xóa hàng loạt (Bulk Delete) giúp Admin xử lý nhanh nhiều công việc cùng lúc.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Tính năng Thu Hồi Công Việc Giao Nhầm & Trả Lại Công Việc:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Bổ sung tính năng cho phép Lãnh đạo / Người giao thu hồi kịp thời các nhiệm vụ đã giao nhầm hoặc cần điều chỉnh.</li>
+                      <li>Cho phép Cán bộ nhận việc gửi <em>Trả lại việc</em> kèm lý do về người giao nếu nhiệm vụ chưa phù hợp. Khi cán bộ bấm <em>Nhận việc</em>, công việc sẽ tự động chuyển vào mục Công việc cá nhân để tiến hành thực hiện và nộp minh chứng.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Chuẩn hóa Danh Mục Công Việc Chuẩn Toàn Cơ Quan:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Danh mục công việc chuẩn được hiển thị dùng chung cho toàn bộ CBQL và CBNV trong cùng cơ quan/đơn vị.</li>
+                      <li>Phân quyền chặt chẽ: Chỉ Admin và Lãnh đạo có quyền Duyệt / Sửa / Xóa; người dùng khác chỉ được đề xuất thêm mới hoặc sửa, sau khi Lãnh đạo duyệt mới được cập nhật vào danh mục chung.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Loại bỏ Tài khoản Chức năng Khỏi Hội Đồng Biểu Quyết:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Tự động sàng lọc loại trừ các tài khoản quản trị chức năng / miễn đánh giá (Admin, Admin đơn vị) ra khỏi hội đồng biểu quyết xếp loại tại Bước 6, đảm bảo tính khách quan và quy chế bỏ phiếu.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 3.8 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-400 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-800 text-xs font-bold">Phiên bản 3.8</span>
+                  <span className="text-xs text-slate-500 font-medium">10/09/2026 (Tối ưu hóa Toàn diện Mobile & Tablet)</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Thanh Điều Hướng Đáy Tiện Dụng (Bottom Nav Dock) & Hệ Thống Thẻ Cảm Ứng (Card Views) Thay Thế Bảng Ngang Trên Di Động
