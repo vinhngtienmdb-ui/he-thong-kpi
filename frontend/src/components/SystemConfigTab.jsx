@@ -771,14 +771,13 @@ export default function SystemConfigTab({
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1300px] text-left text-sm border-collapse">
+              <table className="w-full min-w-[1100px] text-left text-sm border-collapse">
                 <thead>
                   <tr className="bg-slate-100/75 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-xs">
                     <th className="py-3.5 px-4 w-28">Mã đơn vị</th>
                     <th className="py-3.5 px-4 min-w-[240px]">Tên đơn vị / Phòng ban</th>
                     <th className="py-3.5 px-4 min-w-[170px]">Đơn vị cấp trên</th>
                     <th className="py-3.5 px-4 min-w-[200px]">Người đứng đầu (Được gán)</th>
-                    <th className="py-3.5 px-4 min-w-[220px]">Thẩm quyền ký (Chuẩn NĐ 30)</th>
                     <th className="py-3.5 px-4 min-w-[200px]">Tiêu ngữ in BC & Địa danh</th>
                     <th className="py-3.5 px-4 w-28 text-center">ĐV con / CBNV</th>
                     <th className="py-3.5 px-4 w-32 text-center">Chế độ hoạt động</th>
@@ -788,7 +787,7 @@ export default function SystemConfigTab({
                 <tbody className="divide-y divide-slate-100">
                   {filteredDepts.length === 0 ? (
                     <tr>
-                      <td colSpan="9" className="py-10 text-center text-slate-400 text-xs italic">
+                      <td colSpan="8" className="py-10 text-center text-slate-400 text-xs italic">
                         Không tìm thấy đơn vị / phòng ban nào phù hợp với bộ lọc
                       </td>
                     </tr>
@@ -844,16 +843,6 @@ export default function SystemConfigTab({
                             ) : (
                               <span className="text-slate-400 italic text-xs">Chưa gán</span>
                             )}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="space-y-0.5 text-xs">
-                              <div className="text-slate-700 font-medium">
-                                <span className="text-slate-400 text-[11px]">Quản lý:</span> <strong className="text-slate-900">{d.manager_title || 'TRƯỞNG ĐƠN VỊ'}</strong>
-                              </div>
-                              <div className="text-slate-700 font-medium">
-                                <span className="text-slate-400 text-[11px]">Thủ trưởng:</span> <strong className="text-slate-900">{d.leader_title || 'THỦ TRƯỞNG ĐƠN VỊ'}</strong>
-                              </div>
-                            </div>
                           </td>
                           <td className="py-3 px-4">
                             <div className="font-semibold text-slate-800 text-xs truncate max-w-[220px]" title={d.parent_agency}>
