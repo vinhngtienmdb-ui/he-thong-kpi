@@ -508,6 +508,8 @@ export default function App() {
           {currentTab === 'execution' && (
             <ExecutionTab
               selectedPeriod={selectedPeriod}
+              onPeriodChange={handlePeriodChange}
+              periods={periods}
               currentUser={currentUser}
               axes={axes}
               setCurrentTab={setCurrentTab}

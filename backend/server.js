@@ -2571,7 +2571,7 @@ app.get('/api/assigned-tasks/:id/subordinate-evidences', (req, res) => {
   }
 });
 
-// CBNV Cập nhật Kết quả & Minh chứng (Hỗ trợ nộp file mới hoặc kế thừa từ cấp dưới)
+// CBNV Cập nhật Kết quả & Minh chứng (Hỗ trợ nộp file mới hoặc kế thừa từ cấp dưới, lưu nháp hoặc gửi đánh giá)
 app.post('/api/assigned-tasks/:id/evidence', upload.single('evidence_file'), async (req, res) => {
   const { id } = req.params;
   const { 
@@ -2579,9 +2579,13 @@ app.post('/api/assigned-tasks/:id/evidence', upload.single('evidence_file'), asy
     evidence_text, 
     detailed_result_note,
     result_note,
+    document_number,
+    document_date,
     self_quality_pct, 
     is_bonus_proposed, 
     bonus_reason,
+    is_draft,
+    action,
     existing_file_url,
     existing_file_name,
     inherited_from_task_id,
@@ -2614,6 +2618,9 @@ app.post('/api/assigned-tasks/:id/evidence', upload.single('evidence_file'), asy
   const proposeBonus = is_bonus_proposed === 'true' || is_bonus_proposed === true || is_bonus_proposed === 1 ? 1 : 0;
   const noteContent = detailed_result_note !== undefined ? detailed_result_note : (result_note || '');
 
+  const isDraft = is_draft === 'true' || is_draft === true || action === 'draft';
+  const targetStatus = isDraft ? (task.status === 'approved' ? 'approved' : 'in_progress') : 'submitted';
+
   const scores = calculateScores(task.standard_score, task.difficulty_weight, progressPct, qualityPct, false);
 
   const { evaluator_id: defaultEvalId, evaluator_type: defaultEvalType } = resolveTaskEvaluator(task, db);
@@ -2623,24 +2630,27 @@ app.post('/api/assigned-tasks/:id/evidence', upload.single('evidence_file'), asy
   db.prepare(`
     UPDATE assigned_tasks
     SET actual_finish_date = ?, evidence_text = ?, detailed_result_note = ?, evidence_file_url = ?, evidence_file_name = ?,
+        document_number = ?, document_date = ?,
         progress_pct = ?, quality_pct = ?, execution_score = ?, converted_score = ?,
         is_bonus_proposed = ?, bonus_reason = ?,
         inherited_from_task_id = ?, inherited_from_user_name = ?,
         evaluator_id = COALESCE(evaluator_id, ?),
         evaluator_type = COALESCE(evaluator_type, ?),
-        submitted_for_eval_at = CURRENT_TIMESTAMP,
-        status = 'submitted', updated_at = CURRENT_TIMESTAMP
+        submitted_for_eval_at = CASE WHEN ? = 'submitted' THEN CURRENT_TIMESTAMP ELSE submitted_for_eval_at END,
+        status = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(
     finishDate, evidence_text || '', noteContent || '', fileUrl, fileName,
+    document_number || '', document_date || '',
     progressPct, qualityPct, scores.executionScore, scores.convertedScore,
     proposeBonus, bonus_reason || '',
     inherited_from_task_id || null, inherited_from_user_name || null,
-    effectiveEvaluatorId, effectiveEvaluatorType, id
+    effectiveEvaluatorId, effectiveEvaluatorType,
+    targetStatus, targetStatus, id
   );
 
-  // Gửi thông báo đến người nhận đánh giá (Người giao việc / Lãnh đạo đơn vị / Quản lý được ủy quyền)
-  if (effectiveEvaluatorId && effectiveEvaluatorId !== task.user_id) {
+  // Gửi thông báo đến người nhận đánh giá chỉ khi KHÔNG PHẢI lưu nháp
+  if (!isDraft && effectiveEvaluatorId && effectiveEvaluatorId !== task.user_id) {
     const taskUser = db.prepare('SELECT full_name FROM users WHERE id = ?').get(task.user_id);
     createNotification({
       userId: effectiveEvaluatorId,
@@ -2659,11 +2669,17 @@ app.post('/api/assigned-tasks/:id/evidence', upload.single('evidence_file'), asy
     ? `${evaluatorUser.full_name}${evaluatorUser.gov_title ? ` (${evaluatorUser.gov_title})` : ''}`
     : (effectiveEvaluatorType === 'leader' ? 'Lãnh đạo đơn vị' : 'Người giao việc');
 
+  const returnMessage = isDraft 
+    ? 'Đã lưu bản nháp minh chứng và kết quả thực hiện thành công!'
+    : `Đã cập nhật kết quả và gửi đánh giá thành công đến ${evaluatorDesc}!`;
+
   res.json({ 
     success: true, 
-    message: `Đã cập nhật kết quả và gửi đánh giá thành công đến ${evaluatorDesc}!`, 
+    message: returnMessage, 
     ...scores, 
     progressPct,
+    isDraft,
+    status: targetStatus,
     evaluator_id: effectiveEvaluatorId,
     evaluator_name: evaluatorUser?.full_name || evaluatorDesc,
     evaluator_type: effectiveEvaluatorType

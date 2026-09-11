@@ -1247,12 +1247,54 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 4.8 */}
+              {/* Version 4.9 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.8</span>
-                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Điều Hướng Thông Báo Gia Hạn & Chuẩn Hóa Ngày Tháng)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.9</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Thiết Kế Lại B2 Nộp Sản Phẩm, Tăng Cỡ Chữ & Tối Ưu Mobile/Tablet)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Thiết Kế Lại Toàn Diện Màn Hình Nộp Sản Phẩm Công Việc, Form Cập Nhật Dạng Accordion Trực Tiếp, Dự Báo Điểm KPI Thời Gian Thực, Tăng Cỡ Chữ Toàn Hệ Thống (+1 Size) & Tối Ưu Giao Diện Di Động / Máy Tính Bảng
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Thiết Kế Lại Giao Diện Màn Hình Nộp Sản Phẩm (Bước 2):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Bố cục card nhiệm vụ hiện đại với vòng tròn phần trăm tiến độ nổi bật (Circular Progress Badge 100%).</li>
+                      <li>Bộ 3 khối thông tin riêng biệt, trực quan: <strong>THỜI GIAN</strong> (Hạn hoàn thành & Ngày hoàn thành thực tế kèm icon), <strong>ĐIỂM KPI</strong> (Điểm tối đa & Điểm tự đánh giá), <strong>NGƯỜI PHÂN CÔNG</strong> (Avatar tròn ký tự đầu & Họ tên cán bộ giao việc).</li>
+                      <li>Nút thao tác viền đỏ thanh lịch: <code>[∨ Cập nhật]</code> (mở rộng accordion ngay bên dưới) và <code>[Xem phân công]</code> (mở popup chi tiết nhiệm vụ và văn bản).</li>
+                    </ul>
+                  </li>
+                  <li><strong>Form Cập Nhật Kết Quả & Nộp Minh Chứng Dạng Accordion Mở Rộng Trực Tiếp:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Không dùng popup che khuất màn hình; mở rộng trực tiếp ngay dưới card nhiệm vụ giúp cán bộ dễ dàng đối chiếu thông tin công việc khi điền minh chứng.</li>
+                      <li>Trường nhập thông tin chuyên nghiệp: Ngày hoàn thành thực tế, Tự đánh giá mức độ chất lượng (4 mức chuẩn: 100% Tốt/Đúng hạn, 80% Hoàn thành, 60% Cần cố gắng, 0% Không đạt), Số văn bản ban hành, Ngày ban hành, Mô tả chi tiết kết quả.</li>
+                      <li>Dự báo điểm KPI thời gian thực (Real-time live KPI calculation preview) tính tự động theo quy chế: Điểm tối đa × Tiến độ % × Mức độ chất lượng % + Điểm thưởng đề xuất.</li>
+                      <li>Hỗ trợ lưu bản nháp (<code>[Lưu bản nháp]</code>) giúp cán bộ lưu tiến trình mà không làm phiền gửi thông báo đánh giá sớm đến lãnh đạo.</li>
+                      <li>Khu vực nộp minh chứng trực quan hỗ trợ Drag & Drop (tối đa 25MB) và tích hợp sẵn tab <em>Lấy kết quả của cấp dưới</em> cho cán bộ quản lý.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Tăng Cỡ Chữ Trong Toàn Hệ Thống Thêm 1 Size:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Nâng cỡ chữ gốc từ 15px lên 16.5px (tương đương +1 size chuẩn font scale), chiều cao dòng 1.6 giúp văn bản, số liệu và bảng biểu đọc cực kỳ rõ nét, không bị mỏi mắt.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Tối Ưu Giao Diện Cho Thiết Bị Di Động & Máy Tính Bảng:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Thanh lọc trạng thái cuộn ngang mượt mà trên màn hình nhỏ.</li>
+                      <li>Bộ 3 khối thông tin tự động thích ứng chuyển 1 cột trên Mobile và 2-3 cột trên Tablet/Desktop.</li>
+                      <li>Vùng bấm tối ưu cảm ứng (Touch target &gt;= 42px), các nút bấm trên mobile hiển thị đầy đủ và dễ thao tác.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 4.8 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-300 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 4.8</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Điều Hướng Thao Tác Trực Tiếp Từ Thông Báo Gia Hạn, Cho Phép Lãnh Đạo Chọn Thời Điểm Mới & Chuẩn Hóa Định Dạng Ngày Tháng (DD/MM/YYYY)

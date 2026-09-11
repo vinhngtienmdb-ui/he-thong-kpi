@@ -424,7 +424,9 @@ function initDatabase() {
     "ALTER TABLE assigned_tasks ADD COLUMN delegated_by TEXT;",
     "ALTER TABLE assigned_tasks ADD COLUMN delegated_at TEXT;",
     "ALTER TABLE assigned_tasks ADD COLUMN delegation_note TEXT;",
-    "ALTER TABLE assigned_tasks ADD COLUMN submitted_for_eval_at TEXT;"
+    "ALTER TABLE assigned_tasks ADD COLUMN submitted_for_eval_at TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN document_number TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN document_date TEXT;"
   ];
 
   for (const m of migrations) {
