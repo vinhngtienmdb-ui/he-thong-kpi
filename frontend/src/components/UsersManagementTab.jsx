@@ -536,17 +536,80 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
     }));
   };
 
+  // Lấy danh sách cán bộ có chức danh lãnh đạo / quản lý thuộc một đơn vị cụ thể
+  const getDeptLeaders = (deptId, excludeUserId = null) => {
+    if (!deptId) return [];
+    const targetDept = localDepts.find(d => String(d.id) === String(deptId));
+
+    const leaders = users.filter(u => {
+      if (excludeUserId && u.id === excludeUserId) return false;
+
+      // Cán bộ phải thuộc đơn vị này (đơn vị chính hoặc vị trí kiêm nhiệm)
+      const inDeptDirect = String(u.dept_id) === String(deptId);
+      const inDeptPositions = (u.positions || []).filter(p => String(p.dept_id) === String(deptId));
+      if (!inDeptDirect && inDeptPositions.length === 0) return false;
+
+      // 1. Người đứng đầu đơn vị được gán trong danh mục đơn vị
+      if (targetDept && targetDept.leader_id && targetDept.leader_id === u.id) return true;
+
+      // 2. Có chức danh lãnh đạo / quản lý trong vị trí công tác tại đơn vị này
+      const hasLeaderInPos = inDeptPositions.some(p => {
+        if (['lanh_dao', 'quan_ly', 'to_truong'].includes(p.management_role)) return true;
+        const title = (p.position_title || '').toLowerCase();
+        return /hiệu trưởng|hiệu phó|phó hiệu trưởng|trưởng|phó|chủ tịch|bí thư|giám đốc|tổ trưởng/.test(title);
+      });
+      if (hasLeaderInPos) return true;
+
+      // 3. Nếu đơn vị chính là deptId, kiểm tra cấp bậc quản lý / vai trò / chức danh chính
+      if (inDeptDirect) {
+        if (['lanh_dao', 'quan_ly', 'to_truong'].includes(u.management_role)) return true;
+        if (['cbql', 'cbql_phong', 'ld_coquan', 'hieu_pho', 'to_truong'].includes(u.role_code || u.role)) return true;
+        const govTitle = (u.gov_title || '').toLowerCase();
+        if (/hiệu trưởng|hiệu phó|phó hiệu trưởng|trưởng|phó|chủ tịch|bí thư|giám đốc|tổ trưởng/.test(govTitle)) return true;
+      }
+
+      return false;
+    });
+
+    // Sắp xếp ưu tiên: Người đứng đầu đơn vị -> Lãnh đạo (lanh_dao) -> Quản lý cấp phó (quan_ly) -> Tổ trưởng -> Tên
+    return leaders.sort((a, b) => {
+      const isLeaderA = targetDept?.leader_id === a.id ? 1 : 0;
+      const isLeaderB = targetDept?.leader_id === b.id ? 1 : 0;
+      if (isLeaderA !== isLeaderB) return isLeaderB - isLeaderA;
+
+      const priority = { lanh_dao: 1, quan_ly: 2, to_truong: 3, nhan_vien: 4, none: 5 };
+      const prioA = priority[a.management_role] || 4;
+      const prioB = priority[b.management_role] || 4;
+      if (prioA !== prioB) return prioA - prioB;
+
+      return (a.full_name || '').localeCompare(b.full_name || '', 'vi');
+    });
+  };
+
   const handlePositionChange = (index, field, value) => {
     setFormData(prev => {
       const updated = [...prev.positions];
+      const prevDeptId = updated[index]?.dept_id;
       updated[index] = { ...updated[index], [field]: value };
+
+      // Khi chọn đơn vị công tác mới, nếu LĐ trực tiếp hiện tại không thuộc đơn vị mới thì tự động reset
+      if (field === 'dept_id' && value !== prevDeptId) {
+        const leaders = getDeptLeaders(value, editingUser?.id);
+        if (updated[index].manager_id && !leaders.some(l => l.id === updated[index].manager_id)) {
+          updated[index].manager_id = '';
+        }
+      }
 
       // If updating primary position, mirror to main formData fields
       const stateUpdates = { positions: updated };
       if (updated[index].is_primary === 1) {
-        if (field === 'dept_id') stateUpdates.dept_id = value;
+        if (field === 'dept_id') {
+          stateUpdates.dept_id = value;
+          stateUpdates.manager_id = updated[index].manager_id;
+        }
         if (field === 'position_title') stateUpdates.gov_title = value;
         if (field === 'management_role') stateUpdates.management_role = value;
+        if (field === 'manager_id') stateUpdates.manager_id = value;
       }
       return { ...prev, ...stateUpdates };
     });
@@ -2014,13 +2077,26 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                               className="w-full px-2.5 py-1.5 border border-indigo-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-indigo-50/30 text-slate-800 font-medium"
                             >
                               <option value="">-- Mặc định theo đơn vị --</option>
-                              {users
-                                .filter(u => !editingUser || u.id !== editingUser.id)
-                                .map(u => (
+                              {(() => {
+                                const deptLeaders = getDeptLeaders(pos.dept_id, editingUser?.id);
+                                const optionsList = [...deptLeaders];
+                                if (pos.manager_id && !optionsList.some(u => u.id === pos.manager_id)) {
+                                  const currentMgr = users.find(u => u.id === pos.manager_id);
+                                  if (currentMgr) optionsList.push(currentMgr);
+                                }
+
+                                if (optionsList.length === 0 && pos.dept_id) {
+                                  return (
+                                    <option value="" disabled>-- Đơn vị chưa có cán bộ lãnh đạo --</option>
+                                  );
+                                }
+
+                                return optionsList.map(u => (
                                   <option key={u.id} value={u.id}>
-                                    {u.management_role === 'lanh_dao' ? '👑' : u.management_role === 'quan_ly' ? '⭐' : '👔'} {u.full_name} ({u.gov_title || u.role})
+                                    {u.management_role === 'lanh_dao' ? '👑 [Lãnh đạo]' : u.management_role === 'quan_ly' ? '⭐ [Cấp phó]' : u.management_role === 'to_truong' ? '🏷️ [Tổ trưởng]' : '👔'} {u.full_name} ({u.gov_title || u.role})
                                   </option>
-                                ))}
+                                ));
+                              })()}
                             </select>
                           </div>
 
@@ -2173,18 +2249,32 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                         Cán bộ Quản lý trực tiếp (Chấm điểm Bước 3)
                       </label>
                       <select
-                        value={formData.manager_id}
-                        onChange={(e) => setFormData({ ...formData, manager_id: e.target.value })}
+                        value={formData.manager_id || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormData(prev => {
+                            const updatedPositions = (prev.positions || []).map(p => 
+                              p.is_primary === 1 ? { ...p, manager_id: val } : p
+                            );
+                            return { ...prev, manager_id: val, positions: updatedPositions };
+                          });
+                        }}
                         className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-slate-50 text-slate-800"
                       >
-                        <option value="">-- Trực thuộc Lãnh đạo Cơ quan --</option>
-                        {users
-                          .filter(u => !editingUser || u.id !== editingUser.id)
-                          .map(u => (
+                        <option value="">-- Trực thuộc Lãnh đạo Cơ quan / Mặc định --</option>
+                        {(() => {
+                          const deptLeaders = getDeptLeaders(formData.dept_id, editingUser?.id);
+                          const optionsList = [...deptLeaders];
+                          if (formData.manager_id && !optionsList.some(u => u.id === formData.manager_id)) {
+                            const currentMgr = users.find(u => u.id === formData.manager_id);
+                            if (currentMgr) optionsList.push(currentMgr);
+                          }
+                          return optionsList.map(u => (
                             <option key={u.id} value={u.id}>
-                              {u.management_role === 'lanh_dao' ? '👑 [Lãnh đạo]' : u.management_role === 'quan_ly' ? '⭐ [Cấp phó]' : '👔'} {u.full_name} ({u.gov_title || u.role}) - {u.dept_name || ''}
+                              {u.management_role === 'lanh_dao' ? '👑 [Lãnh đạo]' : u.management_role === 'quan_ly' ? '⭐ [Cấp phó]' : u.management_role === 'to_truong' ? '🏷️ [Tổ trưởng]' : '👔'} {u.full_name} ({u.gov_title || u.role})
                             </option>
-                          ))}
+                          ));
+                        })()}
                       </select>
                     </div>
 
