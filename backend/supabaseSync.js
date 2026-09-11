@@ -8,7 +8,7 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 require('dotenv').config();
 const { Pool } = require('pg');
-const { db, createBackup, checkpointDatabase } = require('./database');
+const { db, createBackup, checkpointDatabase, ensureUserPositionsPopulated } = require('./database');
 
 function getDbUrl() {
   return process.env.DATABASE_URL || 
@@ -1051,6 +1051,7 @@ async function syncWithSupabaseOnStartup() {
     console.log(`[Supabase Startup Sync] Supabase Cloud chứa ${supUserCount} cán bộ. Bắt đầu kéo dữ liệu sống về SQLite...`);
     const result = await pullFromSupabase();
     console.log('[Supabase Startup Sync] ✓ Đã nạp thành công 100% CSDL sống từ Supabase vào SQLite:', result.stats);
+    ensureUserPositionsPopulated();
     return result;
   } else if (localUserCount > 0) {
     console.log('[Supabase Startup Sync] Supabase Cloud đang trống. Tiến hành đẩy CSDL từ SQLite lên...');

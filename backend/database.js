@@ -338,6 +338,25 @@ function initDatabase() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read);
+
+    CREATE TABLE IF NOT EXISTS user_positions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      dept_id TEXT NOT NULL,
+      position_title TEXT NOT NULL,
+      position_type TEXT DEFAULT 'chinh_quyen',
+      role_id TEXT,
+      management_role TEXT DEFAULT 'nhan_vien',
+      is_primary INTEGER DEFAULT 0,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY(dept_id) REFERENCES departments(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_positions_user ON user_positions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_positions_dept ON user_positions(dept_id);
     CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
   `);
 
@@ -472,6 +491,9 @@ function initDatabase() {
       }
     }
   } catch (e) {}
+
+  // Khởi tạo chức vụ chính (primary position) cho toàn bộ người dùng hiện có trong bảng user_positions
+  ensureUserPositionsPopulated();
 
   // Ensure common_criteria does not have a global UNIQUE constraint on code
   try {
@@ -899,6 +921,43 @@ function getAccessibleUserIds(viewerUserId) {
   return Array.from(accessibleSet);
 }
 
+/**
+ * Đảm bảo mọi người dùng đều có ít nhất 1 chức vụ chính trong bảng user_positions
+ */
+function ensureUserPositionsPopulated() {
+  try {
+    const { randomUUID } = require('crypto');
+    const usersWithoutPositions = db.prepare(`
+      SELECT u.* FROM users u 
+      WHERE NOT EXISTS (SELECT 1 FROM user_positions p WHERE p.user_id = u.id)
+    `).all();
+
+    if (usersWithoutPositions.length > 0) {
+      const insertPos = db.prepare(`
+        INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, role_id)
+        VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+      `);
+      for (const u of usersWithoutPositions) {
+        if (u.dept_id) {
+          const posTitle = u.gov_title || u.party_title || u.union_title || 'Cán bộ';
+          insertPos.run(
+            randomUUID(),
+            u.id,
+            u.dept_id,
+            posTitle,
+            u.gov_title ? 'chinh_quyen' : (u.party_title ? 'dang' : 'doan_the'),
+            u.management_role || 'nhan_vien',
+            u.role_id || null
+          );
+        }
+      }
+      console.log(`[Migration] Đã tự động tạo chức vụ chính cho ${usersWithoutPositions.length} cán bộ vào user_positions`);
+    }
+  } catch (e) {
+    console.error('[Migration] Lỗi khởi tạo user_positions:', e.message);
+  }
+}
+
 module.exports = {
   db,
   dbPath,
@@ -906,6 +965,7 @@ module.exports = {
   checkpointDatabase,
   createBackup,
   initDatabase,
+  ensureUserPositionsPopulated,
   getDepartmentDescendantIds,
   getAccessibleUserIds
 };

@@ -556,7 +556,9 @@ app.get('/api/departments', (req, res) => {
            p.name as parent_name,
            u.full_name as leader_name,
            (SELECT COUNT(*) FROM departments c WHERE c.parent_id = d.id AND (c.is_active IS NULL OR c.is_active = 1)) as sub_dept_count,
-           (SELECT COUNT(*) FROM users m WHERE m.dept_id = d.id AND (m.is_active IS NULL OR m.is_active = 1)) as user_count
+           (SELECT COUNT(DISTINCT m.id) FROM users m 
+            LEFT JOIN user_positions up ON up.user_id = m.id
+            WHERE (m.dept_id = d.id OR up.dept_id = d.id) AND (m.is_active IS NULL OR m.is_active = 1)) as user_count
     FROM departments d
     LEFT JOIN departments p ON d.parent_id = p.id
     LEFT JOIN users u ON d.leader_id = u.id
@@ -721,8 +723,35 @@ app.delete('/api/roles/:id', requireAdmin, (req, res) => {
 });
 
 // -------------------------------------------------------------
-// Users Management
+// Users Management & Positions
 // -------------------------------------------------------------
+function attachPositionsToUsers(users) {
+  if (!Array.isArray(users) || users.length === 0) return users;
+  const userIds = users.map(u => u.id).filter(Boolean);
+  if (userIds.length === 0) return users;
+
+  const placeholders = userIds.map(() => '?').join(',');
+  const allPositions = db.prepare(`
+    SELECT p.*, d.name as dept_name, d.code as dept_code, r.name as role_name
+    FROM user_positions p
+    LEFT JOIN departments d ON p.dept_id = d.id
+    LEFT JOIN roles r ON p.role_id = r.id
+    WHERE p.user_id IN (${placeholders})
+    ORDER BY p.is_primary DESC, p.created_at ASC
+  `).all(...userIds);
+
+  const posMap = {};
+  for (const p of allPositions) {
+    if (!posMap[p.user_id]) posMap[p.user_id] = [];
+    posMap[p.user_id].push(p);
+  }
+
+  for (const u of users) {
+    u.positions = posMap[u.id] || [];
+  }
+  return users;
+}
+
 app.get('/api/users', (req, res) => {
   const viewerId = getViewerId(req);
   const accessibleUserIds = getAccessibleUserIds(viewerId);
@@ -756,8 +785,23 @@ app.get('/api/users', (req, res) => {
     params.push(...accessibleUserIds);
   }
 
+  // Lọc theo phân cấp đơn vị (hỗ trợ cả đơn vị trực tiếp và các chức vụ kiêm nhiệm)
+  const { dept_id, include_children } = req.query;
+  if (dept_id && dept_id !== 'ALL') {
+    if (include_children === 'true') {
+      const descendantDeptIds = getDepartmentDescendantIds(dept_id);
+      const deptPlaceholders = descendantDeptIds.map(() => '?').join(',');
+      query += ` AND (u.dept_id IN (${deptPlaceholders}) OR EXISTS (SELECT 1 FROM user_positions up WHERE up.user_id = u.id AND up.dept_id IN (${deptPlaceholders})))`;
+      params.push(...descendantDeptIds, ...descendantDeptIds);
+    } else {
+      query += ` AND (u.dept_id = ? OR EXISTS (SELECT 1 FROM user_positions up WHERE up.user_id = u.id AND up.dept_id = ?))`;
+      params.push(dept_id, dept_id);
+    }
+  }
+
   query += ` ORDER BY u.role DESC, u.full_name ASC`;
   const users = db.prepare(query).all(...params);
+  attachPositionsToUsers(users);
   users.sort(compareUsersByPositionAndName);
   res.json(users);
 });
@@ -1064,6 +1108,52 @@ app.post('/api/admin/users', requireCanManageUsers, async (req, res) => {
   );
 
   const newUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+
+  // Khởi tạo các chức vụ cho cán bộ mới
+  if (Array.isArray(req.body.positions) && req.body.positions.length > 0) {
+    const insertPos = db.prepare(`
+      INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, role_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    let hasPrimary = false;
+    for (const pos of req.body.positions) {
+      if (pos.dept_id && pos.position_title) {
+        const isPrim = (pos.is_primary && !hasPrimary) ? 1 : 0;
+        if (isPrim) hasPrimary = true;
+        insertPos.run(
+          pos.id || uuidv4(),
+          id,
+          pos.dept_id,
+          pos.position_title,
+          pos.position_type || 'chinh_quyen',
+          isPrim,
+          pos.management_role || effectiveMgmtRole || 'nhan_vien',
+          pos.role_id || effectiveRoleId || null
+        );
+      }
+    }
+    if (!hasPrimary) {
+      const firstPos = db.prepare('SELECT id, dept_id, position_title FROM user_positions WHERE user_id = ? LIMIT 1').get(id);
+      if (firstPos) {
+        db.prepare('UPDATE user_positions SET is_primary = 1 WHERE id = ?').run(firstPos.id);
+        db.prepare('UPDATE users SET dept_id = ?, gov_title = ? WHERE id = ?').run(firstPos.dept_id, firstPos.position_title, id);
+      }
+    }
+  } else if (dept_id) {
+    db.prepare(`
+      INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, role_id)
+      VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+    `).run(
+      uuidv4(),
+      id,
+      dept_id,
+      gov_title || party_title || union_title || 'Cán bộ',
+      gov_title ? 'chinh_quyen' : (party_title ? 'dang' : 'doan_the'),
+      effectiveMgmtRole || 'nhan_vien',
+      effectiveRoleId || null
+    );
+  }
+
   await syncDirectUserToSupabase(newUser);
 
   res.json({ success: true, id, message: 'Đã thêm cán bộ nhân viên thành công' });
@@ -1076,7 +1166,7 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
   const { 
     full_name, role, target_role, role_id, manager_id,
     management_role, final_evaluator_id,
-    party_title, gov_title, union_title, dept_id, birth_date, gender, phone, email, is_active, password 
+    party_title, gov_title, union_title, dept_id, birth_date, gender, phone, email, is_active, password, positions 
   } = req.body;
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
@@ -1120,6 +1210,68 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
     effectiveTargetRole = 'admin';
   }
 
+  // Quản lý danh sách chức vụ kiêm nhiệm / đa chức vụ nếu client truyền lên
+  let targetDeptId = dept_id || user.dept_id;
+  let targetGovTitle = gov_title !== undefined ? gov_title : user.gov_title;
+  let targetMgmtRole = management_role !== undefined ? management_role : (user.management_role || 'nhan_vien');
+
+  if (Array.isArray(positions) && positions.length > 0) {
+    db.prepare('DELETE FROM user_positions WHERE user_id = ?').run(id);
+    const insertPos = db.prepare(`
+      INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, role_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    let primaryFound = false;
+    for (const pos of positions) {
+      if (pos.dept_id && pos.position_title) {
+        const isPrim = (pos.is_primary && !primaryFound) ? 1 : 0;
+        if (isPrim) {
+          primaryFound = true;
+          targetDeptId = pos.dept_id;
+          targetGovTitle = pos.position_title;
+          targetMgmtRole = pos.management_role || targetMgmtRole;
+        }
+        insertPos.run(
+          pos.id || uuidv4(),
+          id,
+          pos.dept_id,
+          pos.position_title,
+          pos.position_type || 'chinh_quyen',
+          isPrim,
+          pos.management_role || targetMgmtRole,
+          pos.role_id || effectiveRoleId || null
+        );
+      }
+    }
+    if (!primaryFound) {
+      const firstPos = db.prepare('SELECT id, dept_id, position_title, management_role FROM user_positions WHERE user_id = ? LIMIT 1').get(id);
+      if (firstPos) {
+        db.prepare('UPDATE user_positions SET is_primary = 1 WHERE id = ?').run(firstPos.id);
+        targetDeptId = firstPos.dept_id;
+        targetGovTitle = firstPos.position_title;
+        targetMgmtRole = firstPos.management_role || targetMgmtRole;
+      }
+    }
+  } else if (dept_id || gov_title) {
+    // Nếu cập nhật đơn lẻ, cập nhật bản ghi chức vụ chính tương ứng
+    const primPos = db.prepare('SELECT id FROM user_positions WHERE user_id = ? AND is_primary = 1').get(id);
+    if (primPos) {
+      db.prepare(`
+        UPDATE user_positions
+        SET dept_id = COALESCE(?, dept_id),
+            position_title = COALESCE(?, position_title),
+            management_role = COALESCE(?, management_role),
+            updated_at = datetime('now', 'localtime')
+        WHERE id = ?
+      `).run(dept_id, gov_title, management_role, primPos.id);
+    } else if (dept_id) {
+      db.prepare(`
+        INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role)
+        VALUES (?, ?, ?, ?, 'chinh_quyen', 1, ?)
+      `).run(uuidv4(), id, dept_id, gov_title || 'Cán bộ', targetMgmtRole);
+    }
+  }
+
   let updateQuery = `
     UPDATE users 
     SET full_name = ?, role = ?, target_role = ?, role_id = ?, manager_id = ?,
@@ -1130,12 +1282,12 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
   const params = [
     full_name || user.full_name, effectiveRole, effectiveTargetRole,
     effectiveRoleId || null, manager_id !== undefined ? manager_id : user.manager_id,
-    management_role !== undefined ? management_role : (user.management_role || 'nhan_vien'),
+    targetMgmtRole,
     final_evaluator_id !== undefined ? final_evaluator_id : user.final_evaluator_id,
     party_title !== undefined ? party_title : user.party_title,
-    gov_title !== undefined ? gov_title : user.gov_title,
+    targetGovTitle,
     union_title !== undefined ? union_title : user.union_title,
-    dept_id || user.dept_id,
+    targetDeptId,
     birth_date || user.birth_date, gender || user.gender, phone !== undefined ? phone : user.phone,
     email !== undefined ? email : user.email, is_active !== undefined ? is_active : user.is_active
   ];
@@ -1153,8 +1305,83 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
   const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   await syncDirectUserToSupabase(updatedUser);
 
-  res.json({ success: true, message: 'Đã cập nhật thông tin cán bộ thành công' });
+  res.json({ success: true, message: 'Đã cập nhật thông tin cán bộ và chức vụ thành công' });
   triggerBackgroundSupabaseSync(300);
+});
+
+// -------------------------------------------------------------
+// User Positions Direct Management API
+// -------------------------------------------------------------
+app.get('/api/users/:id/positions', (req, res) => {
+  const { id } = req.params;
+  const positions = db.prepare(`
+    SELECT p.*, d.name as dept_name, d.code as dept_code, r.name as role_name
+    FROM user_positions p
+    LEFT JOIN departments d ON p.dept_id = d.id
+    LEFT JOIN roles r ON p.role_id = r.id
+    WHERE p.user_id = ?
+    ORDER BY p.is_primary DESC, p.created_at ASC
+  `).all(id);
+  res.json(positions);
+});
+
+app.post('/api/users/:id/positions', requireCanManageUsers, (req, res) => {
+  const { id } = req.params;
+  const { dept_id, position_title, position_type, is_primary, management_role, role_id, notes } = req.body;
+  if (!dept_id || !position_title) {
+    return res.status(400).json({ success: false, message: 'Thiếu đơn vị hoặc chức danh công việc' });
+  }
+  const posId = uuidv4();
+  if (is_primary) {
+    db.prepare('UPDATE user_positions SET is_primary = 0 WHERE user_id = ?').run(id);
+    db.prepare('UPDATE users SET dept_id = ?, gov_title = ? WHERE id = ?').run(dept_id, position_title, id);
+  }
+  db.prepare(`
+    INSERT INTO user_positions (id, user_id, dept_id, position_title, position_type, is_primary, management_role, role_id, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(posId, id, dept_id, position_title, position_type || 'chinh_quyen', is_primary ? 1 : 0, management_role || 'nhan_vien', role_id || null, notes || '');
+  
+  res.json({ success: true, id: posId, message: 'Đã thêm chức vụ thành công' });
+});
+
+app.put('/api/users/:id/positions/:posId', requireCanManageUsers, (req, res) => {
+  const { id, posId } = req.params;
+  const { dept_id, position_title, position_type, is_primary, management_role, role_id, notes } = req.body;
+  const existing = db.prepare('SELECT * FROM user_positions WHERE id = ? AND user_id = ?').get(posId, id);
+  if (!existing) return res.status(404).json({ success: false, message: 'Không tìm thấy chức vụ' });
+
+  if (is_primary) {
+    db.prepare('UPDATE user_positions SET is_primary = 0 WHERE user_id = ?').run(id);
+    db.prepare('UPDATE users SET dept_id = ?, gov_title = ? WHERE id = ?').run(dept_id || existing.dept_id, position_title || existing.position_title, id);
+  }
+  db.prepare(`
+    UPDATE user_positions
+    SET dept_id = COALESCE(?, dept_id),
+        position_title = COALESCE(?, position_title),
+        position_type = COALESCE(?, position_type),
+        is_primary = COALESCE(?, is_primary),
+        management_role = COALESCE(?, management_role),
+        role_id = COALESCE(?, role_id),
+        notes = COALESCE(?, notes),
+        updated_at = datetime('now', 'localtime')
+    WHERE id = ? AND user_id = ?
+  `).run(dept_id, position_title, position_type, is_primary !== undefined ? (is_primary ? 1 : 0) : existing.is_primary, management_role, role_id, notes, posId, id);
+
+  res.json({ success: true, message: 'Đã cập nhật chức vụ thành công' });
+});
+
+app.delete('/api/users/:id/positions/:posId', requireCanManageUsers, (req, res) => {
+  const { id, posId } = req.params;
+  const count = db.prepare('SELECT COUNT(*) as count FROM user_positions WHERE user_id = ?').get(id).count;
+  if (count <= 1) {
+    return res.status(400).json({ success: false, message: 'Không thể xóa chức vụ duy nhất của cán bộ' });
+  }
+  const target = db.prepare('SELECT is_primary FROM user_positions WHERE id = ? AND user_id = ?').get(posId, id);
+  if (target?.is_primary) {
+    return res.status(400).json({ success: false, message: 'Không thể xóa chức vụ chính. Vui lòng gán chức vụ chính khác trước khi xóa.' });
+  }
+  db.prepare('DELETE FROM user_positions WHERE id = ? AND user_id = ?').run(posId, id);
+  res.json({ success: true, message: 'Đã xóa chức vụ kiêm nhiệm thành công' });
 });
 
 // Admin / Unit Admin: Delete or deactivate user

@@ -1247,12 +1247,46 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 4.9 */}
-              <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
-                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
+              {/* Version 5.0 */}
+              <div className="relative pl-6 border-l-2 border-indigo-600 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-indigo-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.9</span>
-                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Thiết Kế Lại B2 Nộp Sản Phẩm, Tăng Cỡ Chữ & Tối Ưu Mobile/Tablet)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-xs font-bold">Phiên bản 5.0</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Đổi Tên Quản Lý Người Dùng, Cây Phân Cấp Đơn Vị & Hỗ Trợ Đa Chức Vụ / Kiêm Nhiệm)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Đổi Tên Quản Lý Phân Quyền Thành "Quản Lý Người Dùng", Quản Lý Người Dùng Theo Phân Cấp Đơn Vị (Hierarchical Organizational Unit Tree), Hỗ Trợ Cán Bộ Đa Chức Vụ / Kiêm Nhiệm Tại Một Hoặc Nhiều Đơn Vị Theo Chuẩn iCPV TP.HCM
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Đổi tên phân hệ Quản lý phân quyền thành "Quản lý người dùng":</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Đồng bộ tên gọi trên toàn bộ thanh điều hướng (Sidebar), tiêu đề trang (App title), biểu tượng và mô tả phân hệ.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Quản lý Người dùng theo Cây Phân Cấp Đơn vị (Hierarchical Unit Tree):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Tích hợp cây phân cấp tổ chức cơ quan ở cột bên trái: hiển thị mã phân cấp chuẩn iCPV (ví dụ: A29.xx, BTC.TU...), tên đơn vị, số lượng cán bộ và hỗ trợ mở rộng/thu gọn đa tầng.</li>
+                      <li>Bộ lọc thông minh: Lựa chọn xem cán bộ theo đơn vị trực tiếp hoặc bật tùy chọn "Bao gồm cả các đơn vị cấp con trực thuộc" để xem toàn bộ cán bộ thuộc nhánh tổ chức.</li>
+                      <li>Modal quản lý cơ cấu tổ chức: Thêm, sửa, xóa đơn vị, thiết lập đơn vị cấp trên, cơ quan chủ quản và lãnh đạo phụ trách.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Hỗ trợ Cán bộ Đa Chức Vụ / Kiêm nhiệm (Multi-position Support):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Tuân thủ đúng hướng dẫn triển khai iCPV TP.HCM và tài liệu hướng dẫn PM đánh giá cán bộ: 1 cán bộ có thể được phân công 1 hoặc nhiều chức vụ ở 1 hoặc nhiều đơn vị khác nhau.</li>
+                      <li>Đánh dấu rõ ràng "Là chức vụ mặc định" (chức vụ chính) và các chức vụ kiêm nhiệm (chính quyền, Đảng, đoàn thể).</li>
+                      <li>Bảng danh sách và thẻ di động hiển thị nổi bật Chức vụ chính kèm huy hiệu Chức vụ kiêm nhiệm tại các đơn vị liên quan.</li>
+                      <li>Tương thích ngược 100% với hệ thống chấm điểm KPI, tự đánh giá và xuất báo cáo hiện hành.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 4.9 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-300 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 4.9</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Thiết Kế Lại Toàn Diện Màn Hình Nộp Sản Phẩm Công Việc, Form Cập Nhật Dạng Accordion Trực Tiếp, Dự Báo Điểm KPI Thời Gian Thực, Tăng Cỡ Chữ Toàn Hệ Thống (+1 Size) & Tối Ưu Giao Diện Di Động / Máy Tính Bảng

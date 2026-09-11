@@ -299,8 +299,8 @@ export default function App() {
       subtitle: 'Biểu mẫu chuẩn Mẫu 01-A (CBQL), Mẫu 01-B (CBNV), Báo cáo công việc và Mẫu 02' 
     },
     users_mgmt: { 
-      title: 'Quản lý phân quyền', 
-      subtitle: 'Quản lý tài khoản, chức vụ, phân cấp vai trò Admin, CBQL, CBNV và mẫu đánh giá áp dụng' 
+      title: 'Quản lý người dùng', 
+      subtitle: 'Quản lý cơ cấu đơn vị, danh sách cán bộ theo phân cấp tổ chức, đa chức vụ kiêm nhiệm và vai trò hệ thống' 
     },
     system_config: { 
       title: 'Cấu hình', 

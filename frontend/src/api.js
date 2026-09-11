@@ -62,7 +62,10 @@ export const api = {
 
   // Periods, Users, Depts, Roles, Axes
   getPeriods: () => fetchApi('/periods'),
-  getDepartments: () => fetchApi('/departments'),
+  getDepartments: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return fetchApi(`/departments${query ? `?${query}` : ''}`);
+  },
   createDepartment: (data) => fetchApi('/departments', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -495,7 +498,10 @@ export const api = {
   },
 
   // Admin User Management
-  getAdminUsers: () => fetchApi('/users'),
+  getAdminUsers: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return fetchApi(`/users${query ? `?${query}` : ''}`);
+  },
   getUserTemplateUrl: () => {
     const viewerId = getViewerId();
     return `${BASE_URL}/admin/users/template${viewerId ? `?viewer_id=${encodeURIComponent(viewerId)}` : ''}`;
@@ -568,6 +574,22 @@ export const api = {
       body: JSON.stringify(data),
     });
   },
+
+  // User Positions (Đa chức vụ / Kiêm nhiệm)
+  getUserPositions: (userId) => fetchApi(`/users/${userId}/positions`),
+  addUserPosition: (userId, data) => fetchApi(`/users/${userId}/positions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
+  updateUserPosition: (userId, posId, data) => fetchApi(`/users/${userId}/positions/${posId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
+  deleteUserPosition: (userId, posId) => fetchApi(`/users/${userId}/positions/${posId}`, {
+    method: 'DELETE',
+  }),
 
   // Admin System Config & Periods
   getAdminConfigs: () => fetchApi('/admin/configs'),

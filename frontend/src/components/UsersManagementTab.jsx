@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FileSpreadsheet, 
   Upload, 
@@ -21,7 +21,17 @@ import {
   User,
   Sparkles,
   Edit,
-  Users as UsersIcon
+  Users as UsersIcon,
+  FolderTree,
+  ChevronRight,
+  ChevronDown,
+  Briefcase,
+  Layers,
+  Search,
+  Check,
+  Filter,
+  SlidersHorizontal,
+  ChevronLeft
 } from 'lucide-react';
 import { api } from '../api';
 import UserGroupManagementModal from './UserGroupManagementModal';
@@ -38,7 +48,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
           </div>
           <h2 className="text-xl font-bold text-slate-900">Truy cập bị từ chối (403 Forbidden)</h2>
           <p className="text-sm text-slate-600 max-w-md mx-auto">
-            Bạn không có quyền quản lý người dùng và phân quyền hệ thống. Phân hệ này chỉ dành riêng cho Quản trị viên (Admin).
+            Bạn không có quyền quản lý người dùng và phân cấp đơn vị. Phân hệ này chỉ dành riêng cho Quản trị viên (Admin).
           </p>
           <div className="pt-2">
             <span className="inline-block px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-semibold">
@@ -50,19 +60,28 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
     );
   }
 
+  // Data states
   const [users, setUsers] = useState([]);
+  const [localDepts, setLocalDepts] = useState(departments);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterRole, setFilterRole] = useState('ALL');
-  const [filterDept, setFilterDept] = useState('ALL');
-  const [filterStatus, setFilterStatus] = useState('ALL');
-
-  // User Groups state
   const [userGroups, setUserGroups] = useState([]);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
 
-  // Modal state
+  // Department tree & filtering state
+  const [selectedDeptId, setSelectedDeptId] = useState('ALL');
+  const [includeChildren, setIncludeChildren] = useState(true);
+  const [treeSearchTerm, setTreeSearchTerm] = useState('');
+  const [expandedDeptIds, setExpandedDeptIds] = useState(new Set());
+  const [isMobileTreeOpen, setIsMobileTreeOpen] = useState(false);
+
+  // Search and filter states for user table
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterRole, setFilterRole] = useState('ALL');
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [filterSecondary, setFilterSecondary] = useState('ALL'); // 'ALL' | 'HAS_SECONDARY' | 'PRIMARY_ONLY'
+
+  // User Add/Edit Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [formData, setFormData] = useState({
@@ -79,12 +98,31 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
     party_title: 'Đảng viên',
     gov_title: 'Chuyên viên',
     union_title: '',
+    birth_date: '1990-01-01',
+    gender: 'Nam',
     phone: '',
     email: '',
-    is_active: 1
+    is_active: 1,
+    positions: []
   });
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Department CRUD Modal state
+  const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
+  const [editingDept, setEditingDept] = useState(null);
+  const [deptFormData, setDeptFormData] = useState({
+    code: '',
+    name: '',
+    parent_id: '',
+    leader_id: '',
+    parent_agency: 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH',
+    location_name: 'TP. Hồ Chí Minh',
+    description: '',
+    is_active: 1
+  });
+  const [deptModalError, setDeptModalError] = useState('');
+  const [deptModalLoading, setDeptModalLoading] = useState(false);
 
   // Import Excel Modal state
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -93,14 +131,6 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
   const [importError, setImportError] = useState('');
-
-  const openImportModal = () => {
-    setImportFile(null);
-    setUpdateExisting(true);
-    setImportResult(null);
-    setImportError('');
-    setIsImportModalOpen(true);
-  };
 
   // Reset Password Modal state
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
@@ -111,6 +141,456 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
   const [resetSuccessMessage, setResetSuccessMessage] = useState('');
   const [resetErrorMessage, setResetErrorMessage] = useState('');
 
+  // Load initial data
+  const loadInitialData = async () => {
+    setLoading(true);
+    try {
+      const [usersData, rolesData, groupsData, deptsData] = await Promise.all([
+        api.getAdminUsers(),
+        api.getRoles(),
+        api.getUserGroups().catch(() => []),
+        api.getDepartments().catch(() => departments)
+      ]);
+      setUsers(usersData || []);
+      setRoles(rolesData || []);
+      setUserGroups(groupsData || []);
+      if (deptsData && deptsData.length > 0) {
+        setLocalDepts(deptsData);
+        // Default expand all departments in tree
+        setExpandedDeptIds(new Set(deptsData.map(d => d.id)));
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg('Không thể tải dữ liệu: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  // Update local departments if prop changes
+  useEffect(() => {
+    if (departments && departments.length > 0 && localDepts.length === 0) {
+      setLocalDepts(departments);
+      setExpandedDeptIds(new Set(departments.map(d => d.id)));
+    }
+  }, [departments]);
+
+  // Build department hierarchy tree
+  const deptTree = useMemo(() => {
+    const map = {};
+    const roots = [];
+
+    // Filter by treeSearchTerm if present
+    const filteredDepts = localDepts.filter(d => {
+      if (!treeSearchTerm.trim()) return true;
+      const term = treeSearchTerm.toLowerCase();
+      return (d.name && d.name.toLowerCase().includes(term)) ||
+             (d.code && d.code.toLowerCase().includes(term));
+    });
+
+    filteredDepts.forEach(d => {
+      map[d.id] = { ...d, children: [] };
+    });
+
+    filteredDepts.forEach(d => {
+      if (d.parent_id && map[d.parent_id]) {
+        map[d.parent_id].children.push(map[d.id]);
+      } else {
+        roots.push(map[d.id]);
+      }
+    });
+
+    return roots;
+  }, [localDepts, treeSearchTerm]);
+
+  // Helper to get all descendant IDs of a department
+  const getDescendantDeptIds = (deptId) => {
+    const result = [deptId];
+    const queue = [deptId];
+    while (queue.length > 0) {
+      const curr = queue.shift();
+      const children = localDepts.filter(d => d.parent_id === curr);
+      for (const child of children) {
+        if (!result.includes(child.id)) {
+          result.push(child.id);
+          queue.push(child.id);
+        }
+      }
+    }
+    return result;
+  };
+
+  // Toggle node expand/collapse
+  const toggleNodeExpand = (deptId, e) => {
+    e.stopPropagation();
+    setExpandedDeptIds(prev => {
+      const next = new Set(prev);
+      if (next.has(deptId)) {
+        next.delete(deptId);
+      } else {
+        next.add(deptId);
+      }
+      return next;
+    });
+  };
+
+  // Expand / Collapse all nodes
+  const expandAllNodes = () => {
+    setExpandedDeptIds(new Set(localDepts.map(d => d.id)));
+  };
+
+  const collapseAllNodes = () => {
+    setExpandedDeptIds(new Set());
+  };
+
+  // Selected department details
+  const selectedDeptObj = useMemo(() => {
+    if (selectedDeptId === 'ALL') return null;
+    return localDepts.find(d => d.id === selectedDeptId) || null;
+  }, [selectedDeptId, localDepts]);
+
+  const selectedDescendantsCount = useMemo(() => {
+    if (!selectedDeptObj) return 0;
+    const descIds = getDescendantDeptIds(selectedDeptObj.id);
+    return Math.max(0, descIds.length - 1);
+  }, [selectedDeptObj, localDepts]);
+
+  // Filter users based on search, role, status, secondary positions, and selected department
+  const filteredUsers = useMemo(() => {
+    const allowedDeptIds = selectedDeptId === 'ALL'
+      ? null
+      : includeChildren
+        ? getDescendantDeptIds(selectedDeptId)
+        : [selectedDeptId];
+
+    return users.filter(u => {
+      // 1. Search term (Name, Username, Phone, Positions)
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase();
+        const matchesName = u.full_name?.toLowerCase().includes(term);
+        const matchesUser = u.username?.toLowerCase().includes(term);
+        const matchesPhone = u.phone?.toLowerCase().includes(term);
+        const matchesGovTitle = u.gov_title?.toLowerCase().includes(term);
+        const matchesPos = u.positions?.some(p => 
+          p.position_title?.toLowerCase().includes(term) ||
+          p.dept_name?.toLowerCase().includes(term)
+        );
+        if (!matchesName && !matchesUser && !matchesPhone && !matchesGovTitle && !matchesPos) {
+          return false;
+        }
+      }
+
+      // 2. Department Tree selection (supports primary & secondary positions)
+      if (allowedDeptIds) {
+        const primaryMatch = allowedDeptIds.includes(u.dept_id);
+        const secondaryMatch = u.positions?.some(p => allowedDeptIds.includes(p.dept_id));
+        if (!primaryMatch && !secondaryMatch) {
+          return false;
+        }
+      }
+
+      // 3. Role filter
+      if (filterRole !== 'ALL' && u.role !== filterRole) {
+        return false;
+      }
+
+      // 4. Status filter
+      if (filterStatus === 'ACTIVE' && u.is_active === 0) return false;
+      if (filterStatus === 'INACTIVE' && u.is_active !== 0) return false;
+
+      // 5. Secondary position filter (Đa chức vụ / Kiêm nhiệm)
+      if (filterSecondary === 'HAS_SECONDARY') {
+        const secondaryCount = (u.positions || []).filter(p => !p.is_primary).length;
+        if (secondaryCount === 0) return false;
+      } else if (filterSecondary === 'PRIMARY_ONLY') {
+        const secondaryCount = (u.positions || []).filter(p => !p.is_primary).length;
+        if (secondaryCount > 0) return false;
+      }
+
+      return true;
+    }).sort(compareUsersByPositionAndName);
+  }, [users, selectedDeptId, includeChildren, searchTerm, filterRole, filterStatus, filterSecondary, localDepts]);
+
+  // Handle Role selection in Add/Edit user form
+  const handleRoleChange = (selRoleId) => {
+    const selRole = roles.find(r => r.id === selRoleId);
+    let newRole = 'cbnv';
+    let newTgtRole = formData.target_role || 'cbnv';
+    if (selRole?.code === 'admin' || selRole?.code === 'admin_donvi') {
+      newRole = 'admin';
+      newTgtRole = 'admin';
+    } else if (selRole?.code === 'cbql_phong' || selRole?.code === 'ld_coquan' || selRole?.code === 'hieu_pho' || selRole?.data_scope === 'dept_tree' || selRole?.data_scope === 'all') {
+      newRole = 'cbql';
+      newTgtRole = (formData.target_role && formData.target_role !== 'admin') ? formData.target_role : 'cbql';
+    } else if (selRole?.code === 'to_truong' || selRole?.data_scope === 'subordinates') {
+      newRole = 'cbql';
+      newTgtRole = (formData.target_role && formData.target_role !== 'admin') ? formData.target_role : 'cbnv';
+    } else {
+      newRole = 'cbnv';
+      newTgtRole = (formData.target_role && formData.target_role !== 'admin') ? formData.target_role : 'cbnv';
+    }
+    setFormData(prev => ({
+      ...prev,
+      role_id: selRoleId,
+      role: newRole,
+      target_role: newTgtRole
+    }));
+  };
+
+  // Open Modal to Add New User
+  const openAddModal = () => {
+    setEditingUser(null);
+    const defaultRoleId = roles.find(r => r.code === 'cbnv')?.id || roles[0]?.id || '';
+    const initialDeptId = (selectedDeptId !== 'ALL' ? selectedDeptId : (localDepts[0]?.id || ''));
+
+    const initialPositions = [{
+      id: 'temp-' + Date.now(),
+      dept_id: initialDeptId,
+      position_title: 'Chuyên viên',
+      position_type: 'chinh_quyen',
+      management_role: 'nhan_vien',
+      is_primary: 1,
+      notes: ''
+    }];
+
+    setFormData({
+      username: '',
+      password: '',
+      full_name: '',
+      dept_id: initialDeptId,
+      role_id: defaultRoleId,
+      manager_id: '',
+      final_evaluator_id: '',
+      management_role: 'nhan_vien',
+      role: 'cbnv',
+      target_role: 'cbnv',
+      party_title: 'Đảng viên',
+      gov_title: 'Chuyên viên',
+      union_title: '',
+      birth_date: '1990-01-01',
+      gender: 'Nam',
+      phone: '',
+      email: '',
+      is_active: 1,
+      positions: initialPositions
+    });
+    setErrorMsg('');
+    setSuccessMsg('');
+    setIsModalOpen(true);
+  };
+
+  // Open Modal to Edit User
+  const openEditModal = (user) => {
+    setEditingUser(user);
+    const isExempt = user.role === 'admin' || user.role === 'admin_donvi' || user.role_code === 'admin_donvi' || user.role_id === 'role-admin-donvi';
+
+    // Prepare positions array
+    let userPositions = [];
+    if (user.positions && user.positions.length > 0) {
+      userPositions = user.positions.map(p => ({
+        id: p.id,
+        dept_id: p.dept_id || user.dept_id || localDepts[0]?.id || '',
+        position_title: p.position_title || user.gov_title || 'Chuyên viên',
+        position_type: p.position_type || 'chinh_quyen',
+        management_role: p.management_role || user.management_role || 'nhan_vien',
+        is_primary: p.is_primary ? 1 : 0,
+        notes: p.notes || ''
+      }));
+      // Ensure at least one position is primary
+      if (!userPositions.some(p => p.is_primary === 1)) {
+        userPositions[0].is_primary = 1;
+      }
+    } else {
+      userPositions = [{
+        id: 'pos-main-' + user.id,
+        dept_id: user.dept_id || localDepts[0]?.id || '',
+        position_title: user.gov_title || 'Chuyên viên',
+        position_type: 'chinh_quyen',
+        management_role: user.management_role || (user.role === 'cbql' ? 'quan_ly' : 'nhan_vien'),
+        is_primary: 1,
+        notes: ''
+      }];
+    }
+
+    const primaryPos = userPositions.find(p => p.is_primary === 1) || userPositions[0];
+
+    setFormData({
+      username: user.username,
+      password: '',
+      full_name: user.full_name,
+      dept_id: primaryPos.dept_id,
+      role_id: user.role_id || roles.find(r => r.code === user.role)?.id || '',
+      manager_id: user.manager_id || '',
+      final_evaluator_id: user.final_evaluator_id || '',
+      management_role: primaryPos.management_role || user.management_role || (user.role === 'cbql' ? 'quan_ly' : 'nhan_vien'),
+      role: user.role || 'cbnv',
+      target_role: isExempt ? 'admin' : (user.target_role || (user.role === 'cbnv' ? 'cbnv' : 'cbql')),
+      party_title: user.party_title || '',
+      gov_title: primaryPos.position_title || user.gov_title || '',
+      union_title: user.union_title || '',
+      birth_date: user.birth_date || '1990-01-01',
+      gender: user.gender || 'Nam',
+      phone: user.phone || '',
+      email: user.email || '',
+      is_active: user.is_active !== 0 ? 1 : 0,
+      positions: userPositions
+    });
+    setErrorMsg('');
+    setSuccessMsg('');
+    setIsModalOpen(true);
+  };
+
+  // Position manipulation in Add/Edit User Modal
+  const handleAddPositionRow = () => {
+    const newPos = {
+      id: 'temp-' + Date.now(),
+      dept_id: selectedDeptId !== 'ALL' ? selectedDeptId : (localDepts[0]?.id || ''),
+      position_title: 'Chuyên viên',
+      position_type: 'chinh_quyen',
+      management_role: 'nhan_vien',
+      is_primary: 0,
+      notes: ''
+    };
+    setFormData(prev => ({
+      ...prev,
+      positions: [...prev.positions, newPos]
+    }));
+  };
+
+  const handleRemovePositionRow = (index) => {
+    if (formData.positions.length <= 1) {
+      alert('Cán bộ phải có ít nhất 1 chức vụ công tác!');
+      return;
+    }
+    const target = formData.positions[index];
+    const newPositions = formData.positions.filter((_, idx) => idx !== index);
+
+    // If removed position was primary, set the first remaining position as primary
+    if (target.is_primary === 1 && newPositions.length > 0) {
+      newPositions[0].is_primary = 1;
+      setFormData(prev => ({
+        ...prev,
+        positions: newPositions,
+        dept_id: newPositions[0].dept_id,
+        gov_title: newPositions[0].position_title,
+        management_role: newPositions[0].management_role
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, positions: newPositions }));
+    }
+  };
+
+  const handleSetPrimaryPosition = (index) => {
+    const updated = formData.positions.map((p, idx) => ({
+      ...p,
+      is_primary: idx === index ? 1 : 0
+    }));
+    const primary = updated[index];
+    setFormData(prev => ({
+      ...prev,
+      positions: updated,
+      dept_id: primary.dept_id,
+      gov_title: primary.position_title,
+      management_role: primary.management_role
+    }));
+  };
+
+  const handlePositionChange = (index, field, value) => {
+    setFormData(prev => {
+      const updated = [...prev.positions];
+      updated[index] = { ...updated[index], [field]: value };
+
+      // If updating primary position, mirror to main formData fields
+      const stateUpdates = { positions: updated };
+      if (updated[index].is_primary === 1) {
+        if (field === 'dept_id') stateUpdates.dept_id = value;
+        if (field === 'position_title') stateUpdates.gov_title = value;
+        if (field === 'management_role') stateUpdates.management_role = value;
+      }
+      return { ...prev, ...stateUpdates };
+    });
+  };
+
+  // Submit Add / Edit User
+  const handleSubmitUser = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    try {
+      // Validation
+      if (!formData.positions || formData.positions.length === 0) {
+        setErrorMsg('Vui lòng gán ít nhất một chức vụ công tác cho cán bộ');
+        return;
+      }
+
+      // Ensure 1 primary position
+      let finalPositions = [...formData.positions];
+      if (!finalPositions.some(p => p.is_primary === 1)) {
+        finalPositions[0].is_primary = 1;
+      }
+      const primaryPos = finalPositions.find(p => p.is_primary === 1);
+
+      const payload = {
+        ...formData,
+        dept_id: primaryPos.dept_id,
+        gov_title: primaryPos.position_title,
+        management_role: primaryPos.management_role,
+        positions: finalPositions
+      };
+
+      if (editingUser) {
+        await api.updateAdminUser(editingUser.id, payload);
+        setSuccessMsg('Cập nhật hồ sơ và chức vụ cán bộ thành công!');
+      } else {
+        if (!formData.username || !formData.password || !formData.full_name) {
+          setErrorMsg('Vui lòng điền đủ Tên đăng nhập, Mật khẩu và Họ tên');
+          return;
+        }
+        await api.createAdminUser(payload);
+        setSuccessMsg('Thêm mới cán bộ và gán chức vụ thành công!');
+      }
+
+      setIsModalOpen(false);
+      await loadInitialData();
+      if (onReloadUsers) onReloadUsers();
+    } catch (err) {
+      setErrorMsg(err.message);
+    }
+  };
+
+  // Lock / Unlock user account
+  const handleToggleStatus = async (user, newStatus) => {
+    const actionText = newStatus === 1 ? 'mở khoá và kích hoạt lại' : 'khoá / ngừng kích hoạt';
+    if (!window.confirm(`Bạn có chắc chắn muốn ${actionText} tài khoản cán bộ "${user.full_name}"?`)) return;
+    try {
+      await api.toggleAdminUserStatus(user.id, newStatus);
+      await loadInitialData();
+      if (onReloadUsers) onReloadUsers();
+    } catch (err) {
+      alert('Lỗi: ' + err.message);
+    }
+  };
+
+  // Permanent delete user
+  const handlePermanentDelete = async (user) => {
+    const confirmMsg = `CẢNH BÁO XOÁ VĨNH VIỄN:\n\nBạn có chắc chắn muốn xoá hoàn toàn tài khoản cán bộ "${user.full_name}" (${user.username}) khỏi hệ thống và đồng bộ Supabase Cloud?\n\n- Toàn bộ chức vụ kiêm nhiệm, nhiệm vụ phân công và dữ liệu đánh giá kiểm thử liên quan sẽ được dọn dẹp triệt để.\n- Thao tác này KHÔNG THỂ khôi phục!`;
+    if (!window.confirm(confirmMsg)) return;
+    try {
+      const res = await api.deleteAdminUser(user.id, true);
+      alert(res.message || 'Đã xoá vĩnh viễn tài khoản cán bộ thành công');
+      await loadInitialData();
+      if (onReloadUsers) onReloadUsers();
+    } catch (err) {
+      alert('Lỗi khi xoá: ' + err.message);
+    }
+  };
+
+  // Reset Password Handlers
   const openResetPasswordModal = (user) => {
     setResettingUser(user);
     setResetPasswordInput('123456');
@@ -148,6 +628,15 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
     }
   };
 
+  // Excel Import Handlers
+  const openImportModal = () => {
+    setImportFile(null);
+    setUpdateExisting(true);
+    setImportResult(null);
+    setImportError('');
+    setIsImportModalOpen(true);
+  };
+
   const handleImportSubmit = async (e) => {
     e.preventDefault();
     if (!importFile) {
@@ -176,175 +665,90 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
     }
   };
 
-  const loadInitialData = async () => {
-    setLoading(true);
-    try {
-      const [usersData, rolesData, groupsData] = await Promise.all([
-        api.getAdminUsers(),
-        api.getRoles(),
-        api.getUserGroups().catch(() => [])
-      ]);
-      setUsers(usersData);
-      setRoles(rolesData);
-      setUserGroups(groupsData || []);
-    } catch (err) {
-      console.error(err);
-      setErrorMsg('Không thể tải danh sách CBNV: ' + err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  const handleRoleChange = (selRoleId) => {
-    const selRole = roles.find(r => r.id === selRoleId);
-    let newRole = 'cbnv';
-    let newTgtRole = formData.target_role || 'cbnv';
-    if (selRole?.code === 'admin' || selRole?.code === 'admin_donvi') {
-      newRole = 'admin';
-      newTgtRole = 'admin';
-    } else if (selRole?.code === 'cbql_phong' || selRole?.code === 'ld_coquan' || selRole?.code === 'hieu_pho' || selRole?.data_scope === 'dept_tree' || selRole?.data_scope === 'all') {
-      newRole = 'cbql';
-      newTgtRole = (formData.target_role && formData.target_role !== 'admin') ? formData.target_role : 'cbql';
-    } else if (selRole?.code === 'to_truong' || selRole?.data_scope === 'subordinates') {
-      newRole = 'cbql';
-      newTgtRole = (formData.target_role && formData.target_role !== 'admin') ? formData.target_role : 'cbnv';
-    } else {
-      newRole = 'cbnv';
-      newTgtRole = (formData.target_role && formData.target_role !== 'admin') ? formData.target_role : 'cbnv';
-    }
-    setFormData(prev => ({
-      ...prev,
-      role_id: selRoleId,
-      role: newRole,
-      target_role: newTgtRole
-    }));
-  };
-
-  const openAddModal = () => {
-    setEditingUser(null);
-    const defaultRoleId = roles.find(r => r.code === 'cbnv')?.id || roles[0]?.id || '';
-    setFormData({
-      username: '',
-      password: '',
-      full_name: '',
-      dept_id: departments[0]?.id || '',
-      role_id: defaultRoleId,
-      manager_id: '',
-      final_evaluator_id: '',
-      management_role: 'nhan_vien',
-      role: 'cbnv',
-      target_role: 'cbnv',
-      party_title: 'Đảng viên',
-      gov_title: 'Chuyên viên',
-      union_title: '',
-      birth_date: '1990-01-01',
-      gender: 'Nam',
-      phone: '',
-      email: '',
+  // Department Management Handlers
+  const openAddDeptModal = (parentId = '') => {
+    setEditingDept(null);
+    setDeptFormData({
+      code: '',
+      name: '',
+      parent_id: parentId || (selectedDeptId !== 'ALL' ? selectedDeptId : ''),
+      leader_id: '',
+      parent_agency: 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH',
+      location_name: 'TP. Hồ Chí Minh',
+      description: '',
       is_active: 1
     });
-    setErrorMsg('');
-    setSuccessMsg('');
-    setIsModalOpen(true);
+    setDeptModalError('');
+    setIsDeptModalOpen(true);
   };
 
-  const openEditModal = (user) => {
-    setEditingUser(user);
-    const isExempt = user.role === 'admin' || user.role === 'admin_donvi' || user.role_code === 'admin_donvi' || user.role_id === 'role-admin-donvi';
-    setFormData({
-      username: user.username,
-      password: '',
-      full_name: user.full_name,
-      dept_id: user.dept_id || '',
-      role_id: user.role_id || roles.find(r => r.code === user.role)?.id || '',
-      manager_id: user.manager_id || '',
-      final_evaluator_id: user.final_evaluator_id || '',
-      management_role: user.management_role || (user.role === 'cbql' ? 'quan_ly' : 'nhan_vien'),
-      role: user.role || 'cbnv',
-      target_role: isExempt ? 'admin' : (user.target_role || (user.role === 'cbnv' ? 'cbnv' : 'cbql')),
-      party_title: user.party_title || '',
-      gov_title: user.gov_title || '',
-      union_title: user.union_title || '',
-      birth_date: user.birth_date || '1990-01-01',
-      gender: user.gender || 'Nam',
-      phone: user.phone || '',
-      email: user.email || '',
-      is_active: user.is_active !== 0 ? 1 : 0
+  const openEditDeptModal = (dept, e) => {
+    if (e) e.stopPropagation();
+    setEditingDept(dept);
+    setDeptFormData({
+      code: dept.code || '',
+      name: dept.name || '',
+      parent_id: dept.parent_id || '',
+      leader_id: dept.leader_id || '',
+      parent_agency: dept.parent_agency || 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH',
+      location_name: dept.location_name || 'TP. Hồ Chí Minh',
+      description: dept.description || '',
+      is_active: dept.is_active !== 0 ? 1 : 0
     });
-    setErrorMsg('');
-    setSuccessMsg('');
-    setIsModalOpen(true);
+    setDeptModalError('');
+    setIsDeptModalOpen(true);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSaveDept = async (e) => {
     e.preventDefault();
-    setErrorMsg('');
-    setSuccessMsg('');
-
+    if (!deptFormData.code.trim() || !deptFormData.name.trim()) {
+      setDeptModalError('Mã và tên đơn vị không được để trống');
+      return;
+    }
+    setDeptModalLoading(true);
+    setDeptModalError('');
     try {
-      if (editingUser) {
-        await api.updateAdminUser(editingUser.id, formData);
-        setSuccessMsg('Cập nhật thông tin cán bộ thành công');
+      if (editingDept) {
+        await api.updateDepartment(editingDept.id, deptFormData);
       } else {
-        if (!formData.username || !formData.password || !formData.full_name) {
-          setErrorMsg('Vui lòng điền đủ Tên đăng nhập, Mật khẩu và Họ tên');
-          return;
-        }
-        await api.createAdminUser(formData);
-        setSuccessMsg('Thêm mới cán bộ thành công');
+        await api.createDepartment(deptFormData);
       }
-      setIsModalOpen(false);
+      setIsDeptModalOpen(false);
       await loadInitialData();
       if (onReloadUsers) onReloadUsers();
     } catch (err) {
-      setErrorMsg(err.message);
+      setDeptModalError(err.message || 'Lỗi lưu thông tin đơn vị');
+    } finally {
+      setDeptModalLoading(false);
     }
   };
 
-  const handleToggleStatus = async (user, newStatus) => {
-    const actionText = newStatus === 1 ? 'mở khoá và kích hoạt lại' : 'khoá / ngừng kích hoạt';
-    if (!window.confirm(`Bạn có chắc chắn muốn ${actionText} tài khoản cán bộ "${user.full_name}"?`)) return;
+  const handleDeleteDept = async (dept, e) => {
+    if (e) e.stopPropagation();
+    const hasChildren = localDepts.some(d => d.parent_id === dept.id);
+    if (hasChildren) {
+      alert(`Không thể xóa đơn vị "${dept.name}" vì đang có các đơn vị cấp con trực thuộc. Vui lòng chuyển hoặc xóa các đơn vị con trước!`);
+      return;
+    }
+    if (dept.user_count > 0) {
+      alert(`Không thể xóa đơn vị "${dept.name}" vì đang có ${dept.user_count} cán bộ công tác/kiêm nhiệm. Vui lòng chuyển cán bộ sang đơn vị khác trước!`);
+      return;
+    }
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa đơn vị "${dept.name}" (${dept.code}) khỏi cơ cấu tổ chức?`)) return;
+
     try {
-      await api.toggleAdminUserStatus(user.id, newStatus);
+      await api.deleteDepartment(dept.id);
+      if (selectedDeptId === dept.id) {
+        setSelectedDeptId('ALL');
+      }
       await loadInitialData();
       if (onReloadUsers) onReloadUsers();
     } catch (err) {
-      alert('Lỗi: ' + err.message);
+      alert('Lỗi khi xóa đơn vị: ' + err.message);
     }
   };
 
-  const handlePermanentDelete = async (user) => {
-    const confirmMsg = `CẢNH BÁO XOÁ VĨNH VIỄN:\n\nBạn có chắc chắn muốn xoá hoàn toàn tài khoản cán bộ "${user.full_name}" (${user.username}) khỏi hệ thống và đồng bộ Supabase Cloud?\n\n- Toàn bộ nhiệm vụ phân công và dữ liệu đánh giá kiểm thử liên quan sẽ được dọn dẹp triệt để.\n- Thao tác này KHÔNG THỂ khôi phục!`;
-    if (!window.confirm(confirmMsg)) return;
-    try {
-      const res = await api.deleteAdminUser(user.id, true);
-      alert(res.message || 'Đã xoá vĩnh viễn tài khoản cán bộ thành công');
-      await loadInitialData();
-      if (onReloadUsers) onReloadUsers();
-    } catch (err) {
-      alert('Lỗi khi xoá: ' + err.message);
-    }
-  };
-
-  const filteredUsers = users
-    .filter((u) => {
-      const matchesSearch =
-        u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.username?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesRole = filterRole === 'ALL' || u.role === filterRole;
-      const matchesDept = filterDept === 'ALL' || u.dept_id === filterDept;
-      const matchesStatus =
-        filterStatus === 'ALL' ||
-        (filterStatus === 'ACTIVE' && (u.is_active === 1 || u.is_active === undefined || u.is_active === null)) ||
-        (filterStatus === 'INACTIVE' && u.is_active === 0);
-      return matchesSearch && matchesRole && matchesDept && matchesStatus;
-    })
-    .sort(compareUsersByPositionAndName);
-
+  // Helper check if selected role is exempt from KPI evaluation
   const selectedRoleObj = roles.find(r => r.id === formData.role_id);
   const isSelectedRoleExempt = 
     formData.role === 'admin' || 
@@ -352,36 +756,116 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
     selectedRoleObj?.code === 'admin' || 
     selectedRoleObj?.code === 'admin_donvi';
 
+  // Recursive Tree Node Component
+  const TreeNode = ({ node, level = 0 }) => {
+    const hasChildren = node.children && node.children.length > 0;
+    const isExpanded = expandedDeptIds.has(node.id);
+    const isSelected = selectedDeptId === node.id;
+
+    return (
+      <div className="select-none">
+        <div 
+          onClick={() => setSelectedDeptId(node.id)}
+          className={`group flex items-center justify-between py-2 px-2.5 rounded-xl cursor-pointer transition-all text-xs font-medium ${
+            isSelected 
+              ? 'bg-indigo-600 text-white shadow-xs font-bold' 
+              : 'hover:bg-slate-100 text-slate-700'
+          }`}
+          style={{ paddingLeft: `${level * 16 + 10}px` }}
+        >
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            {hasChildren ? (
+              <button
+                type="button"
+                onClick={(e) => toggleNodeExpand(node.id, e)}
+                className={`p-0.5 rounded hover:bg-black/10 transition ${isSelected ? 'text-white' : 'text-slate-400'}`}
+              >
+                {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              </button>
+            ) : (
+              <span className="w-3.5 h-3.5 shrink-0 inline-block" />
+            )}
+
+            <Building2 className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-white' : 'text-indigo-600'}`} />
+            
+            <div className="min-w-0 flex-1 truncate">
+              <span className="truncate block" title={`${node.name} (${node.code})`}>
+                {node.name}
+              </span>
+              {node.code && (
+                <span className={`text-[10px] block font-mono ${isSelected ? 'text-indigo-100' : 'text-slate-400'}`}>
+                  {node.code}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0 ml-1">
+            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+              isSelected 
+                ? 'bg-white/20 text-white' 
+                : 'bg-slate-200/80 text-slate-600'
+            }`}>
+              {node.user_count || 0}
+            </span>
+
+            {/* Hover Actions for Dept */}
+            <button
+              type="button"
+              onClick={(e) => openEditDeptModal(node, e)}
+              className={`p-1 rounded opacity-0 group-hover:opacity-100 transition ${
+                isSelected ? 'hover:bg-white/20 text-white' : 'hover:bg-slate-200 text-slate-500'
+              }`}
+              title="Chỉnh sửa đơn vị"
+            >
+              <Edit className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+
+        {hasChildren && isExpanded && (
+          <div className="space-y-0.5 mt-0.5">
+            {node.children.map(child => (
+              <TreeNode key={child.id} node={child} level={level + 1} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header Banner */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <svg className="w-7 h-7 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-            Quản lý Phân quyền Hệ thống
+          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-50 text-indigo-700 rounded-xl border border-indigo-100 shadow-2xs">
+              <UsersIcon className="w-6 h-6" />
+            </div>
+            <span>Quản lý Người dùng & Cơ cấu Đơn vị</span>
           </h2>
           <p className="text-slate-500 text-sm mt-1">
-            Quản lý danh sách cán bộ, phân công vai trò (Admin, CBQL, CBNV) và mẫu đánh giá áp dụng (Mẫu 01-A, Mẫu 01-B).
+            Quản lý cơ cấu đơn vị tổ chức, danh sách cán bộ theo phân cấp, đa chức vụ kiêm nhiệm và vai trò đánh giá theo Hướng dẫn số 06-HD/BTCTU.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2.5">
+
+        {/* Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2">
           <a
             href={api.getUserTemplateUrl()}
             download="Mau_nhap_danh_sach_can_bo_KPI.xlsx"
-            className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3.5 py-2.5 rounded-lg border border-slate-300 transition shadow-xs cursor-pointer"
-            title="Tải file mẫu Excel chuẩn để nhập dữ liệu"
+            className="inline-flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 transition shadow-2xs cursor-pointer"
+            title="Tải file mẫu Excel chuẩn để nhập dữ liệu cán bộ"
           >
             <Download className="w-4 h-4 text-slate-600" />
-            <span>Tải file mẫu Excel</span>
+            <span>File mẫu Excel</span>
           </a>
 
           <button
             type="button"
             onClick={openImportModal}
-            className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg shadow-xs transition cursor-pointer"
+            className="inline-flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow-2xs transition cursor-pointer"
           >
             <FileSpreadsheet className="w-4 h-4 text-white" />
             <span>Nhập từ Excel</span>
@@ -390,471 +874,575 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
           <button
             type="button"
             onClick={() => setIsGroupModalOpen(true)}
-            className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3.5 py-2.5 rounded-lg border border-slate-300 transition shadow-xs cursor-pointer"
-            title="Quản lý nhóm người dùng tự tạo để giao việc và phân bổ văn bản"
+            className="inline-flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold px-3 py-2 rounded-xl border border-slate-200 transition shadow-2xs cursor-pointer"
+            title="Quản lý nhóm người dùng tự tạo để giao việc"
           >
             <UsersIcon className="w-4 h-4 text-slate-600" />
-            <span>Nhóm người dùng ({userGroups.length})</span>
+            <span>Nhóm ({userGroups.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openAddDeptModal()}
+            className="inline-flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-xs font-semibold px-3 py-2 rounded-xl shadow-2xs transition cursor-pointer"
+          >
+            <Building2 className="w-4 h-4 text-indigo-700" />
+            <span>+ Thêm Đơn vị</span>
           </button>
 
           <button
             onClick={openAddModal}
-            className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg shadow-xs transition cursor-pointer"
+            className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3.5 py-2 rounded-xl shadow-xs transition cursor-pointer"
           >
             <Plus className="w-4 h-4 text-white" />
-            <span>Thêm cán bộ mới</span>
+            <span>Thêm Cán bộ</span>
           </button>
         </div>
       </div>
 
-      {/* Permission Matrix Guide Card */}
-      <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-100 rounded-xl p-5 shadow-sm">
-        <h3 className="text-sm font-semibold text-indigo-900 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-          </svg>
-          Ma trận phân quyền & Mẫu đánh giá theo Hướng dẫn số 06-HD/BTCTU
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          <div className="bg-white p-3.5 rounded-lg border border-indigo-200/60 shadow-xs space-y-1.5">
-            <div className="font-bold text-slate-900 text-sm flex items-center justify-between">
-              <span className="text-rose-700">1. Quản trị viên (Admin)</span>
-              <span className="bg-rose-100 text-rose-800 px-2 py-0.5 rounded text-[11px]">Toàn quyền</span>
+      {/* Main Workspace Layout: 2 Columns (Left: Hierarchical Tree, Right: Users Table) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* Left Column: Hierarchical Department Tree (4 cols on lg, 3 cols on xl) */}
+        <div className="lg:col-span-4 xl:col-span-3 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3.5">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2 font-bold text-slate-900 text-sm">
+              <FolderTree className="w-4.5 h-4.5 text-indigo-600" />
+              <span>Cơ cấu Đơn vị</span>
             </div>
-            <p className="text-slate-600">• Quản lý tài khoản, phòng ban, phân quyền người dùng.</p>
-            <p className="text-slate-600">• Cấu hình chu kỳ đánh giá (Quý I - IV) và công thức tính HD.06.</p>
-            <p className="text-slate-600">• Giám sát và tổng hợp báo cáo KPI toàn hệ thống.</p>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={expandAllNodes}
+                className="text-[11px] text-slate-500 hover:text-indigo-600 px-1.5 py-0.5 rounded hover:bg-slate-100"
+                title="Mở rộng tất cả các cấp"
+              >
+                Mở
+              </button>
+              <span className="text-slate-300">|</span>
+              <button
+                type="button"
+                onClick={collapseAllNodes}
+                className="text-[11px] text-slate-500 hover:text-indigo-600 px-1.5 py-0.5 rounded hover:bg-slate-100"
+                title="Thu gọn cây"
+              >
+                Gọn
+              </button>
+            </div>
           </div>
 
-          <div className="bg-white p-3.5 rounded-lg border border-indigo-200/60 shadow-xs space-y-1.5">
-            <div className="font-bold text-slate-900 text-sm flex items-center justify-between">
-              <span className="text-blue-700">2. Lãnh đạo, Quản lý (CBQL)</span>
-              <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-[11px]">Mẫu 01-A</span>
-            </div>
-            <p className="text-slate-600">• Giao việc cho CBNV (cùng 1 việc có thể giao nhiều người).</p>
-            <p className="text-slate-600">• Phê duyệt công việc đăng ký & thẩm định minh chứng.</p>
-            <p className="text-slate-600">• Chấm điểm chất lượng (70%) và đề xuất thưởng 5%.</p>
-            <p className="text-slate-600">• Đánh giá Mẫu 01-A (17 tiêu chí) & Phê duyệt Mẫu 02.</p>
-          </div>
-
-          <div className="bg-white p-3.5 rounded-lg border border-indigo-200/60 shadow-xs space-y-1.5">
-            <div className="font-bold text-slate-900 text-sm flex items-center justify-between">
-              <span className="text-emerald-700">3. Chuyên viên, CBNV</span>
-              <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[11px]">Mẫu 01-B</span>
-            </div>
-            <p className="text-slate-600">• Nhận việc được phân công hoặc tự đăng ký công việc.</p>
-            <p className="text-slate-600">• Cập nhật tiến độ, nộp minh chứng (văn bản, link file, kết quả).</p>
-            <p className="text-slate-600">• Tự chấm điểm Phần Đạo đức chính trị (30đ - 16 tiêu chí).</p>
-            <p className="text-slate-600">• Đề xuất xếp loại bản thân theo Mẫu 01-B.</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Filter and Search Bar */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex-1 min-w-[280px]">
+          {/* Tree Search Box */}
           <div className="relative">
             <input
               type="text"
-              placeholder="Tìm kiếm theo họ tên, tên đăng nhập..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              placeholder="Lọc tên, mã đơn vị..."
+              value={treeSearchTerm}
+              onChange={(e) => setTreeSearchTerm(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-50/50"
             />
-            <svg className="w-5 h-5 text-slate-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+            {treeSearchTerm && (
+              <button
+                type="button"
+                onClick={() => setTreeSearchTerm('')}
+                className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Root: All Units item */}
+          <div className="space-y-1">
+            <div
+              onClick={() => setSelectedDeptId('ALL')}
+              className={`flex items-center justify-between py-2 px-2.5 rounded-xl cursor-pointer transition text-xs ${
+                selectedDeptId === 'ALL'
+                  ? 'bg-indigo-600 text-white shadow-xs font-bold'
+                  : 'hover:bg-slate-100 text-slate-700'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Layers className={`w-4 h-4 ${selectedDeptId === 'ALL' ? 'text-white' : 'text-indigo-600'}`} />
+                <span>Toàn bộ Cơ quan & Đơn vị</span>
+              </div>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                selectedDeptId === 'ALL' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+              }`}>
+                {users.length}
+              </span>
+            </div>
+
+            {/* Recursive Tree Nodes */}
+            <div className="pt-1 space-y-0.5 max-h-[520px] overflow-y-auto pr-1">
+              {deptTree.length === 0 ? (
+                <div className="text-center py-6 text-slate-400 text-xs">
+                  Không tìm thấy đơn vị nào phù hợp
+                </div>
+              ) : (
+                deptTree.map(node => (
+                  <TreeNode key={node.id} node={node} level={0} />
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Sub-tree toggle options */}
+          <div className="pt-3 border-t border-slate-100 space-y-2">
+            <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={includeChildren}
+                onChange={(e) => setIncludeChildren(e.target.checked)}
+                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+              />
+              <span>Bao gồm cả các đơn vị cấp con trực thuộc</span>
+            </label>
+
+            <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-[11px] text-slate-500 flex items-center justify-between">
+              <span>Tổng số đơn vị: <b>{localDepts.length}</b></span>
+              <button
+                type="button"
+                onClick={() => openAddDeptModal()}
+                className="text-indigo-600 hover:text-indigo-800 font-bold hover:underline"
+              >
+                + Thêm đơn vị con
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={filterDept}
-            onChange={(e) => setFilterDept(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-          >
-            <option value="ALL">Tất cả Phòng / Ban</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-
-          <select
-            value={filterRole}
-            onChange={(e) => setFilterRole(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-          >
-            <option value="ALL">Tất cả vai trò</option>
-            <option value="admin">Quản trị viên (Admin)</option>
-            <option value="cbql">Lãnh đạo, Quản lý (CBQL)</option>
-            <option value="cbnv">Cán bộ, Nhân viên (CBNV)</option>
-          </select>
-
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-          >
-            <option value="ALL">Tất cả trạng thái</option>
-            <option value="ACTIVE">Đang hoạt động</option>
-            <option value="INACTIVE">Đã khoá / Vô hiệu hoá</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Users Table & Mobile Cards */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        {/* Desktop Table (hidden lg:block) */}
-        <div className="hidden lg:block overflow-x-auto">
-          <table className="w-full min-w-[1450px] text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 text-slate-700 text-xs font-semibold uppercase border-b border-slate-200">
-              <tr>
-                <th className="px-4 py-3.5 w-14 text-center">STT</th>
-                <th className="px-4 py-3.5 min-w-[220px]">Họ và tên / Tài khoản</th>
-                <th className="px-4 py-3.5 min-w-[180px]">Đơn vị / Phòng ban</th>
-                <th className="px-4 py-3.5 min-w-[220px]">Tuyến Quản lý & Đánh giá</th>
-                <th className="px-4 py-3.5 min-w-[200px]">Cấp bậc CBQL & Chức vụ</th>
-                <th className="px-4 py-3.5 min-w-[210px] text-center">Vai trò & Phạm vi</th>
-                <th className="px-4 py-3.5 min-w-[140px] text-center">Mẫu đánh giá</th>
-                <th className="px-4 py-3.5 min-w-[130px] text-center">Trạng thái</th>
-                <th className="px-4 py-3.5 text-center min-w-[120px] w-32">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200 text-sm">
-              {loading ? (
-                <tr>
-                  <td colSpan="9" className="text-center py-10 text-slate-400">
-                    Đang tải danh sách cán bộ...
-                  </td>
-                </tr>
-              ) : filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan="9" className="text-center py-10 text-slate-400">
-                    Không tìm thấy cán bộ nào phù hợp
-                  </td>
-                </tr>
-              ) : (
-                filteredUsers.map((u, idx) => (
-                  <tr key={u.id} className="hover:bg-slate-50/80 transition">
-                    <td className="px-4 py-3.5 text-center font-medium text-slate-500">{idx + 1}</td>
-                    <td className="px-4 py-3.5">
-                      <div className="font-bold text-slate-900 text-sm">{u.full_name}</div>
-                      <div className="text-xs text-slate-400 mt-0.5">@{u.username} {u.phone ? `• 📞 ${u.phone}` : ''}</div>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-800">
-                        {u.dept_name || 'Chưa phân bổ'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="space-y-1 text-xs">
-                        <div className="flex items-center gap-1.5 text-slate-700">
-                          <span className="text-slate-400 font-normal">Trực tiếp:</span>
-                          {u.manager_name ? (
-                            <span className="font-semibold text-slate-800">👔 {u.manager_name}</span>
-                          ) : (
-                            <span className="text-slate-400 italic">Trực thuộc Lãnh đạo CQ</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 text-indigo-700">
-                          <span className="text-slate-400 font-normal">ĐG cuối:</span>
-                          {u.final_evaluator_name ? (
-                            <span className="font-semibold text-indigo-900">👑 {u.final_evaluator_name}</span>
-                          ) : (
-                            <span className="text-slate-500 italic">Theo phân cấp Lãnh đạo</span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="space-y-1">
-                        <div>
-                          {u.management_role === 'lanh_dao' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
-                              👑 Lãnh đạo (Người đứng đầu)
-                            </span>
-                          ) : u.management_role === 'quan_ly' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                              ⭐ Quản lý (Cấp phó)
-                            </span>
-                          ) : u.management_role === 'to_truong' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                              🏷️ Tổ trưởng chuyên môn
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-slate-100 text-slate-600">
-                              👤 Cán bộ, Nhân viên
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-slate-800 font-medium text-xs">{u.gov_title || 'Chuyên viên'}</div>
-                        <div className="text-[11px] text-slate-500">{u.party_title || 'Đảng viên'}</div>
-                        {u.union_title && (
-                          <div className="text-[11px] text-indigo-600 font-medium">{u.union_title}</div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 text-center">
-                      <div className="inline-flex flex-col items-center">
-                        <span className="font-bold text-slate-900 text-xs">
-                          {u.role_name || (u.role === 'admin' ? 'Quản trị viên' : u.role === 'cbql' ? 'Lãnh đạo (CBQL)' : 'Cán bộ nhân viên')}
-                        </span>
-                        <span className={`mt-1 px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                          u.role_code === 'admin_donvi' || u.role_id === 'role-admin-donvi'
-                            ? 'bg-purple-100 text-purple-800 border-purple-200'
-                            : u.data_scope === 'all' || u.role === 'admin' 
-                            ? 'bg-rose-100 text-rose-800 border-rose-200' 
-                            : u.data_scope === 'dept_tree' || u.role === 'cbql'
-                            ? 'bg-blue-100 text-blue-800 border-blue-200'
-                            : 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                        }`}>
-                          {u.role_code === 'admin_donvi' || u.role_id === 'role-admin-donvi' ? 'Quản trị đơn vị' :
-                           u.data_scope === 'all' || u.role === 'admin' ? 'Toàn cơ quan' :
-                           u.data_scope === 'dept_tree' || u.role === 'cbql' ? 'Đơn vị & trực thuộc' :
-                           u.data_scope === 'subordinates' ? 'Tuyến cấp dưới' : 'Chỉ cá nhân'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 text-center">
-                      {u.role === 'admin' || u.role_code === 'admin_donvi' || u.role_id === 'role-admin-donvi' || u.target_role === 'admin' ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-bold bg-purple-50 text-purple-800 border border-purple-200">
-                          ⚙️ Không đánh giá (TK Chức năng)
-                        </span>
-                      ) : u.target_role === 'cbql' || (u.role === 'cbql' && u.target_role !== 'cbnv') ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                          Mẫu 01-A (CBQL)
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded text-xs font-bold bg-teal-100 text-teal-900 border border-teal-300">
-                          Mẫu 01-B (CBNV)
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5 text-center">
-                      {u.is_active !== 0 ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                          Đang hoạt động
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400">
-                          <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-                          Đã khoá
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => openEditModal(u)}
-                          className="p-1.5 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded transition"
-                          title="Chỉnh sửa thông tin"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => openResetPasswordModal(u)}
-                          className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded transition"
-                          title="Cấp lại mật khẩu"
-                        >
-                          <KeyRound className="w-4 h-4" />
-                        </button>
-                        {u.id !== currentUser?.id && (
-                          <>
-                            {u.is_active !== 0 ? (
-                              <button
-                                onClick={() => handleToggleStatus(u, 0)}
-                                className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded transition cursor-pointer"
-                                title="Khoá tài khoản cán bộ"
-                              >
-                                <Lock className="w-4 h-4" />
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleToggleStatus(u, 1)}
-                                className="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded transition cursor-pointer"
-                                title="Mở khoá / kích hoạt lại tài khoản"
-                              >
-                                <Unlock className="w-4 h-4" />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handlePermanentDelete(u)}
-                              className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded transition cursor-pointer"
-                              title="Xoá vĩnh viễn khỏi hệ thống & Supabase"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile & Tablet Card View for Users (lg:hidden) */}
-        <div className="lg:hidden p-3 sm:p-4 space-y-3 bg-slate-50/60">
-          {loading ? (
-            <div className="text-center py-10 text-slate-400 bg-white rounded-xl border border-slate-200">
-              Đang tải danh sách cán bộ...
-            </div>
-          ) : filteredUsers.length === 0 ? (
-            <div className="text-center py-10 text-slate-400 bg-white rounded-xl border border-slate-200">
-              Không tìm thấy cán bộ nào phù hợp
-            </div>
-          ) : (
-            filteredUsers.map((u, idx) => {
-              const initials = u.full_name?.split(' ').map(n => n[0]).slice(-2).join('') || 'CB';
-              return (
-                <div key={u.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
-                  {/* Top: Avatar, Name, Username, Phone, Status badge */}
-                  <div className="flex items-start justify-between gap-2.5 border-b border-slate-100 pb-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-700 to-slate-900 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
-                        {initials}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="font-bold text-slate-900 text-sm truncate">
-                          {u.full_name}
-                        </div>
-                        <div className="text-xs text-slate-400 truncate mt-0.5">
-                          @{u.username} {u.phone ? `• 📞 ${u.phone}` : ''}
-                        </div>
-                        <div className="text-[11px] text-slate-500 font-medium truncate mt-0.5">
-                          🏢 {u.dept_name || 'Chưa phân bổ'}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Status */}
-                    {u.is_active !== 0 ? (
-                      <span className="px-2.5 py-1 text-[11px] font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
-                        Hoạt động
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-1 text-[11px] font-bold rounded-full bg-slate-100 text-slate-500 border border-slate-200 shrink-0">
-                        Đã khóa
+        {/* Right Column: User Management Table & Filters (8 cols on lg, 9 cols on xl) */}
+        <div className="lg:col-span-8 xl:col-span-9 space-y-4">
+          {/* Active Filter Indicator Banner */}
+          {selectedDeptObj && (
+            <div className="bg-indigo-50/80 border border-indigo-200/80 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Building2 className="w-5 h-5 text-indigo-600 shrink-0" />
+                <div className="min-w-0">
+                  <div className="font-bold text-indigo-950 text-sm truncate flex items-center gap-2">
+                    <span>Đơn vị: {selectedDeptObj.name}</span>
+                    {selectedDeptObj.code && (
+                      <span className="font-mono text-[11px] bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded">
+                        {selectedDeptObj.code}
                       </span>
                     )}
                   </div>
-
-                  {/* Badges strip: Role, Management Level, Evaluation Template */}
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                    {u.management_role === 'lanh_dao' ? (
-                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
-                        👑 Lãnh đạo
-                      </span>
-                    ) : u.management_role === 'quan_ly' ? (
-                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-                        ⭐ Cấp phó / Quản lý
-                      </span>
-                    ) : u.management_role === 'to_truong' ? (
-                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-teal-100 text-teal-800 border border-teal-200">
-                        🎖️ Tổ trưởng
-                      </span>
-                    ) : null}
-
-                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700">
-                      {u.role_name || u.role}
-                    </span>
-
-                    {u.target_role === 'cbql' ? (
-                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
-                        Mẫu 01-A (Lãnh đạo)
-                      </span>
+                  <div className="text-indigo-700 text-[11px]">
+                    {includeChildren && selectedDescendantsCount > 0 ? (
+                      <span>Đang lọc cán bộ thuộc đơn vị này và <b>{selectedDescendantsCount}</b> đơn vị cấp con trực thuộc</span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-                        Mẫu 01-B (CBNV)
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Management hierarchy */}
-                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-xs space-y-1">
-                    <div className="flex items-center gap-1.5 text-slate-700">
-                      <span className="text-slate-400 font-normal">Quản lý trực tiếp:</span>
-                      <span className="font-semibold text-slate-800">
-                        {u.manager_name ? `👔 ${u.manager_name}` : 'Trực thuộc Lãnh đạo cơ quan'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-indigo-700">
-                      <span className="text-slate-400 font-normal">Đánh giá cuối cùng:</span>
-                      <span className="font-semibold text-indigo-900">
-                        {u.final_evaluator_name ? `👑 ${u.final_evaluator_name}` : 'Theo phân cấp Lãnh đạo'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Touch Actions Bar */}
-                  <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-100 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(u)}
-                      className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition active:scale-95"
-                    >
-                      <Edit className="w-3.5 h-3.5" />
-                      <span>Sửa</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => openResetPasswordModal(u)}
-                      className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition active:scale-95"
-                    >
-                      <KeyRound className="w-3.5 h-3.5" />
-                      <span>Cấp lại MK</span>
-                    </button>
-
-                    {u.id !== currentUser?.id && u.username !== 'admin' && (
-                      <>
-                        {u.is_active !== 0 ? (
-                          <button
-                            type="button"
-                            onClick={() => handleToggleStatus(u, 0)}
-                            className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition active:scale-95"
-                            title="Khóa tài khoản"
-                          >
-                            <Lock className="w-3.5 h-3.5" />
-                            <span>Khóa</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => handleToggleStatus(u, 1)}
-                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition active:scale-95"
-                            title="Mở khóa tài khoản"
-                          >
-                            <Unlock className="w-3.5 h-3.5" />
-                            <span>Mở</span>
-                          </button>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => handlePermanentDelete(u)}
-                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer transition active:scale-95"
-                          title="Xóa cán bộ"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Xóa</span>
-                        </button>
-                      </>
+                      <span>Chỉ lọc cán bộ trực thuộc đơn vị này</span>
                     )}
                   </div>
                 </div>
-              );
-            })
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedDeptId('ALL')}
+                className="text-indigo-700 hover:text-indigo-900 bg-white hover:bg-indigo-100 border border-indigo-200 px-3 py-1.5 rounded-xl font-semibold shrink-0 transition"
+              >
+                Xem tất cả đơn vị
+              </button>
+            </div>
           )}
+
+          {/* Filter & Search Bar */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-3">
+            <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
+              {/* Search user */}
+              <div className="w-full md:flex-1 relative">
+                <input
+                  type="text"
+                  placeholder="Tìm theo họ tên, tài khoản, số điện thoại, chức vụ..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                />
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Filters row */}
+              <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                <select
+                  value={filterRole}
+                  onChange={(e) => setFilterRole(e.target.value)}
+                  className="border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+                >
+                  <option value="ALL">Tất cả vai trò</option>
+                  <option value="admin">Quản trị viên (Admin)</option>
+                  <option value="cbql">Lãnh đạo, Quản lý (CBQL)</option>
+                  <option value="cbnv">Cán bộ, Nhân viên (CBNV)</option>
+                </select>
+
+                <select
+                  value={filterSecondary}
+                  onChange={(e) => setFilterSecondary(e.target.value)}
+                  className="border border-indigo-200 bg-indigo-50/40 text-indigo-900 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                >
+                  <option value="ALL">Tất cả chế độ chức vụ</option>
+                  <option value="HAS_SECONDARY">🏷️ Có chức vụ kiêm nhiệm</option>
+                  <option value="PRIMARY_ONLY">Chỉ chức vụ đơn nhiệm</option>
+                </select>
+
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="border border-slate-300 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white"
+                >
+                  <option value="ALL">Tất cả trạng thái</option>
+                  <option value="ACTIVE">Đang hoạt động</option>
+                  <option value="INACTIVE">Đã khóa</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Results counter strip */}
+            <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+              <span>Hiển thị <b>{filteredUsers.length}</b> / {users.length} cán bộ</span>
+              <span className="italic text-slate-400">Hỗ trợ đa chức vụ & tự động đồng bộ theo Hướng dẫn số 06-HD/BTCTU</span>
+            </div>
+          </div>
+
+          {/* Users Table & Mobile Cards */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            {/* Desktop Table */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full text-left text-sm text-slate-600">
+                <thead className="bg-slate-50 text-slate-700 text-xs font-semibold uppercase border-b border-slate-200">
+                  <tr>
+                    <th className="px-3.5 py-3 w-12 text-center">STT</th>
+                    <th className="px-3.5 py-3 min-w-[200px]">Cán bộ & Tài khoản</th>
+                    <th className="px-3.5 py-3 min-w-[260px]">Đơn vị & Chức vụ (Đa chức vụ)</th>
+                    <th className="px-3.5 py-3 min-w-[190px]">Tuyến Quản lý</th>
+                    <th className="px-3.5 py-3 min-w-[170px] text-center">Vai trò & Mẫu ĐG</th>
+                    <th className="px-3.5 py-3 min-w-[110px] text-center">Trạng thái</th>
+                    <th className="px-3.5 py-3 text-center min-w-[130px] w-32">Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 text-xs">
+                  {loading ? (
+                    <tr>
+                      <td colSpan="7" className="text-center py-12 text-slate-400">
+                        <RefreshCw className="w-6 h-6 animate-spin mx-auto text-indigo-500 mb-2" />
+                        Đang tải danh sách cán bộ và chức vụ...
+                      </td>
+                    </tr>
+                  ) : filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="text-center py-12 text-slate-400">
+                        Không tìm thấy cán bộ nào phù hợp với bộ lọc hiện tại
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredUsers.map((u, idx) => {
+                      const allPositions = u.positions && u.positions.length > 0
+                        ? u.positions
+                        : [{
+                            id: 'p0',
+                            dept_id: u.dept_id,
+                            dept_name: u.dept_name,
+                            position_title: u.gov_title || 'Chuyên viên',
+                            is_primary: 1
+                          }];
+
+                      const primaryPos = allPositions.find(p => p.is_primary === 1) || allPositions[0];
+                      const secondaryPositions = allPositions.filter(p => !p.is_primary);
+
+                      return (
+                        <tr key={u.id} className="hover:bg-slate-50/80 transition">
+                          {/* STT */}
+                          <td className="px-3.5 py-3 text-center font-medium text-slate-400">
+                            {idx + 1}
+                          </td>
+
+                          {/* Cán bộ / Username */}
+                          <td className="px-3.5 py-3">
+                            <div className="font-bold text-slate-900 text-sm">{u.full_name}</div>
+                            <div className="text-slate-400 text-[11px] mt-0.5">
+                              @{u.username} {u.phone ? `• 📞 ${u.phone}` : ''}
+                            </div>
+                            {u.email && (
+                              <div className="text-slate-400 text-[10px] truncate max-w-[180px]">
+                                ✉️ {u.email}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Đơn vị & Chức vụ (Đa chức vụ / Kiêm nhiệm) */}
+                          <td className="px-3.5 py-3">
+                            <div className="space-y-1.5">
+                              {/* Primary Position */}
+                              <div className="bg-indigo-50/70 border border-indigo-200/70 rounded-lg p-2 text-xs">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="px-1.5 py-0.2 bg-indigo-600 text-white rounded text-[10px] font-bold shrink-0">
+                                    Chính
+                                  </span>
+                                  <span className="font-bold text-indigo-950 truncate">
+                                    {primaryPos.position_title || u.gov_title || 'Chuyên viên'}
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-indigo-800/80 font-medium truncate mt-0.5">
+                                  🏢 {primaryPos.dept_name || u.dept_name || 'Chưa phân bổ đơn vị'}
+                                </div>
+                              </div>
+
+                              {/* Secondary / Kiêm nhiệm positions */}
+                              {secondaryPositions.length > 0 && (
+                                <div className="space-y-1">
+                                  {secondaryPositions.map((sp, sIdx) => (
+                                    <div 
+                                      key={sp.id || sIdx}
+                                      className="bg-amber-50/80 border border-amber-200/80 rounded-lg p-1.5 text-[11px]"
+                                    >
+                                      <div className="flex items-center gap-1">
+                                        <span className="px-1.5 py-0.2 bg-amber-600 text-white rounded text-[9px] font-bold shrink-0">
+                                          Kiêm nhiệm
+                                        </span>
+                                        <span className="font-semibold text-amber-950 truncate">
+                                          {sp.position_title}
+                                        </span>
+                                      </div>
+                                      <div className="text-[10px] text-amber-800/90 truncate mt-0.5">
+                                        🏢 {sp.dept_name || 'Đơn vị kiêm nhiệm'}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Tuyến Quản lý & Đánh giá */}
+                          <td className="px-3.5 py-3">
+                            <div className="space-y-1 text-xs">
+                              <div className="text-slate-700">
+                                <span className="text-slate-400 text-[11px]">Trực tiếp: </span>
+                                {u.manager_name ? (
+                                  <span className="font-semibold text-slate-800">👔 {u.manager_name}</span>
+                                ) : (
+                                  <span className="text-slate-400 italic">Trực thuộc LĐ</span>
+                                )}
+                              </div>
+                              <div className="text-indigo-800">
+                                <span className="text-slate-400 text-[11px]">ĐG cuối: </span>
+                                {u.final_evaluator_name ? (
+                                  <span className="font-semibold text-indigo-900">👑 {u.final_evaluator_name}</span>
+                                ) : (
+                                  <span className="text-slate-500 italic">Theo phân cấp</span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Vai trò & Mẫu ĐG */}
+                          <td className="px-3.5 py-3 text-center">
+                            <div className="space-y-1 inline-flex flex-col items-center">
+                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
+                                u.role === 'admin'
+                                  ? 'bg-rose-100 text-rose-800 border-rose-200'
+                                  : u.role === 'cbql'
+                                  ? 'bg-blue-100 text-blue-800 border-blue-200'
+                                  : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                              }`}>
+                                {u.role_name || (u.role === 'admin' ? 'Quản trị' : u.role === 'cbql' ? 'Lãnh đạo' : 'CBNV')}
+                              </span>
+
+                              <div>
+                                {u.role === 'admin' || u.target_role === 'admin' ? (
+                                  <span className="inline-block text-[10px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                                    ⚙️ Miễn ĐG
+                                  </span>
+                                ) : u.target_role === 'cbql' || (u.role === 'cbql' && u.target_role !== 'cbnv') ? (
+                                  <span className="inline-block text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                    Mẫu 01-A
+                                  </span>
+                                ) : (
+                                  <span className="inline-block text-[10px] font-bold text-teal-800 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200">
+                                    Mẫu 01-B
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Trạng thái */}
+                          <td className="px-3.5 py-3 text-center">
+                            {u.is_active !== 0 ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                Hoạt động
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                Đã khoá
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Thao tác */}
+                          <td className="px-3.5 py-3 text-center">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => openEditModal(u)}
+                                className="p-1.5 text-indigo-600 hover:text-indigo-900 hover:bg-indigo-50 rounded-lg transition cursor-pointer"
+                                title="Chỉnh sửa hồ sơ & chức vụ"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => openResetPasswordModal(u)}
+                                className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition cursor-pointer"
+                                title="Cấp lại mật khẩu"
+                              >
+                                <KeyRound className="w-4 h-4" />
+                              </button>
+                              {u.id !== currentUser?.id && (
+                                <>
+                                  {u.is_active !== 0 ? (
+                                    <button
+                                      onClick={() => handleToggleStatus(u, 0)}
+                                      className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition cursor-pointer"
+                                      title="Khoá tài khoản"
+                                    >
+                                      <Lock className="w-4 h-4" />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleToggleStatus(u, 1)}
+                                      className="p-1.5 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                                      title="Mở khoá tài khoản"
+                                    >
+                                      <Unlock className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => handlePermanentDelete(u)}
+                                    className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                    title="Xoá vĩnh viễn"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile & Tablet Card View */}
+            <div className="lg:hidden p-3 space-y-3 bg-slate-50/50">
+              {loading ? (
+                <div className="text-center py-10 text-slate-400 bg-white rounded-xl border border-slate-200">
+                  Đang tải danh sách cán bộ...
+                </div>
+              ) : filteredUsers.length === 0 ? (
+                <div className="text-center py-10 text-slate-400 bg-white rounded-xl border border-slate-200 text-xs">
+                  Không tìm thấy cán bộ nào phù hợp
+                </div>
+              ) : (
+                filteredUsers.map((u) => {
+                  const allPositions = u.positions && u.positions.length > 0 ? u.positions : [{
+                    dept_name: u.dept_name,
+                    position_title: u.gov_title || 'Chuyên viên',
+                    is_primary: 1
+                  }];
+                  const primaryPos = allPositions.find(p => p.is_primary === 1) || allPositions[0];
+                  const secondaryPositions = allPositions.filter(p => !p.is_primary);
+
+                  return (
+                    <div key={u.id} className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
+                      <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2.5">
+                        <div>
+                          <div className="font-bold text-slate-900 text-sm">{u.full_name}</div>
+                          <div className="text-xs text-slate-400 mt-0.5">
+                            @{u.username} {u.phone ? `• 📞 ${u.phone}` : ''}
+                          </div>
+                        </div>
+                        {u.is_active !== 0 ? (
+                          <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
+                            Hoạt động
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 text-slate-500 border border-slate-200 shrink-0">
+                            Đã khóa
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Positions strip */}
+                      <div className="space-y-1.5 text-xs">
+                        <div className="bg-indigo-50/70 border border-indigo-100 rounded-lg p-2">
+                          <span className="px-1.5 py-0.2 bg-indigo-600 text-white rounded text-[9px] font-bold mr-1.5">
+                            Chức vụ chính
+                          </span>
+                          <span className="font-bold text-indigo-950">
+                            {primaryPos.position_title}
+                          </span>
+                          <div className="text-[11px] text-indigo-800 mt-0.5">
+                            🏢 {primaryPos.dept_name || 'Chưa phân bổ'}
+                          </div>
+                        </div>
+
+                        {secondaryPositions.map((sp, sIdx) => (
+                          <div key={sIdx} className="bg-amber-50/80 border border-amber-200/80 rounded-lg p-2 text-xs">
+                            <span className="px-1.5 py-0.2 bg-amber-600 text-white rounded text-[9px] font-bold mr-1.5">
+                              Kiêm nhiệm
+                            </span>
+                            <span className="font-bold text-amber-950">
+                              {sp.position_title}
+                            </span>
+                            <div className="text-[11px] text-amber-800 mt-0.5">
+                              🏢 {sp.dept_name}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Mobile Actions */}
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(u)}
+                          className="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-xl font-bold text-xs flex items-center gap-1"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                          <span>Sửa</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openResetPasswordModal(u)}
+                          className="px-3 py-1.5 bg-amber-50 text-amber-700 rounded-xl font-bold text-xs flex items-center gap-1"
+                        >
+                          <KeyRound className="w-3.5 h-3.5" />
+                          <span>Đổi MK</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Add / Edit Modal */}
+      {/* Add / Edit User Modal (Multi-Position Support) */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl w-[95%] sm:max-w-3xl max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden my-auto">
@@ -869,9 +1457,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                     {editingUser ? `Hồ sơ cán bộ: ${editingUser.full_name}` : 'Thêm Cán bộ Mới vào Hệ thống'}
                   </h3>
                   <p className="text-xs text-slate-300">
-                    {editingUser 
-                      ? `Tài khoản: @${editingUser.username} • Đơn vị: ${editingUser.dept_name || 'Chưa phân bổ'}` 
-                      : 'Nhập thông tin tài khoản, phân cấp quản lý và hồ sơ cá nhân'}
+                    Hỗ trợ quản lý đa chức vụ / kiêm nhiệm tại một hoặc nhiều đơn vị
                   </p>
                 </div>
               </div>
@@ -884,8 +1470,8 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
               </button>
             </div>
 
-            {/* Modal Body - Scrollable */}
-            <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+            {/* Modal Body */}
+            <form onSubmit={handleSubmitUser} className="flex flex-col flex-1 overflow-hidden">
               <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1 bg-slate-50/60">
                 {errorMsg && (
                   <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-sm flex items-center gap-2">
@@ -917,7 +1503,6 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                         className={`w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-medium ${editingUser ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}
                         placeholder="vd: vinhnt"
                       />
-                      {editingUser && <p className="text-[11px] text-slate-400 mt-1">Tên đăng nhập cố định, không thể thay đổi</p>}
                     </div>
 
                     <div>
@@ -960,7 +1545,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                       {isSelectedRoleExempt ? (
                         <div className="px-3.5 py-2 border border-purple-200 bg-purple-50 text-purple-800 rounded-lg text-xs font-bold flex items-center gap-1.5 h-[38px]">
                           <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
-                          <span>⚙️ Miễn đánh giá (Tài khoản chức năng / Quản trị)</span>
+                          <span>⚙️ Miễn đánh giá (Tài khoản chức năng)</span>
                         </div>
                       ) : (
                         <select
@@ -974,16 +1559,6 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                       )}
                     </div>
                   </div>
-
-                  {/* Banner hướng dẫn đặc quyền tài khoản quản trị chức năng */}
-                  {isSelectedRoleExempt && (
-                    <div className="p-3 bg-purple-50/80 border border-purple-200 rounded-lg text-xs text-purple-900 flex items-start gap-2">
-                      <span className="text-base leading-none">ℹ️</span>
-                      <div>
-                        <span className="font-bold">Tài khoản Quản trị chức năng:</span> Tài khoản phục vụ quản lý nhân sự và danh mục công việc. Được <strong className="underline font-bold">miễn tham gia tự đánh giá, chấm điểm và biểu quyết xếp loại KPI</strong>.
-                      </div>
-                    </div>
-                  )}
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1000,105 +1575,168 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                   </div>
                 </div>
 
-                {/* SECTION 2: TỔ CHỨC & TUYẾN QUẢN LÝ */}
-                <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-xs space-y-4">
-                  <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                    <Building2 className="w-4.5 h-4.5 text-blue-600" />
-                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                      2. Đơn vị công tác & Tuyến Quản lý
-                    </h4>
+                {/* SECTION 2: ĐƠN VỊ & CHỨC VỤ (HỖ TRỢ ĐA CHỨC VỤ / KIÊM NHIỆM) */}
+                <div className="bg-white rounded-xl p-5 border border-indigo-200 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-indigo-100">
+                    <div className="flex items-center gap-2">
+                      <Briefcase className="w-4.5 h-4.5 text-indigo-600" />
+                      <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                        2. Đơn vị công tác & Chức vụ (Đa chức vụ / Kiêm nhiệm)
+                      </h4>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddPositionRow}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition border border-indigo-200 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ Thêm chức vụ</span>
+                    </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Đơn vị / Phòng ban công tác <span className="text-rose-500">*</span>
-                      </label>
-                      <select
-                        value={formData.dept_id}
-                        onChange={(e) => setFormData({ ...formData, dept_id: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                      >
-                        {departments.map((d) => (
-                          <option key={d.id} value={d.id}>
-                            {d.name} {d.parent_name ? `(thuộc ${d.parent_name})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  <p className="text-xs text-slate-500">
+                    Theo tài liệu hướng dẫn iCPV TP.HCM: 1 cán bộ có thể được gán một hoặc nhiều chức vụ ở một hoặc nhiều đơn vị khác nhau. Tích chọn <b>"Là chức vụ mặc định"</b> tại chức vụ chính.
+                  </p>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Cấp bậc chức danh quản lý
-                      </label>
-                      <select
-                        value={formData.management_role}
-                        onChange={(e) => setFormData({ ...formData, management_role: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-purple-200 bg-purple-50/40 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-semibold text-purple-900"
+                  {/* List of Position Rows */}
+                  <div className="space-y-3">
+                    {formData.positions.map((pos, idx) => (
+                      <div 
+                        key={pos.id || idx} 
+                        className={`p-4 rounded-xl border transition-all ${
+                          pos.is_primary === 1 
+                            ? 'bg-indigo-50/40 border-indigo-300 ring-1 ring-indigo-200' 
+                            : 'bg-slate-50/70 border-slate-200 hover:border-slate-300'
+                        }`}
                       >
-                        <option value="lanh_dao">👑 Lãnh đạo (Người đứng đầu cơ quan/đơn vị)</option>
-                        <option value="quan_ly">⭐ Quản lý (Cấp phó đơn vị)</option>
-                        <option value="to_truong">🏷️ Tổ trưởng chuyên môn</option>
-                        <option value="nhan_vien">👤 Cán bộ, Nhân viên (CBNV)</option>
-                      </select>
-                    </div>
-                  </div>
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                              pos.is_primary === 1 
+                                ? 'bg-indigo-600 text-white' 
+                                : 'bg-slate-200 text-slate-700'
+                            }`}>
+                              {pos.is_primary === 1 ? '👑 Chức vụ chính (Mặc định)' : `Chức vụ kiêm nhiệm #${idx}`}
+                            </span>
+                          </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Cán bộ Quản lý trực tiếp
-                      </label>
-                      <select
-                        value={formData.manager_id}
-                        onChange={(e) => setFormData({ ...formData, manager_id: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-slate-50 text-slate-800"
-                      >
-                        <option value="">-- Trực thuộc Lãnh đạo Cơ quan (Không qua trung gian) --</option>
-                        {users
-                          .filter(u => !editingUser || u.id !== editingUser.id)
-                          .map(u => (
-                            <option key={u.id} value={u.id}>
-                              {u.management_role === 'lanh_dao' ? '👑 [Lãnh đạo]' : u.management_role === 'quan_ly' ? '⭐ [Cấp phó]' : u.management_role === 'to_truong' ? '🏷️ [Tổ trưởng]' : '👔'} {u.full_name} ({u.gov_title || u.role}) - {u.dept_name || ''}
-                            </option>
-                          ))}
-                      </select>
-                      <p className="text-[11px] text-slate-400 mt-1">
-                        Người giao nhiệm vụ hàng ngày, đôn đốc tiến độ và thẩm định ban đầu.
-                      </p>
-                    </div>
+                          <div className="flex items-center gap-3">
+                            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="primary_position_selector"
+                                checked={pos.is_primary === 1}
+                                onChange={() => handleSetPrimaryPosition(idx)}
+                                className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                              />
+                              <span className={pos.is_primary === 1 ? 'text-indigo-900 font-bold' : ''}>
+                                Là chức vụ mặc định
+                              </span>
+                            </label>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Người đánh giá cuối cùng (Ký duyệt kết luận)
-                      </label>
-                      <select
-                        value={formData.final_evaluator_id}
-                        onChange={(e) => setFormData({ ...formData, final_evaluator_id: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-blue-200 bg-blue-50/40 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-medium text-slate-800"
-                      >
-                        <option value="">-- Mặc định (Theo phân cấp Người đứng đầu đơn vị) --</option>
-                        {users
-                          .filter(u => (!editingUser || u.id !== editingUser.id) && (u.role === 'cbql' || u.role === 'admin' || u.management_role === 'lanh_dao' || u.management_role === 'quan_ly'))
-                          .map(u => (
-                            <option key={u.id} value={u.id}>
-                              {u.management_role === 'lanh_dao' ? '👑 [Lãnh đạo đứng đầu]' : u.management_role === 'quan_ly' ? '⭐ [Quản lý - Cấp phó]' : '👔'} {u.full_name} ({u.gov_title || u.role})
-                            </option>
-                          ))}
-                      </select>
-                      <p className="text-[11px] text-slate-400 mt-1">
-                        Cán bộ có thẩm quyền phê duyệt kết luận xếp loại cuối quý.
-                      </p>
-                    </div>
+                            {formData.positions.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePositionRow(idx)}
+                                className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition"
+                                title="Xóa chức vụ này"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                              Đơn vị công tác <span className="text-rose-500">*</span>
+                            </label>
+                            <select
+                              value={pos.dept_id}
+                              onChange={(e) => handlePositionChange(idx, 'dept_id', e.target.value)}
+                              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 bg-white"
+                            >
+                              {localDepts.map(d => (
+                                <option key={d.id} value={d.id}>
+                                  {d.name} {d.code ? `[${d.code}]` : ''} {d.parent_name ? `(thuộc ${d.parent_name})` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                              Chức vụ / Vị trí việc làm <span className="text-rose-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={pos.position_title}
+                              onChange={(e) => handlePositionChange(idx, 'position_title', e.target.value)}
+                              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-indigo-500"
+                              placeholder="vd: Trưởng phòng, Chuyên viên, Bí thư Chi bộ..."
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                              Phân loại chức vụ
+                            </label>
+                            <select
+                              value={pos.position_type}
+                              onChange={(e) => handlePositionChange(idx, 'position_type', e.target.value)}
+                              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-white"
+                            >
+                              <option value="chinh_quyen">🏛️ Chính quyền</option>
+                              <option value="dang">🚩 Đảng</option>
+                              <option value="doan_the">⭐ Đoàn thể</option>
+                              <option value="khac">Khác</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                              Cấp bậc quản lý
+                            </label>
+                            <select
+                              value={pos.management_role}
+                              onChange={(e) => handlePositionChange(idx, 'management_role', e.target.value)}
+                              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-white font-medium"
+                            >
+                              <option value="lanh_dao">👑 Lãnh đạo (Người đứng đầu)</option>
+                              <option value="quan_ly">⭐ Quản lý (Cấp phó)</option>
+                              <option value="to_truong">🏷️ Tổ trưởng chuyên môn</option>
+                              <option value="nhan_vien">👤 Cán bộ, Nhân viên</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-700 mb-1">
+                              Ghi chú phân công
+                            </label>
+                            <input
+                              type="text"
+                              value={pos.notes || ''}
+                              onChange={(e) => handlePositionChange(idx, 'notes', e.target.value)}
+                              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
+                              placeholder="vd: Theo QĐ số 45/QĐ-TU..."
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
-                {/* SECTION 3: THÔNG TIN CÁ NHÂN & CHỨC DANH */}
+                {/* SECTION 3: THÔNG TIN CÁ NHÂN & LIÊN HỆ */}
                 <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-xs space-y-4">
                   <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
                     <User className="w-4.5 h-4.5 text-emerald-600" />
                     <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                      3. Thông tin Cá nhân & Chức danh
+                      3. Thông tin Cá nhân & Liên hệ
                     </h4>
                   </div>
 
@@ -1114,47 +1752,6 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                       className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-semibold"
                       placeholder="vd: Nguyễn Tiến Vinh"
                     />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Chức vụ chính quyền
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.gov_title}
-                        onChange={(e) => setFormData({ ...formData, gov_title: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                        placeholder="vd: Chuyên viên, Trưởng phòng..."
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Chức vụ Đảng
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.party_title}
-                        onChange={(e) => setFormData({ ...formData, party_title: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                        placeholder="vd: Bí thư, Cấp ủy viên, Đảng viên..."
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Chức vụ đoàn thể
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.union_title}
-                        onChange={(e) => setFormData({ ...formData, union_title: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                        placeholder="vd: Bí thư Chi đoàn, Chủ tịch CĐ..."
-                      />
-                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1213,6 +1810,58 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                     </div>
                   </div>
                 </div>
+
+                {/* SECTION 4: TUYẾN QUẢN LÝ & ĐÁNH GIÁ */}
+                <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-xs space-y-4">
+                  <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                    <Building2 className="w-4.5 h-4.5 text-blue-600" />
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                      4. Tuyến Quản lý & Phê duyệt Đánh giá
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Cán bộ Quản lý trực tiếp
+                      </label>
+                      <select
+                        value={formData.manager_id}
+                        onChange={(e) => setFormData({ ...formData, manager_id: e.target.value })}
+                        className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-slate-50 text-slate-800"
+                      >
+                        <option value="">-- Trực thuộc Lãnh đạo Cơ quan --</option>
+                        {users
+                          .filter(u => !editingUser || u.id !== editingUser.id)
+                          .map(u => (
+                            <option key={u.id} value={u.id}>
+                              {u.management_role === 'lanh_dao' ? '👑 [Lãnh đạo]' : u.management_role === 'quan_ly' ? '⭐ [Cấp phó]' : '👔'} {u.full_name} ({u.gov_title || u.role}) - {u.dept_name || ''}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Người đánh giá cuối cùng (Ký duyệt kết luận)
+                      </label>
+                      <select
+                        value={formData.final_evaluator_id}
+                        onChange={(e) => setFormData({ ...formData, final_evaluator_id: e.target.value })}
+                        className="w-full px-3.5 py-2 border border-blue-200 bg-blue-50/40 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-medium text-slate-800"
+                      >
+                        <option value="">-- Mặc định (Theo phân cấp Người đứng đầu) --</option>
+                        {users
+                          .filter(u => (!editingUser || u.id !== editingUser.id) && (u.role === 'cbql' || u.role === 'admin' || u.management_role === 'lanh_dao' || u.management_role === 'quan_ly'))
+                          .map(u => (
+                            <option key={u.id} value={u.id}>
+                              {u.management_role === 'lanh_dao' ? '👑 [Lãnh đạo đứng đầu]' : '👔'} {u.full_name} ({u.gov_title || u.role})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Modal Footer */}
@@ -1236,10 +1885,180 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
         </div>
       )}
 
+      {/* Department Add/Edit Modal */}
+      {isDeptModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-[95%] sm:max-w-lg shadow-2xl border border-slate-200 overflow-hidden my-auto">
+            <div className="px-6 py-4 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Building2 className="w-5 h-5 text-amber-300" />
+                <h3 className="text-base font-bold">
+                  {editingDept ? `Chỉnh sửa Đơn vị: ${editingDept.name}` : 'Thêm Đơn vị / Cơ cấu Tổ chức Mới'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDeptModalOpen(false)}
+                className="text-white/70 hover:text-white p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDept} className="p-5 sm:p-6 space-y-4">
+              {deptModalError && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{deptModalError}</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Mã đơn vị <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={deptFormData.code}
+                    onChange={(e) => setDeptFormData({ ...deptFormData, code: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono font-bold uppercase focus:ring-2 focus:ring-indigo-500"
+                    placeholder="vd: A29.01.05"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-0.5">Mã chuẩn iCPV TPHCM</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Đơn vị cấp trên trực tiếp
+                  </label>
+                  <select
+                    value={deptFormData.parent_id}
+                    onChange={(e) => setDeptFormData({ ...deptFormData, parent_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-white"
+                  >
+                    <option value="">-- Đơn vị cấp cao nhất (Không có cha) --</option>
+                    {localDepts
+                      .filter(d => !editingDept || d.id !== editingDept.id)
+                      .map(d => (
+                        <option key={d.id} value={d.id}>
+                          {d.name} {d.code ? `[${d.code}]` : ''}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Tên đơn vị / Phòng ban <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={deptFormData.name}
+                  onChange={(e) => setDeptFormData({ ...deptFormData, name: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm font-semibold focus:ring-2 focus:ring-indigo-500"
+                  placeholder="vd: Ban Tuyên giáo, Chi bộ Trường..."
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Cơ quan chủ quản
+                  </label>
+                  <input
+                    type="text"
+                    value={deptFormData.parent_agency}
+                    onChange={(e) => setDeptFormData({ ...deptFormData, parent_agency: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Địa bàn / Trụ sở
+                  </label>
+                  <input
+                    type="text"
+                    value={deptFormData.location_name}
+                    onChange={(e) => setDeptFormData({ ...deptFormData, location_name: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Lãnh đạo phụ trách
+                </label>
+                <select
+                  value={deptFormData.leader_id}
+                  onChange={(e) => setDeptFormData({ ...deptFormData, leader_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-white"
+                >
+                  <option value="">-- Chưa chỉ định --</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.full_name} ({u.gov_title || u.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Mô tả chức năng nhiệm vụ
+                </label>
+                <textarea
+                  rows="2"
+                  value={deptFormData.description}
+                  onChange={(e) => setDeptFormData({ ...deptFormData, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
+                  placeholder="Mô tả tóm tắt quyền hạn, nhiệm vụ..."
+                />
+              </div>
+
+              <div className="pt-3 flex items-center justify-between border-t border-slate-100">
+                {editingDept ? (
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteDept(editingDept, e)}
+                    className="text-rose-600 hover:text-rose-800 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Xóa đơn vị này</span>
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsDeptModalOpen(false)}
+                    className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-xs font-medium hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={deptModalLoading}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs transition cursor-pointer disabled:opacity-50"
+                  >
+                    {deptModalLoading ? 'Đang lưu...' : (editingDept ? 'Lưu thay đổi' : 'Tạo đơn vị')}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Import Modal */}
       {isImportModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-xl w-[95%] sm:max-w-xl border border-slate-200 overflow-hidden my-4 sm:my-8 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl w-[95%] sm:max-w-xl border border-slate-200 overflow-hidden my-4 max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-emerald-100 text-emerald-800 rounded-lg">
@@ -1264,7 +2083,6 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
             </div>
 
             <div className="p-6 space-y-4">
-              {/* Template Download Prompt */}
               <div className="p-3.5 bg-blue-50/90 border border-blue-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                 <div className="space-y-0.5">
                   <div className="font-bold text-blue-950 flex items-center gap-1.5">
@@ -1272,7 +2090,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                     <span>Biểu mẫu Excel chuẩn đính kèm</span>
                   </div>
                   <div className="text-blue-800 text-[11px] leading-relaxed">
-                    Tải file mẫu gồm 2 sheet: <b>01. Danh sách người dùng</b> (các trường thông tin bắt buộc, ngày sinh dd/mm/yyyy) và <b>02. Hướng dẫn & Danh mục</b> (danh mục phòng ban, vai trò).
+                    Tải file mẫu gồm 2 sheet: <b>01. Danh sách người dùng</b> và <b>02. Hướng dẫn & Danh mục</b>.
                   </div>
                 </div>
                 <a
@@ -1292,7 +2110,6 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                 </div>
               )}
 
-              {/* Result Summary Box if imported */}
               {importResult && (
                 <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl text-xs text-emerald-900 space-y-2">
                   <div className="flex items-center gap-2 font-bold text-sm text-emerald-800">
@@ -1476,7 +2293,6 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                 </div>
               )}
 
-              {/* Thông tin cán bộ nhận cấp lại */}
               <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200 text-xs space-y-1.5">
                 <div className="flex justify-between items-center">
                   <span className="text-slate-500">Họ và tên:</span>
@@ -1487,16 +2303,11 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                   <span className="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">{resettingUser?.username}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-500">Đơn vị / Phòng ban:</span>
+                  <span className="text-slate-500">Đơn vị:</span>
                   <span className="font-medium text-slate-800">{resettingUser?.dept_name || 'Chưa phân bổ'}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500">Chức vụ:</span>
-                  <span className="text-slate-700">{resettingUser?.gov_title || resettingUser?.role || 'Cán bộ'}</span>
                 </div>
               </div>
 
-              {/* Nhập mật khẩu mới */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs font-semibold text-slate-700">
@@ -1507,7 +2318,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                     onClick={() => setResetPasswordInput('123456')}
                     className="text-[11px] text-indigo-600 hover:text-indigo-800 hover:underline font-semibold cursor-pointer"
                   >
-                    Dùng mặc định: 123456
+                    Mặc định: 123456
                   </button>
                 </div>
                 <div className="relative">
@@ -1517,7 +2328,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                     value={resetPasswordInput}
                     onChange={(e) => setResetPasswordInput(e.target.value)}
                     placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
-                    className="w-full px-3.5 py-2.5 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-slate-50/50"
+                    className="w-full px-3.5 py-2.5 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 bg-slate-50/50"
                   />
                   <button
                     type="button"
@@ -1527,12 +2338,8 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                     {showResetPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                <p className="text-[11px] text-slate-500">
-                  Sau khi cấp lại, cán bộ sử dụng mật khẩu này để đăng nhập và có thể chủ động tự đổi mật khẩu cá nhân.
-                </p>
               </div>
 
-              {/* Action buttons */}
               <div className="pt-3 flex justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
@@ -1567,12 +2374,13 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
           </div>
         </div>
       )}
-      {/* Modal Quản lý Nhóm người dùng tự tạo */}
+
+      {/* User Group Management Modal */}
       <UserGroupManagementModal
         isOpen={isGroupModalOpen}
         onClose={() => setIsGroupModalOpen(false)}
         users={users}
-        departments={departments}
+        departments={localDepts}
         onGroupsUpdated={(g) => setUserGroups(g)}
       />
     </div>

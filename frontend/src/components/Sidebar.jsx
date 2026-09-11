@@ -61,7 +61,7 @@ export default function Sidebar({
   ];
 
   const adminModules = [
-    { id: 'users_mgmt', label: 'Quản lý phân quyền', icon: Users },
+    { id: 'users_mgmt', label: 'Quản lý người dùng', icon: Users },
     { id: 'system_config', label: 'Cấu hình', icon: Settings }
   ];
 
