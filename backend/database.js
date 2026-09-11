@@ -381,7 +381,15 @@ function initDatabase() {
     "ALTER TABLE documents ADD COLUMN submitted_by TEXT;",
     "ALTER TABLE documents ADD COLUMN is_reference_only INTEGER DEFAULT 0;",
     "ALTER TABLE document_dispatches ADD COLUMN dispatch_type TEXT DEFAULT 'process';",
-    "ALTER TABLE document_dispatches ADD COLUMN role_in_dispatch TEXT DEFAULT 'main';"
+    "ALTER TABLE document_dispatches ADD COLUMN role_in_dispatch TEXT DEFAULT 'main';",
+    "ALTER TABLE standard_tasks ADD COLUMN proposed_by TEXT;",
+    "ALTER TABLE standard_tasks ADD COLUMN proposed_by_name TEXT;",
+    "ALTER TABLE standard_tasks ADD COLUMN proposal_type TEXT DEFAULT 'add';",
+    "ALTER TABLE standard_tasks ADD COLUMN proposal_note TEXT;",
+    "ALTER TABLE standard_tasks ADD COLUMN original_task_id TEXT;",
+    "ALTER TABLE standard_tasks ADD COLUMN approved_by TEXT;",
+    "ALTER TABLE standard_tasks ADD COLUMN approved_at TEXT;",
+    "ALTER TABLE standard_tasks ADD COLUMN rejection_reason TEXT;"
   ];
 
   for (const m of migrations) {

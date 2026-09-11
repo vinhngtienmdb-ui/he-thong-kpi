@@ -39,6 +39,20 @@ function getRankBadgeClass(rank) {
   return 'bg-blue-50 text-blue-700 border-blue-300';
 }
 
+function isFunctionalOrAdmin(user) {
+  if (!user) return true;
+  const username = (user.username || '').toLowerCase();
+  const fullName = (user.full_name || '').toLowerCase();
+  const role = (user.role || '').toLowerCase();
+  const roleCode = (user.role_code || user.role_id || user.target_role || '').toLowerCase();
+
+  if (role === 'admin' || roleCode.includes('admin')) return true;
+  if (username === 'admin' || username === 'quantri' || username === 'vanthu' || username === 'mnhy.andong') return true;
+  if (fullName.startsWith('trường ') || fullName.startsWith('phòng ') || fullName.startsWith('ban ') || fullName.startsWith('cơ quan ') || fullName.startsWith('ủy ban ') || fullName.startsWith('quản trị ')) return true;
+  if (fullName.includes('trường mầm non') || fullName.includes('mầm non hoàng yến')) return true;
+  return false;
+}
+
 export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] }) {
   const [advisoryList, setAdvisoryList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +73,7 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
     try {
       setLoading(true);
       const data = await api.getAdvisorySummary(selectedPeriod);
-      const nonAdminList = (data || []).filter(item => item.role !== 'admin');
+      const nonAdminList = (data || []).filter(item => !isFunctionalOrAdmin(item));
       setAdvisoryList(nonAdminList);
       
       // Khởi tạo state chỉnh sửa theo dữ liệu hiện tại
@@ -100,12 +114,16 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
       // Lọc theo phòng ban
       const matchDept = deptFilter === 'all' || item.dept_name === deptFilter;
 
-      // Lọc theo trạng thái trình biểu quyết
+      // Lọc theo trạng thái trình biểu quyết & hoàn tất Bước 5
       let matchStatus = true;
-      if (statusFilter === 'submitted') {
+      if (statusFilter === 'step5_done') {
+        matchStatus = Boolean(item.superior_rank);
+      } else if (statusFilter === 'step5_pending') {
+        matchStatus = !item.superior_rank;
+      } else if (statusFilter === 'submitted') {
         matchStatus = item.is_advisory_submitted === 1;
       } else if (statusFilter === 'pending') {
-        matchStatus = !item.is_advisory_submitted;
+        matchStatus = !item.is_advisory_submitted && Boolean(item.superior_rank);
       } else if (statusFilter === 'has_comment') {
         matchStatus = Boolean(item.advisory_comment || item.advisory_rank);
       }
@@ -119,12 +137,14 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
     const total = advisoryList.length;
     const submittedCount = advisoryList.filter(i => i.is_advisory_submitted === 1).length;
     const hasSuperiorEval = advisoryList.filter(i => Boolean(i.superior_rank)).length;
+    const pendingSuperior = total - hasSuperiorEval;
     const hasFeedback = advisoryList.filter(i => i.task_feedback_count > 0).length;
     return {
       total,
       submittedCount,
       pendingCount: total - submittedCount,
       hasSuperiorEval,
+      pendingSuperior,
       hasFeedback
     };
   }, [advisoryList]);
@@ -165,6 +185,11 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
 
   // Trình biểu quyết cho 1 cán bộ
   const handleSubmitSingle = async (item) => {
+    if (!item.superior_rank) {
+      alert(`CẢNH BÁO TIẾN ĐỘ:\n\nHồ sơ của cán bộ "${item.full_name}" chưa được Lãnh đạo trực tiếp hoàn tất đánh giá và xếp loại ở Bước 5.\nTheo quy định, chỉ những hồ sơ đã kết luận Bước 5 mới được cơ quan tham mưu tổng hợp trình biểu quyết.`);
+      return;
+    }
+
     if (!window.confirm(`Xác nhận Trình biểu quyết hồ sơ của đ/c "${item.full_name}" lên Hội đồng Tập thể Lãnh đạo?`)) return;
     try {
       setSavingId(item.evaluation_id || item.user_id);
@@ -196,12 +221,16 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
     }
   };
 
+  const selectableList = useMemo(() => {
+    return filteredList.filter(i => Boolean(i.superior_rank));
+  }, [filteredList]);
+
   // Chọn / bỏ chọn tất cả
   const handleToggleSelectAll = () => {
-    if (selectedIds.length === filteredList.length) {
+    if (selectableList.length > 0 && selectedIds.length === selectableList.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(filteredList.map(i => i.user_id));
+      setSelectedIds(selectableList.map(i => i.user_id));
     }
   };
 
@@ -219,7 +248,13 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
     }
 
     const selectedItems = advisoryList.filter(i => selectedIds.includes(i.user_id));
-    if (!window.confirm(`XÁC NHẬN TRÌNH BIỂU QUYẾT HÀNG LOẠT?\n\nBạn đang chọn ${selectedItems.length} hồ sơ để trình lên Tập thể Lãnh đạo biểu quyết tại Bước 7. Tiếp tục?`)) {
+    const notReadyItems = selectedItems.filter(i => !i.superior_rank);
+    if (notReadyItems.length > 0) {
+      alert(`CẢNH BÁO TIẾN ĐỘ:\n\nCó ${notReadyItems.length} cán bộ chưa hoàn tất đánh giá ở Bước 5 (chưa có kết luận của Lãnh đạo trực tiếp):\n${notReadyItems.map(i => '- ' + i.full_name).join('\n')}\n\nTheo quy trình chuẩn, chỉ những cán bộ đã hoàn tất Bước 5 mới được cơ quan tham mưu trình lên Tập thể Lãnh đạo biểu quyết (Bước 7). Vui lòng bỏ chọn các hồ sơ này.`);
+      return;
+    }
+
+    if (!window.confirm(`XÁC NHẬN TRÌNH BIỂU QUYẾT HÀNG LOẠT?\n\nBạn đang chọn ${selectedItems.length} hồ sơ đã hoàn tất Bước 5 để trình lên Tập thể Lãnh đạo biểu quyết tại Bước 7. Tiếp tục?`)) {
       return;
     }
 
@@ -269,7 +304,7 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
           <div className="flex items-center gap-1 font-semibold truncate">
             <span className="text-slate-500">Quản lý đánh giá</span>
             <span className="text-slate-400">&gt;</span>
-            <span className="text-red-700 font-bold">Bước 6: Cơ quan Tham mưu Tổng hợp & Trình biểu quyết</span>
+            <span className="text-red-700 font-bold">Bước 6: Tổng hợp tham mưu & Thẩm tra hồ sơ</span>
           </div>
         </div>
 
@@ -288,7 +323,7 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
               type="button"
               onClick={handleSubmitBulk}
               disabled={submittingBulk}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-xs font-bold transition shadow-xs"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
             >
               <Send className="w-3.5 h-3.5" />
               Trình biểu quyết ({selectedIds.length})
@@ -313,16 +348,16 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
             <Users className="w-4 h-4 text-slate-400" />
           </div>
           <div className="text-xl font-black text-slate-800 mt-1">{stats.total}</div>
-          <div className="text-[11px] text-slate-400 mt-0.5">Cán bộ, công chức trong kỳ</div>
+          <div className="text-[11px] text-slate-400 mt-0.5">Cán bộ trong đơn vị</div>
         </div>
 
         <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Lãnh đạo đã chấm</span>
+            <span className="text-xs font-semibold text-slate-500">Đã hoàn tất Bước 5</span>
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="text-xl font-black text-emerald-700 mt-1">{stats.hasSuperiorEval} / {stats.total}</div>
-          <div className="text-[11px] text-emerald-600 font-medium mt-0.5">Đã có kết luận Bước 5</div>
+          <div className="text-[11px] text-emerald-600 font-medium mt-0.5">Sẵn sàng tham mưu ({stats.pendingSuperior} chờ CBQL)</div>
         </div>
 
         <div className="bg-white p-3.5 rounded-xl border border-slate-200/80 shadow-2xs">
@@ -377,9 +412,11 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
             onChange={(e) => setStatusFilter(e.target.value)}
             className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 font-medium text-slate-700 focus:ring-2 focus:ring-red-500"
           >
-            <option value="all">Tất cả trạng thái</option>
-            <option value="pending">Chờ trình biểu quyết</option>
-            <option value="submitted">Đã trình biểu quyết (Bước 7)</option>
+            <option value="all">Tất cả trạng thái ({advisoryList.length})</option>
+            <option value="step5_done">Đã hoàn tất Bước 5 (Sẵn sàng: {stats.hasSuperiorEval})</option>
+            <option value="step5_pending">Chưa hoàn tất Bước 5 (Chờ CBQL: {stats.pendingSuperior})</option>
+            <option value="pending">Chờ trình biểu quyết ({stats.pendingCount})</option>
+            <option value="submitted">Đã trình biểu quyết Bước 7 ({stats.submittedCount})</option>
             <option value="has_comment">Đã nhập ý kiến tham mưu</option>
           </select>
         </div>
@@ -399,9 +436,11 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
                 <th className="py-2.5 px-3 w-10 text-center">
                   <input
                     type="checkbox"
-                    checked={filteredList.length > 0 && selectedIds.length === filteredList.length}
+                    checked={selectableList.length > 0 && selectedIds.length === selectableList.length}
                     onChange={handleToggleSelectAll}
-                    className="rounded text-red-600 focus:ring-red-500 cursor-pointer"
+                    disabled={selectableList.length === 0}
+                    title="Chọn tất cả hồ sơ đã hoàn tất Bước 5"
+                    className="rounded text-red-600 focus:ring-red-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                   />
                 </th>
                 <th className="py-2.5 px-3 min-w-[170px]">Cán bộ / Đơn vị</th>
@@ -436,8 +475,10 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
                         <input
                           type="checkbox"
                           checked={isSelected}
+                          disabled={!item.superior_rank}
                           onChange={() => handleToggleSelectOne(item.user_id)}
-                          className="rounded text-red-600 focus:ring-red-500 cursor-pointer mt-1"
+                          title={!item.superior_rank ? 'Chưa hoàn tất đánh giá Bước 5' : 'Chọn để trình biểu quyết'}
+                          className="rounded text-red-600 focus:ring-red-500 cursor-pointer mt-1 disabled:opacity-30 disabled:cursor-not-allowed"
                         />
                       </td>
 
@@ -500,8 +541,13 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
                             )}
                           </>
                         ) : (
-                          <div className="text-[11px] text-slate-400 italic py-2">
-                            Lãnh đạo chưa hoàn tất đánh giá Bước 5
+                          <div className="py-2 space-y-1">
+                            <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                              Chưa hoàn tất Bước 5
+                            </span>
+                            <div className="text-[11px] text-slate-400 italic">
+                              Đang chờ CBQL trực tiếp đánh giá & kết luận
+                            </div>
                           </div>
                         )}
                       </td>
@@ -569,16 +615,25 @@ export default function AdvisoryTab({ selectedPeriod, currentUser, users = [] })
                           </div>
                         ) : (
                           <div className="space-y-1.5">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                              item.superior_rank 
+                                ? 'bg-amber-50 text-amber-700 border-amber-200' 
+                                : 'bg-slate-100 text-slate-500 border-slate-200'
+                            }`}>
                               <Clock className="w-2.5 h-2.5" />
-                              Chờ trình
+                              {item.superior_rank ? 'Chờ trình BQ' : 'Chờ B5'}
                             </span>
                             <div>
                               <button
                                 type="button"
                                 onClick={() => handleSubmitSingle(item)}
-                                disabled={isSaving}
-                                className="inline-flex items-center justify-center gap-1 w-full px-2.5 py-1.5 bg-red-700 hover:bg-red-800 text-white rounded-lg text-xs font-bold transition shadow-2xs"
+                                disabled={isSaving || !item.superior_rank}
+                                title={!item.superior_rank ? 'Cần hoàn tất Bước 5 trước khi trình biểu quyết' : 'Trình Tập thể Lãnh đạo biểu quyết (Bước 7)'}
+                                className={`inline-flex items-center justify-center gap-1 w-full px-2.5 py-1.5 rounded-lg text-xs font-bold transition shadow-2xs ${
+                                  !item.superior_rank
+                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                    : 'bg-red-700 hover:bg-red-800 text-white cursor-pointer'
+                                }`}
                               >
                                 <Send className="w-3 h-3" />
                                 Trình BQ

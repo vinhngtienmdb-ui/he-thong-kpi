@@ -50,12 +50,12 @@ export default function Sidebar({
   const evalModules = [
     { id: 'standard', label: 'Danh mục công việc chuẩn', icon: FileSpreadsheet },
     { id: 'documents', label: 'Quản lý & Phân bổ văn bản', icon: Files },
-    { id: 'assignment', label: 'Quản lý nhiệm vụ', icon: UserCheck },
-    { id: 'execution', label: 'Nộp sản phẩm công việc', icon: CheckSquare },
-    { id: 'self_eval', label: 'Tự đánh giá cuối quý', icon: Award },
-    { id: 'grading', label: 'Đánh giá, nhận xét', icon: ShieldCheck },
-    { id: 'advisory', label: 'Tổng hợp tham mưu (B6)', icon: ClipboardCheck },
-    { id: 'voting', label: 'Biểu quyết xếp loại', icon: Vote },
+    { id: 'assignment', label: 'B1. Giao & Tiếp nhận việc', icon: UserCheck },
+    { id: 'execution', label: 'B2. Nộp sản phẩm công việc', icon: CheckSquare },
+    { id: 'self_eval', label: 'B3. Tự đánh giá cuối kỳ', icon: Award },
+    { id: 'grading', label: 'B5. Đánh giá, nhận xét (CBQL)', icon: ShieldCheck },
+    { id: 'advisory', label: 'B6. Tổng hợp tham mưu', icon: ClipboardCheck },
+    { id: 'voting', label: 'B6. Biểu quyết xếp loại', icon: Vote },
     { id: 'charts', label: 'Biểu đồ thống kê', icon: BarChart3 },
     { id: 'reports', label: 'Xuất báo cáo & biểu mẫu', icon: FileText }
   ];

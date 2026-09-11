@@ -208,10 +208,9 @@ function checkCanManageUsers(viewer) {
   }
 }
 
-// Check if user is a Leader/Manager eligible for management and voting
+// Check if user is a Leader/Manager eligible for general management
 function isLeaderUser(u) {
   if (!u) return false;
-  // Quản trị đơn vị là tài khoản chức năng, tuyệt đối không tham gia đánh giá, chấm điểm hay biểu quyết
   if (u.role_code === 'admin_donvi' || u.role_id === 'role-admin-donvi') return false;
   if (u.role === 'admin' || u.role === 'cbql') return true;
   if (u.target_role === 'cbql') return true;
@@ -230,9 +229,52 @@ function isLeaderUser(u) {
     'hiệu trưởng', 'hiệu phó', 'phó hiệu trưởng', 'giám đốc', 'phó giám đốc', 
     'trưởng phòng', 'phó phòng', 'phó trưởng phòng', 'trưởng ban', 'phó ban', 
     'tổ trưởng', 'tổ phó', 'bí thư', 'phó bí thư', 'thường trực', 'thường vụ', 
-    'cấp ủy', 'chi ủy', 'chủ tịch', 'phó chủ tịch', 'quản trị'
+    'cấp ủy', 'chi ủy', 'chủ tịch', 'phó chủ tịch'
   ];
   return leaderKeywords.some(kw => title.includes(kw));
+}
+
+// Kiểm tra thành viên Hội đồng Lãnh đạo biểu quyết: TUYỆT ĐỐI LOẠI BỎ TẤT CẢ TÀI KHOẢN CHỨC NĂNG / ADMIN / ĐƠN VỊ
+function isVotingCouncilMember(u) {
+  if (!u) return false;
+  // 1. Loại bỏ tất cả tài khoản admin, admin đơn vị, chức năng kỹ thuật
+  if (u.role === 'admin' || u.role === 'admin_donvi') return false;
+  if (u.role_code === 'admin' || u.role_code === 'admin_donvi') return false;
+  if (u.role_id === 'role-admin' || u.role_id === 'role-admin-donvi') return false;
+  if (u.target_role === 'admin' || u.target_role === 'admin_donvi' || u.target_role === 'exempt' || u.target_role === 'none') return false;
+  
+  const uname = String(u.username || '').toLowerCase();
+  if (['admin', 'quantri', 'quantrihethong', 'admin_donvi', 'vanthu', 'mnhy.andong'].includes(uname)) return false;
+
+  // Loại bỏ các tài khoản mang tên cơ quan/đơn vị/trường/phòng/ban/quản trị (không phải cá nhân lãnh đạo)
+  const fname = String(u.full_name || '').toLowerCase();
+  const orgKeywords = ['trường ', 'phòng ', 'ban ', 'cơ quan', 'ủy ban', 'quản trị', 'văn thư', 'hệ thống', 'đơn vị'];
+  if (orgKeywords.some(kw => fname.startsWith(kw) || fname.includes('quản trị viên') || fname.includes('tài khoản chức năng'))) {
+    return false;
+  }
+
+  try {
+    const perms = typeof u.permissions === 'string' 
+      ? JSON.parse(u.permissions || '{}') 
+      : (u.permissions || {});
+    if (perms.is_exempt_from_evaluation || perms.is_functional_admin) return false;
+  } catch (e) {}
+
+  // 2. Phải có chức danh Lãnh đạo thực tế (Hiệu trưởng, Phó Hiệu trưởng, Trưởng/Phó phòng, Giám đốc, Bí thư...)
+  const title = `${u.gov_title || ''} ${u.party_title || ''}`.toLowerCase();
+  const leaderKeywords = [
+    'hiệu trưởng', 'hiệu phó', 'phó hiệu trưởng', 'giám đốc', 'phó giám đốc', 
+    'trưởng phòng', 'phó phòng', 'phó trưởng phòng', 'trưởng ban', 'phó ban', 
+    'bí thư', 'phó bí thư', 'thường trực', 'thường vụ', 'chủ tịch', 'phó chủ tịch'
+  ];
+  const hasLeaderTitle = leaderKeywords.some(kw => title.includes(kw));
+  if (!hasLeaderTitle) return false;
+
+  if (u.management_role === 'lanh_dao' || u.management_role === 'quan_ly') return true;
+  if (u.role === 'cbql' || u.target_role === 'cbql') return true;
+  if (u.role_code && ['cbql_phong', 'ld_coquan', 'hieu_pho'].includes(u.role_code)) return true;
+
+  return true;
 }
 
 // Check if viewer is CBQL or Admin (Leader/Manager)
@@ -1388,7 +1430,10 @@ app.get('/api/axes', (req, res) => {
 // 2. Standard Tasks (Danh mục Công việc chuẩn)
 // -------------------------------------------------------------
 app.get('/api/standard-tasks', (req, res) => {
-  const { period_id, axis_code, dept_code } = req.query;
+  const { period_id, axis_code, dept_code, include_proposals } = req.query;
+  const viewer = getViewer(req);
+  const isManager = viewer ? checkIsManagerOrAdmin(viewer) : false;
+
   let query = 'SELECT * FROM standard_tasks WHERE 1=1';
   const params = [];
 
@@ -1401,13 +1446,157 @@ app.get('/api/standard-tasks', (req, res) => {
     params.push(axis_code);
   }
   if (dept_code) {
-    query += ' AND (dept_code = ? OR dept_code IS NULL)';
+    query += ' AND (dept_code = ? OR dept_code IS NULL OR dept_code = "")';
     params.push(dept_code);
   }
+
+  // Quản lý hiển thị trạng thái đề xuất:
+  // - Nếu là CBQL/Admin hoặc yêu cầu include_proposals: hiển thị tất cả
+  // - Nếu là CBNV: hiển thị các nhiệm vụ Hoạt động/Khoá DÙNG CHUNG TOÀN CƠ QUAN, VÀ các đề xuất của chính CBNV đó
+  if (include_proposals === 'true' || isManager) {
+    // Show all
+  } else if (viewer?.id) {
+    query += " AND (status != 'pending_approval' OR proposed_by = ?)";
+    params.push(viewer.id);
+  } else {
+    query += " AND (status IS NULL OR status = 'Hoạt động' OR status = 'Tạm khóa' OR status = 'Khoá')";
+  }
+
   query += ' ORDER BY axis_code, deadline ASC';
 
   const tasks = db.prepare(query).all(...params);
   res.json(tasks);
+});
+
+// CBNV gửi đề xuất Thêm mới hoặc Sửa công việc chuẩn
+app.post('/api/standard-tasks/propose', (req, res) => {
+  const {
+    period_id, dept_code, task_name, output_result, deadline,
+    task_type, standard_score, difficulty_weight, expected_evidence, note, axis_code,
+    proposal_type, proposal_note, original_task_id
+  } = req.body;
+
+  const viewer = getViewer(req);
+  const viewerId = viewer?.id || getViewerId(req);
+  const proposerName = viewer?.full_name || 'Cán bộ';
+
+  if (!task_name || !task_name.trim()) {
+    return res.status(400).json({ success: false, message: 'Vui lòng nhập tên công việc chuẩn' });
+  }
+
+  const id = uuidv4();
+  const stdScore = parseFloat(standard_score) || (task_type === 'Đột xuất' ? 12 : 10);
+  const diffWeight = parseFloat(difficulty_weight) || 1.0;
+  const maxConv = Number((stdScore * diffWeight).toFixed(2));
+
+  db.prepare(`
+    INSERT INTO standard_tasks (
+      id, period_id, dept_code, task_name, output_result, deadline,
+      task_type, standard_score, difficulty_weight, max_converted_score,
+      expected_evidence, note, axis_code, status,
+      proposed_by, proposed_by_name, proposal_type, proposal_note, original_task_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, ?, ?)
+  `).run(
+    id, period_id || null, dept_code || null, task_name.trim(), output_result || null, deadline || null,
+    task_type || 'Thường xuyên', stdScore, diffWeight, maxConv,
+    expected_evidence || '', note || '', axis_code || null,
+    viewerId, proposerName, proposal_type || 'add', proposal_note || '', original_task_id || null
+  );
+
+  triggerBackgroundSupabaseSync();
+
+  res.json({
+    success: true,
+    id,
+    message: proposal_type === 'edit'
+      ? 'Đã gửi đề xuất sửa đổi công việc chuẩn đến Lãnh đạo phê duyệt thành công!'
+      : 'Đã gửi đề xuất thêm công việc chuẩn mới đến Lãnh đạo phê duyệt thành công!'
+  });
+});
+
+// Lãnh đạo / CBQL / Admin phê duyệt đề xuất công việc chuẩn
+app.put('/api/standard-tasks/:id/approve-proposal', requireManagerOrAdmin, (req, res) => {
+  const { id } = req.params;
+  const viewer = getViewer(req);
+  const viewerId = viewer?.id || getViewerId(req);
+
+  const proposal = db.prepare('SELECT * FROM standard_tasks WHERE id = ?').get(id);
+  if (!proposal) {
+    return res.status(404).json({ success: false, message: 'Không tìm thấy đề xuất công việc chuẩn' });
+  }
+
+  if (proposal.proposal_type === 'edit' && proposal.original_task_id) {
+    // Cập nhật công việc gốc
+    db.prepare(`
+      UPDATE standard_tasks
+      SET task_name = ?,
+          output_result = ?,
+          deadline = ?,
+          task_type = ?,
+          standard_score = ?,
+          difficulty_weight = ?,
+          max_converted_score = ?,
+          expected_evidence = ?,
+          note = ?,
+          axis_code = ?,
+          status = 'Hoạt động'
+      WHERE id = ?
+    `).run(
+      proposal.task_name,
+      proposal.output_result,
+      proposal.deadline,
+      proposal.task_type,
+      proposal.standard_score,
+      proposal.difficulty_weight,
+      proposal.max_converted_score,
+      proposal.expected_evidence,
+      proposal.note,
+      proposal.axis_code,
+      proposal.original_task_id
+    );
+
+    // Xóa bản ghi đề xuất tạm sau khi đã merge vào bản gốc
+    db.prepare('DELETE FROM standard_tasks WHERE id = ?').run(id);
+  } else {
+    // Đề xuất thêm mới: chuyển thành Hoạt động
+    db.prepare(`
+      UPDATE standard_tasks
+      SET status = 'Hoạt động',
+          approved_by = ?,
+          approved_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(viewerId, id);
+  }
+
+  triggerBackgroundSupabaseSync();
+
+  res.json({ success: true, message: 'Đã phê duyệt đề xuất thành công! Công việc đã được cập nhật vào Danh mục chuẩn chung.' });
+});
+
+// Lãnh đạo từ chối đề xuất
+app.put('/api/standard-tasks/:id/reject-proposal', requireManagerOrAdmin, (req, res) => {
+  const { id } = req.params;
+  const { rejection_reason } = req.body;
+  const viewer = getViewer(req);
+  const viewerId = viewer?.id || getViewerId(req);
+
+  const proposal = db.prepare('SELECT * FROM standard_tasks WHERE id = ?').get(id);
+  if (!proposal) {
+    return res.status(404).json({ success: false, message: 'Không tìm thấy đề xuất' });
+  }
+
+  db.prepare(`
+    UPDATE standard_tasks
+    SET status = 'rejected',
+        rejection_reason = ?,
+        approved_by = ?,
+        approved_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(rejection_reason || 'Không phù hợp với tiêu chuẩn chung của đơn vị', viewerId, id);
+
+  triggerBackgroundSupabaseSync();
+
+  res.json({ success: true, message: 'Đã từ chối đề xuất công việc chuẩn.' });
 });
 
 // Download template for standard tasks import
@@ -2428,6 +2617,8 @@ app.post('/api/assigned-tasks/:id/return', requireManagerOrAdmin, (req, res) => 
     WHERE id = ?
   `).run(reasonText, `[Trả về bởi ${returnerName}]: ${reasonText}`, id);
 
+  triggerBackgroundSupabaseSync();
+
   res.json({ 
     success: true, 
     message: `Đã trả về công việc "${task.task_name}" yêu cầu cán bộ nộp lại minh chứng!` 
@@ -2453,6 +2644,8 @@ app.put('/api/assigned-tasks/:id/accept', (req, res) => {
     SET status = 'in_progress', updated_at = CURRENT_TIMESTAMP 
     WHERE id = ?
   `).run(id);
+
+  triggerBackgroundSupabaseSync();
 
   res.json({ success: true, message: 'Đã xác nhận tiếp nhận nhiệm vụ thành công!' });
 });
@@ -2495,48 +2688,134 @@ app.put('/api/assigned-tasks/:id/feedback', (req, res) => {
     WHERE id = ?
   `).run(feedback_reason.trim(), id);
 
+  triggerBackgroundSupabaseSync();
+
   res.json({ success: true, message: 'Đã gửi phản hồi về công việc cho Lãnh đạo xem xét thành công!' });
 });
 
-// Lãnh đạo Giao lại nhiệm vụ sau khi cấp dưới phản hồi (Bước 1 - Nhánh 2 theo tài liệu V6)
-app.put('/api/assigned-tasks/:id/reassign', requireManagerOrAdmin, (req, res) => {
+// Cán bộ Trả lại công việc cho Lãnh đạo / Người giao việc
+app.put('/api/assigned-tasks/:id/return-to-assigner', (req, res) => {
   const { id } = req.params;
-  const { deadline, task_name, output_result, standard_score, difficulty_weight } = req.body;
+  const { return_reason } = req.body;
+  const viewerId = getViewerId(req);
+
+  if (!return_reason || !return_reason.trim()) {
+    return res.status(400).json({ success: false, message: 'Vui lòng nhập lý do trả lại công việc' });
+  }
 
   const task = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
   if (!task) return res.status(404).json({ success: false, message: 'Không tìm thấy công việc' });
 
-  // Theo tài liệu V6: Khi lãnh đạo giao lại thì nhiệm vụ tự chuyển vào "Đã xác nhận" (in_progress) của cán bộ
+  // Kiểm tra quyền: chỉ người được giao hoặc admin mới được trả lại việc
+  if (viewerId && task.user_id !== viewerId) {
+    const viewer = db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId);
+    if (viewer?.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Bạn không có quyền trả lại nhiệm vụ của cán bộ khác' });
+    }
+  }
+
+  if (task.status === 'approved') {
+    return res.status(400).json({ success: false, message: 'Công việc đã được thẩm định chấm điểm phê duyệt, không thể trả lại' });
+  }
+
+  const viewer = viewerId ? db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId) : null;
+  const userName = viewer?.full_name || 'Cán bộ';
+
+  db.prepare(`
+    UPDATE assigned_tasks 
+    SET status = 'returned', 
+        return_reason = ?, 
+        is_returned = 1,
+        cbql_comment = ?,
+        updated_at = CURRENT_TIMESTAMP 
+    WHERE id = ?
+  `).run(return_reason.trim(), `[Cán bộ ${userName} trả lại việc]: ${return_reason.trim()}`, id);
+
+  triggerBackgroundSupabaseSync();
+
+  res.json({ success: true, message: 'Đã trả lại công việc cho Lãnh đạo/Người giao thành công!' });
+});
+
+// Lãnh đạo Giao lại nhiệm vụ sau khi cấp dưới phản hồi hoặc trả lại
+app.put('/api/assigned-tasks/:id/reassign', requireManagerOrAdmin, (req, res) => {
+  const { id } = req.params;
+  const { deadline, task_name, output_result, standard_score, difficulty_weight, new_user_id, note } = req.body;
+
+  const task = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
+  if (!task) return res.status(404).json({ success: false, message: 'Không tìm thấy công việc' });
+
   const stdScore = standard_score ? parseFloat(standard_score) : task.standard_score;
   const diffWeight = difficulty_weight ? parseFloat(difficulty_weight) : task.difficulty_weight;
   const maxConv = Number((stdScore * diffWeight).toFixed(2));
 
+  // Nếu giao cho cán bộ khác
+  const targetUserId = (new_user_id && new_user_id !== task.user_id) ? new_user_id : task.user_id;
+  const newStatus = (new_user_id && new_user_id !== task.user_id) ? 'pending_acceptance' : 'in_progress';
+
   db.prepare(`
     UPDATE assigned_tasks 
-    SET status = 'in_progress',
+    SET status = ?,
+        user_id = ?,
         task_name = COALESCE(?, task_name),
         deadline = COALESCE(?, deadline),
         output_result = COALESCE(?, output_result),
         standard_score = ?,
         difficulty_weight = ?,
         max_converted_score = ?,
+        is_returned = 0,
+        cbql_comment = COALESCE(?, cbql_comment),
         reassigned_at = CURRENT_TIMESTAMP,
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(
+    newStatus,
+    targetUserId,
     task_name ? task_name.trim() : null,
     deadline || null,
     output_result || null,
     stdScore,
     diffWeight,
     maxConv,
+    note ? `[Lãnh đạo chỉ đạo khi giao lại]: ${note.trim()}` : task.cbql_comment,
     id
   );
 
+  triggerBackgroundSupabaseSync();
+
   res.json({ 
     success: true, 
-    message: 'Đã điều chỉnh và giao lại nhiệm vụ thành công. Nhiệm vụ đã được chuyển vào danh sách thực hiện của cán bộ!' 
+    message: (new_user_id && new_user_id !== task.user_id)
+      ? 'Đã chuyển giao nhiệm vụ cho cán bộ mới thành công!' 
+      : 'Đã điều chỉnh và giao lại nhiệm vụ thành công!' 
   });
+});
+
+// Lãnh đạo / Admin xóa hoặc hủy nhiệm vụ đã giao hoặc bị trả lại
+app.delete('/api/assigned-tasks/:id', requireManagerOrAdmin, (req, res) => {
+  const { id } = req.params;
+  const viewerId = getViewerId(req);
+
+  const task = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
+  if (!task) return res.status(404).json({ success: false, message: 'Không tìm thấy công việc' });
+
+  if (task.status === 'approved') {
+    return res.status(400).json({ success: false, message: 'Công việc đã được chấm điểm phê duyệt, không thể xóa' });
+  }
+
+  // Kiểm tra quyền
+  const accessibleUserIds = getAccessibleUserIds(viewerId);
+  if (accessibleUserIds !== null && !accessibleUserIds.includes(task.user_id) && task.assigned_by !== viewerId) {
+    const viewer = viewerId ? db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId) : null;
+    if (viewer?.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Bạn không có quyền xóa nhiệm vụ này' });
+    }
+  }
+
+  db.prepare('DELETE FROM assigned_tasks WHERE id = ?').run(id);
+
+  triggerBackgroundSupabaseSync();
+
+  res.json({ success: true, message: `Đã xóa nhiệm vụ "${task.task_name}" thành công!` });
 });
 
 // Cán bộ Phản hồi đánh giá nhiệm vụ cuối kỳ (Bước 4 theo tài liệu V6)
@@ -2928,13 +3207,35 @@ app.post('/api/evaluations/conclude', requireManagerOrAdmin, (req, res) => {
     }
   }
 
+  // Điều kiện chuyển lên Bước 5: Cán bộ đã nộp tự đánh giá cuối kỳ
+  if (evalRec.status !== 'submitted' && evalRec.status !== 'approved') {
+    return res.status(400).json({
+      success: false,
+      message: 'Cán bộ chưa hoàn tất nộp bản tự đánh giá cuối kỳ (Bước 3). Chưa đủ điều kiện kết luận xếp loại Bước 5!'
+    });
+  }
+
+  // Điều kiện chuyển lên Bước 5: Cán bộ đã hoàn tất nộp tất cả sản phẩm công việc (Bước 2)
+  const unsubmitted = db.prepare(`
+    SELECT COUNT(*) as count 
+    FROM assigned_tasks 
+    WHERE user_id = ? AND period_id = ? AND status NOT IN ('submitted', 'approved', 'rejected')
+  `).get(evalRec.user_id, evalRec.period_id);
+
+  if (unsubmitted && unsubmitted.count > 0) {
+    return res.status(400).json({
+      success: false,
+      message: `Cán bộ còn ${unsubmitted.count} nhiệm vụ chưa nộp sản phẩm/minh chứng (Bước 2). Cán bộ phải hoàn tất nộp toàn bộ sản phẩm công việc thì mới đủ điều kiện chuyển lên Bước 5!`
+    });
+  }
+
   db.prepare(`
     UPDATE evaluations
-    SET superior_rank = ?, superior_comment = ?, status = ?, step = 'step_5_voting', updated_at = CURRENT_TIMESTAMP
+    SET superior_rank = ?, superior_comment = ?, status = ?, step = 'step_6_advisory', updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(superior_rank, superior_comment, status || 'approved', evaluation_id);
 
-  res.json({ success: true, message: 'Đã lưu kết luận đánh giá của cấp có thẩm quyền thành công!' });
+  res.json({ success: true, message: 'Đã lưu kết luận đánh giá Bước 5 thành công! Hồ sơ đã được chuyển tiếp lên Bước 6 (Tổng hợp tham mưu).' });
 });
 
 // Báo cáo Mẫu 02 (Toàn cơ quan / đơn vị theo HD.06)
@@ -3241,12 +3542,34 @@ app.post('/api/advisory-summary/submit-voting', (req, res) => {
 app.get('/api/voting/progress', (req, res) => {
   const { period_id } = req.query;
   const viewer = getViewer(req);
-  const isViewerLeader = viewer ? isLeaderUser(viewer) : false;
+  const isViewerLeader = viewer ? isVotingCouncilMember(viewer) : false;
 
-  // Lấy tất cả người dùng đang hoạt động để đếm số cán bộ cần đánh giá
-  const allActiveUsers = db.prepare(`
+  // Lấy tất cả người dùng hợp lệ cần được biểu quyết (LOẠI BỎ TÀI KHOẢN ADMIN/CHỨC NĂNG)
+  const candidates = db.prepare(`
     SELECT u.id, u.full_name, u.role, u.target_role, u.gov_title, u.party_title, u.dept_id,
            r.code as role_code, r.permissions, r.data_scope, d.name as dept_name
+    FROM users u
+    LEFT JOIN roles r ON u.role_id = r.id
+    LEFT JOIN departments d ON u.dept_id = d.id
+    WHERE (u.is_active IS NULL OR u.is_active = 1)
+      AND u.role NOT IN ('admin', 'admin_donvi')
+      AND COALESCE(u.target_role, '') NOT IN ('admin', 'admin_donvi', 'none', 'exempt')
+      AND COALESCE(u.role_id, '') NOT IN ('role-admin', 'role-admin-donvi')
+      AND LOWER(u.username) NOT IN ('admin', 'quantri', 'quantrihethong', 'admin_donvi', 'vanthu', 'mnhy.andong')
+      AND LOWER(u.full_name) NOT LIKE 'trường%'
+      AND LOWER(u.full_name) NOT LIKE 'phòng%'
+      AND LOWER(u.full_name) NOT LIKE 'ban %'
+      AND LOWER(u.full_name) NOT LIKE 'cơ quan%'
+      AND LOWER(u.full_name) NOT LIKE 'quản trị%'
+    ORDER BY u.full_name ASC
+  `).all();
+
+  const totalCandidates = candidates.length;
+
+  // Lấy danh sách toàn bộ cán bộ để lọc ra Hội đồng Lãnh đạo biểu quyết (CHỈ LÃNH ĐẠO THỰC TẾ, KHÔNG BAO GỒM ADMIN)
+  const allUsers = db.prepare(`
+    SELECT u.id, u.username, u.full_name, u.role, u.target_role, u.role_id, u.management_role,
+           u.gov_title, u.party_title, u.dept_id, r.code as role_code, r.permissions, r.data_scope, d.name as dept_name
     FROM users u
     LEFT JOIN roles r ON u.role_id = r.id
     LEFT JOIN departments d ON u.dept_id = d.id
@@ -3254,10 +3577,7 @@ app.get('/api/voting/progress', (req, res) => {
     ORDER BY u.full_name ASC
   `).all();
 
-  const totalCandidates = allActiveUsers.length;
-
-  // Lọc danh sách Lãnh đạo / Quản lý có thẩm quyền biểu quyết
-  const eligibleLeaders = allActiveUsers.filter(isLeaderUser);
+  const eligibleLeaders = allUsers.filter(isVotingCouncilMember);
 
   // Tiến độ bỏ phiếu của từng lãnh đạo
   const leadersProgress = eligibleLeaders.map(leader => {
@@ -3356,7 +3676,13 @@ app.get('/api/voting', (req, res) => {
     WHERE (u.is_active IS NULL OR u.is_active = 1)
       AND u.role NOT IN ('admin', 'admin_donvi')
       AND COALESCE(u.target_role, '') NOT IN ('admin', 'admin_donvi', 'none', 'exempt')
-      AND COALESCE(u.role_id, '') NOT IN ('role-admin', 'role-admin-donvi') ${userClause}
+      AND COALESCE(u.role_id, '') NOT IN ('role-admin', 'role-admin-donvi')
+      AND LOWER(u.username) NOT IN ('admin', 'quantri', 'quantrihethong', 'admin_donvi', 'vanthu', 'mnhy.andong')
+      AND LOWER(u.full_name) NOT LIKE 'trường%'
+      AND LOWER(u.full_name) NOT LIKE 'phòng%'
+      AND LOWER(u.full_name) NOT LIKE 'ban %'
+      AND LOWER(u.full_name) NOT LIKE 'cơ quan%'
+      AND LOWER(u.full_name) NOT LIKE 'quản trị%' ${userClause}
     ORDER BY u.full_name ASC
   `).all(...params);
 
@@ -3404,11 +3730,11 @@ app.post('/api/voting', (req, res) => {
     return res.status(401).json({ success: false, message: 'Vui lòng xác định người biểu quyết (yêu cầu đăng nhập)' });
   }
 
-  // Chặn nghiêm ngặt: Chỉ người có chức danh Lãnh đạo / Quản lý mới được biểu quyết
-  if (!viewer || !isLeaderUser(viewer)) {
+  // Chặn nghiêm ngặt: Chỉ thành viên Hội đồng Lãnh đạo thực tế mới được biểu quyết
+  if (!viewer || !isVotingCouncilMember(viewer)) {
     return res.status(403).json({ 
       success: false, 
-      message: 'Từ chối quyền: Chỉ cán bộ có chức danh Lãnh đạo / Quản lý mới có quyền tham gia biểu quyết xếp loại!' 
+      message: 'Từ chối quyền: Chỉ cán bộ trong Hội đồng Lãnh đạo thực tế mới có quyền tham gia biểu quyết xếp loại (không bao gồm tài khoản chức năng/admin)!' 
     });
   }
 

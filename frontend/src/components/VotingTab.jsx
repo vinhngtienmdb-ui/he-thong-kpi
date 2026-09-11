@@ -20,30 +20,50 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 
+function isFunctionalOrAdmin(user) {
+  if (!user) return false;
+  if (user.role === 'admin' || user.role === 'admin_donvi') return true;
+  if (user.role_code === 'admin' || user.role_code === 'admin_donvi') return true;
+  if (user.role_id === 'role-admin' || user.role_id === 'role-admin-donvi') return true;
+  if (['admin', 'admin_donvi', 'none', 'exempt'].includes(user.target_role)) return true;
+  
+  const uname = String(user.username || '').toLowerCase();
+  if (['admin', 'quantri', 'quantrihethong', 'admin_donvi', 'vanthu', 'mnhy.andong'].includes(uname)) return true;
+
+  const fname = String(user.full_name || '').toLowerCase();
+  const orgKeywords = ['trường ', 'phòng ', 'ban ', 'cơ quan', 'ủy ban', 'quản trị', 'văn thư', 'hệ thống', 'đơn vị'];
+  if (orgKeywords.some(kw => fname.startsWith(kw) || fname.includes('quản trị viên') || fname.includes('tài khoản chức năng'))) {
+    return true;
+  }
+
+  try {
+    const perms = typeof user.permissions === 'string' ? JSON.parse(user.permissions || '{}') : (user.permissions || {});
+    if (perms.is_exempt_from_evaluation || perms.is_functional_admin) return true;
+  } catch (e) {}
+
+  return false;
+}
+
 function checkIsLeader(user) {
   if (!user) return false;
-  // Quản trị đơn vị là tài khoản chức năng kỹ thuật, tuyệt đối không tham gia biểu quyết hay đánh giá
-  if (user.role_code === 'admin_donvi' || user.role_id === 'role-admin-donvi') return false;
-  try {
-    const perms = typeof user.permissions === 'string' ? JSON.parse(user.permissions || '{}') : (user.permissions || {});
-    if (perms.is_exempt_from_evaluation || perms.is_functional_admin) return false;
-  } catch (e) {}
-  if (user.role === 'admin' || user.role === 'cbql') return true;
-  if (user.target_role === 'cbql') return true;
-  if (user.role_code && ['admin', 'cbql_phong', 'ld_coquan', 'to_truong', 'hieu_pho'].includes(user.role_code)) return true;
-  if (user.data_scope && user.data_scope !== 'personal') return true;
-  try {
-    const perms = typeof user.permissions === 'string' ? JSON.parse(user.permissions || '{}') : (user.permissions || {});
-    if (perms.can_manage_system || perms.can_assign_tasks || perms.can_grade_tasks || perms.can_conclude_evaluation) return true;
-  } catch (e) {}
+  // 1. Tuyệt đối loại bỏ tài khoản Admin, Admin đơn vị, tài khoản chức năng kỹ thuật, đại diện tổ chức
+  if (isFunctionalOrAdmin(user)) return false;
+
+  // 2. Phải có chức danh Lãnh đạo thực tế (Hiệu trưởng, Phó Hiệu trưởng, Trưởng/Phó phòng, Giám đốc, Bí thư...)
   const title = `${user.gov_title || ''} ${user.party_title || ''}`.toLowerCase();
   const leaderKeywords = [
     'hiệu trưởng', 'hiệu phó', 'phó hiệu trưởng', 'giám đốc', 'phó giám đốc', 
     'trưởng phòng', 'phó phòng', 'phó trưởng phòng', 'trưởng ban', 'phó ban', 
-    'tổ trưởng', 'tổ phó', 'bí thư', 'phó bí thư', 'thường trực', 'thường vụ', 
-    'cấp ủy', 'chi ủy', 'chủ tịch', 'phó chủ tịch', 'quản trị'
+    'bí thư', 'phó bí thư', 'thường trực', 'thường vụ', 'chủ tịch', 'phó chủ tịch'
   ];
-  return leaderKeywords.some(kw => title.includes(kw));
+  const hasLeaderTitle = leaderKeywords.some(kw => title.includes(kw));
+  if (!hasLeaderTitle) return false;
+
+  if (user.management_role === 'lanh_dao' || user.management_role === 'quan_ly') return true;
+  if (user.role === 'cbql' || user.target_role === 'cbql') return true;
+  if (user.role_code && ['cbql_phong', 'ld_coquan', 'hieu_pho'].includes(user.role_code)) return true;
+
+  return true;
 }
 
 function formatDateDisplay(val) {
@@ -83,7 +103,7 @@ export default function VotingTab({ selectedPeriod, currentUser, users = [], set
         api.getVotingList(selectedPeriod),
         api.getVotingProgress(selectedPeriod)
       ]);
-      setVotingList((listData || []).filter(item => item.role !== 'admin'));
+      setVotingList((listData || []).filter(item => !isFunctionalOrAdmin(item)));
       setProgressData(progressRes || null);
 
       // initialize myVotes map: only set if user has already voted

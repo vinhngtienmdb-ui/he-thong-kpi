@@ -186,6 +186,25 @@ export const api = {
       body: JSON.stringify({ ids }),
     });
   },
+  proposeStandardTask: (data) => {
+    return fetchApi('/standard-tasks/propose', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  approveStandardTaskProposal: (id) => {
+    return fetchApi(`/standard-tasks/${id}/approve-proposal`, {
+      method: 'PUT',
+    });
+  },
+  rejectStandardTaskProposal: (id, reason) => {
+    return fetchApi(`/standard-tasks/${id}/reject-proposal`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rejection_reason: reason }),
+    });
+  },
 
   // Assigned Tasks
   getAssignedTasks: (params = {}, maybeUserId) => {
@@ -281,6 +300,39 @@ export const api = {
   },
   reassignTask: (id, data) => {
     return fetchApi(`/assigned-tasks/${id}/reassign`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  returnTaskToAssigner: (id, data) => {
+    return fetchApi(`/assigned-tasks/${id}/return-to-assigner`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  deleteAssignedTask: (id) => {
+    return fetchApi(`/assigned-tasks/${id}`, {
+      method: 'DELETE',
+    });
+  },
+  proposeStandardTask: (data) => {
+    return fetchApi('/standard-tasks/propose', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  approveStandardTaskProposal: (id, data = {}) => {
+    return fetchApi(`/standard-tasks/${id}/approve-proposal`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  rejectStandardTaskProposal: (id, data = {}) => {
+    return fetchApi(`/standard-tasks/${id}/reject-proposal`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),

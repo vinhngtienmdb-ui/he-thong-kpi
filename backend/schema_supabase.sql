@@ -91,6 +91,14 @@ CREATE TABLE IF NOT EXISTS standard_tasks (
     note TEXT,
     axis_code TEXT,
     status TEXT DEFAULT 'Hoạt động',
+    proposed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    proposed_by_name TEXT,
+    proposal_type TEXT DEFAULT 'add',
+    proposal_note TEXT,
+    original_task_id TEXT REFERENCES standard_tasks(id) ON DELETE SET NULL,
+    approved_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    approved_at TIMESTAMPTZ,
+    rejection_reason TEXT,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 

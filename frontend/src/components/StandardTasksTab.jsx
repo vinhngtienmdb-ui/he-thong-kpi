@@ -100,6 +100,26 @@ export default function StandardTasksTab({
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [actionNotice, setActionNotice] = useState(null);
 
+  // Proposals Filter & Modal State
+  const [proposalFilter, setProposalFilter] = useState('official'); // 'official' | 'pending_proposals' | 'my_proposals' | 'all'
+  const [showProposeModal, setShowProposeModal] = useState(false);
+  const [customProposeOutput, setCustomProposeOutput] = useState('');
+  const [isSubmittingProposal, setIsSubmittingProposal] = useState(false);
+  const [proposeForm, setProposeForm] = useState({
+    task_name: '',
+    output_result: OUTPUT_RESULT_OPTIONS[0],
+    deadline: '2026-09-30',
+    task_type: 'Thường xuyên',
+    standard_score: 10,
+    difficulty_weight: 1.0,
+    expected_evidence: '',
+    axis_code: 'TRUC_1',
+    dept_code: 'A29.123.22',
+    proposal_type: 'add',
+    proposal_note: '',
+    original_task_id: null
+  });
+
   // New task form state
   const [newTask, setNewTask] = useState({
     task_name: '',
@@ -123,6 +143,8 @@ export default function StandardTasksTab({
       const params = {};
       if (selectedPeriod) params.period_id = selectedPeriod;
       if (selectedAxis) params.axis_code = selectedAxis;
+      const vId = currentUser?.id || (api.getViewerId ? api.getViewerId() : null);
+      if (vId) params.viewer_id = vId;
       const data = await api.getStandardTasks(params);
       setTasks(data);
     } catch (err) {
@@ -131,6 +153,111 @@ export default function StandardTasksTab({
       setLoading(false);
     }
   }
+
+  // ĐỀ XUẤT CÔNG VIỆC CHUẨN (Proposals)
+  const handleOpenProposeModal = (task = null) => {
+    if (task) {
+      const isCustom = !OUTPUT_RESULT_OPTIONS.includes(task.output_result);
+      setProposeForm({
+        task_name: task.task_name || '',
+        output_result: isCustom ? 'Khác' : (task.output_result || OUTPUT_RESULT_OPTIONS[0]),
+        deadline: task.deadline || '2026-09-30',
+        task_type: task.task_type || 'Thường xuyên',
+        standard_score: task.standard_score || 10,
+        difficulty_weight: task.difficulty_weight || 1.0,
+        expected_evidence: task.expected_evidence || '',
+        axis_code: task.axis_code || 'TRUC_1',
+        dept_code: task.dept_code || 'A29.123.22',
+        proposal_type: 'edit',
+        proposal_note: '',
+        original_task_id: task.id
+      });
+      setCustomProposeOutput(isCustom ? (task.output_result || '').replace('Khác: ', '') : '');
+    } else {
+      setProposeForm({
+        task_name: '',
+        output_result: OUTPUT_RESULT_OPTIONS[0],
+        deadline: '2026-09-30',
+        task_type: 'Thường xuyên',
+        standard_score: 10,
+        difficulty_weight: 1.0,
+        expected_evidence: '',
+        axis_code: 'TRUC_1',
+        dept_code: 'A29.123.22',
+        proposal_type: 'add',
+        proposal_note: '',
+        original_task_id: null
+      });
+      setCustomProposeOutput('');
+    }
+    setShowProposeModal(true);
+  };
+
+  const handleSubmitProposal = async (e) => {
+    if (e) e.preventDefault();
+    if (!proposeForm.task_name || !proposeForm.task_name.trim()) {
+      alert('Vui lòng nhập tên công việc đề xuất');
+      return;
+    }
+    try {
+      setIsSubmittingProposal(true);
+      const finalOutput = proposeForm.output_result === 'Khác' && customProposeOutput.trim()
+        ? `Khác: ${customProposeOutput.trim()}`
+        : proposeForm.output_result;
+
+      const payload = {
+        ...proposeForm,
+        output_result: finalOutput,
+        period_id: selectedPeriod
+      };
+
+      const res = await api.proposeStandardTask(payload);
+      setShowProposeModal(false);
+      setActionNotice({
+        type: 'success',
+        text: res?.message || 'Đã gửi đề xuất công việc chuẩn đến Lãnh đạo phê duyệt thành công!'
+      });
+      loadTasks();
+      setTimeout(() => setActionNotice(null), 4000);
+    } catch (err) {
+      alert(err.message || 'Lỗi gửi đề xuất công việc chuẩn');
+    } finally {
+      setIsSubmittingProposal(false);
+    }
+  };
+
+  const handleApproveProposal = async (task) => {
+    if (!window.confirm(`XÁC NHẬN PHÊ DUYỆT ĐỀ XUẤT:\n"${task.task_name}"\n\nSau khi phê duyệt, công việc sẽ được cập nhật trực tiếp vào Danh mục công việc chuẩn dùng chung cho toàn cơ quan/đơn vị.`)) {
+      return;
+    }
+    try {
+      const res = await api.approveStandardTaskProposal(task.id);
+      setActionNotice({
+        type: 'success',
+        text: res?.message || `Đã phê duyệt đề xuất "${task.task_name}" thành công!`
+      });
+      loadTasks();
+      setTimeout(() => setActionNotice(null), 4000);
+    } catch (err) {
+      alert(err.message || 'Lỗi phê duyệt đề xuất');
+    }
+  };
+
+  const handleRejectProposal = async (task) => {
+    const reason = window.prompt(`Nhập lý do từ chối đề xuất "${task.task_name}":`, 'Không phù hợp với tiêu chuẩn nhiệm vụ chung của đơn vị');
+    if (reason === null) return;
+    try {
+      const res = await api.rejectStandardTaskProposal(task.id, reason);
+      setActionNotice({
+        type: 'success',
+        text: res?.message || `Đã từ chối đề xuất "${task.task_name}".`
+      });
+      loadTasks();
+      setTimeout(() => setActionNotice(null), 4000);
+    } catch (err) {
+      alert(err.message || 'Lỗi khi từ chối đề xuất');
+    }
+  };
 
   async function handleImportSubmit(e, useDefault = false) {
     if (e) e.preventDefault();
@@ -528,11 +655,24 @@ export default function StandardTasksTab({
     setShowBulkDeleteModal(false);
   };
 
+  const pendingProposalsCount = tasks.filter(t => t.status === 'pending_approval').length;
+  const myProposalsCount = tasks.filter(t => t.proposed_by === currentUser?.id).length;
+
   const filteredTasks = tasks.filter(t => {
     const matchesSearch = t.task_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.output_result?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesOutput = !selectedOutputResult || t.output_result?.toLowerCase().includes(selectedOutputResult.toLowerCase());
-    return matchesSearch && matchesOutput;
+    
+    let matchesProposal = true;
+    if (proposalFilter === 'pending_proposals') {
+      matchesProposal = t.status === 'pending_approval';
+    } else if (proposalFilter === 'my_proposals') {
+      matchesProposal = t.proposed_by === currentUser?.id;
+    } else if (proposalFilter === 'official') {
+      matchesProposal = t.status !== 'pending_approval' && t.status !== 'rejected';
+    }
+
+    return matchesSearch && matchesOutput && matchesProposal;
   });
 
   const activeFilterCount = (selectedAxis ? 1 : 0) + (selectedOutputResult ? 1 : 0);
@@ -712,14 +852,24 @@ export default function StandardTasksTab({
             </button>
           )}
 
-          {/* + Thêm mới (Chỉ CBQL & Admin) */}
-          {isCBQL && (
+          {/* + Thêm mới (Chỉ CBQL & Admin) hoặc + Đề xuất việc mới (CBNV) */}
+          {isCBQL ? (
             <button
               type="button"
               onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center gap-1 px-4 py-1.5 rounded-lg bg-red-700 hover:bg-red-800 text-white text-xs font-bold transition shadow-sm"
+              className="inline-flex items-center gap-1 px-4 py-1.5 rounded-lg bg-red-700 hover:bg-red-800 text-white text-xs font-bold transition shadow-sm cursor-pointer"
             >
               <span>+ Thêm mới</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleOpenProposeModal(null)}
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-red-700 hover:bg-red-800 text-white text-xs font-bold transition shadow-sm cursor-pointer"
+              title="Đề xuất thêm công việc chuẩn mới gửi Lãnh đạo phê duyệt"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>+ Đề xuất việc mới</span>
             </button>
           )}
         </div>
@@ -801,6 +951,88 @@ export default function StandardTasksTab({
           </div>
         </div>
       )}
+
+      {/* Proposal & Official Sub-tabs */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+        <div className="flex items-center gap-1.5 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setProposalFilter('official')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              proposalFilter === 'official'
+                ? 'bg-slate-800 text-white shadow-xs'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <span>Danh mục chuẩn chính thức</span>
+          </button>
+
+          {isCBQL ? (
+            <button
+              type="button"
+              onClick={() => setProposalFilter('pending_proposals')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                proposalFilter === 'pending_proposals'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'bg-white text-amber-800 hover:bg-amber-50 border border-amber-300'
+              }`}
+            >
+              <span>Đề xuất chờ Lãnh đạo duyệt</span>
+              {pendingProposalsCount > 0 && (
+                <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-black ${
+                  proposalFilter === 'pending_proposals' ? 'bg-white text-amber-700' : 'bg-red-600 text-white'
+                }`}>
+                  {pendingProposalsCount}
+                </span>
+              )}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setProposalFilter('my_proposals')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                proposalFilter === 'my_proposals'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'bg-white text-blue-700 hover:bg-blue-50 border border-blue-200'
+              }`}
+            >
+              <span>Đề xuất của tôi</span>
+              {myProposalsCount > 0 && (
+                <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-black ${
+                  proposalFilter === 'my_proposals' ? 'bg-white text-blue-700' : 'bg-blue-600 text-white'
+                }`}>
+                  {myProposalsCount}
+                </span>
+              )}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setProposalFilter('all')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              proposalFilter === 'all'
+                ? 'bg-slate-800 text-white shadow-xs'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <span>Tất cả ({tasks.length})</span>
+          </button>
+        </div>
+
+        {/* Informational banner when there are pending proposals for CBQL */}
+        {isCBQL && pendingProposalsCount > 0 && proposalFilter !== 'pending_proposals' && (
+          <button
+            type="button"
+            onClick={() => setProposalFilter('pending_proposals')}
+            className="text-[11px] font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg px-2.5 py-1 flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span>Có <strong>{pendingProposalsCount}</strong> đề xuất công việc chờ Lãnh đạo phê duyệt</span>
+            <span className="underline font-bold ml-1">Xem ngay →</span>
+          </button>
+        )}
+      </div>
 
       {/* 3. Data Table matching exact ICPV layout */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs">
@@ -889,6 +1121,16 @@ export default function StandardTasksTab({
                         <div className="font-normal text-slate-800 leading-relaxed text-xs">
                           {t.task_name}
                         </div>
+                        {t.status === 'pending_approval' && (
+                          <div className="text-[11px] text-amber-700 font-medium mt-1 flex flex-wrap items-center gap-1.5">
+                            <span className="px-1.5 py-0.2 rounded bg-amber-100/80 border border-amber-200">
+                              Đề xuất bởi: <strong>{t.proposed_by_name || 'Cán bộ'}</strong>
+                            </span>
+                            {t.proposal_note && (
+                              <span className="italic text-slate-500 text-[10.5px]">({t.proposal_note})</span>
+                            )}
+                          </div>
+                        )}
                         {t.expected_evidence && (
                           <div className="text-[11px] text-slate-400 mt-0.5 italic">
                             Minh chứng: {t.expected_evidence}
@@ -939,9 +1181,21 @@ export default function StandardTasksTab({
                         {deptName}
                       </td>
 
-                      {/* Trạng thái (Soft green pill for Hoạt động) */}
+                      {/* Trạng thái */}
                       <td className="px-2 py-3 text-center">
-                        {t.status === 'Tạm khóa' ? (
+                        {t.status === 'pending_approval' ? (
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                            t.proposal_type === 'edit'
+                              ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              : 'bg-amber-50 text-amber-700 border-amber-200'
+                          }`}>
+                            {t.proposal_type === 'edit' ? 'Đề xuất sửa' : 'Đề xuất mới'}
+                          </span>
+                        ) : t.status === 'rejected' ? (
+                          <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-rose-50 text-rose-700 border border-rose-200">
+                            Từ chối
+                          </span>
+                        ) : t.status === 'Tạm khóa' ? (
                           <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#fef3c7] text-[#b45309]">
                             Tạm khóa
                           </span>
@@ -965,7 +1219,35 @@ export default function StandardTasksTab({
                             <Eye className="w-3.5 h-3.5" />
                           </button>
 
-                          {isCBQL ? (
+                          {t.status === 'pending_approval' ? (
+                            isCBQL ? (
+                              <>
+                                {/* Duyệt đề xuất (Green circle) */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleApproveProposal(t)}
+                                  className="w-6.5 h-6.5 sm:w-7 sm:h-7 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center transition shadow-2xs cursor-pointer shrink-0"
+                                  title="Phê duyệt đề xuất công việc này vào Danh mục chuẩn chung"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* Từ chối đề xuất (Red circle) */}
+                                <button
+                                  type="button"
+                                  onClick={() => handleRejectProposal(t)}
+                                  className="w-6.5 h-6.5 sm:w-7 sm:h-7 rounded-full bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center transition shadow-2xs cursor-pointer shrink-0"
+                                  title="Từ chối đề xuất"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                Chờ duyệt
+                              </span>
+                            )
+                          ) : isCBQL ? (
                             <>
                               {/* 2. Sửa (Red circle) */}
                               <button
@@ -1008,16 +1290,28 @@ export default function StandardTasksTab({
                               </button>
                             </>
                           ) : (
-                            /* Với CBNV: nút Tự đăng ký nhiệm vụ vào kế hoạch quý cá nhân */
-                            <button
-                              type="button"
-                              onClick={() => onAssignTask && onAssignTask(t)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-700 hover:bg-red-800 text-white text-[11px] font-semibold transition shadow-2xs cursor-pointer"
-                              title="Tự đăng ký công việc này vào kế hoạch cá nhân"
-                            >
-                              <UserCheck className="w-3.5 h-3.5" />
-                              <span>Đăng ký</span>
-                            </button>
+                            /* Với CBNV: nút Đăng ký việc VÀ nút Đề xuất sửa */
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => onAssignTask && onAssignTask(t)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-red-700 hover:bg-red-800 text-white text-[11px] font-semibold transition shadow-2xs cursor-pointer"
+                                title="Tự đăng ký công việc này vào kế hoạch cá nhân"
+                              >
+                                <UserCheck className="w-3.5 h-3.5" />
+                                <span>Đăng ký</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleOpenProposeModal(t)}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-[11px] font-semibold transition shadow-2xs cursor-pointer"
+                                title="Đề xuất sửa công việc này gửi Lãnh đạo phê duyệt"
+                              >
+                                <SquarePen className="w-3 h-3 text-amber-700" />
+                                <span>Đề xuất sửa</span>
+                              </button>
+                            </div>
                           )}
                         </div>
                       </td>
@@ -1081,7 +1375,19 @@ export default function StandardTasksTab({
                         </span>
                       )}
 
-                      {t.status === 'Tạm khóa' ? (
+                      {t.status === 'pending_approval' ? (
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                          t.proposal_type === 'edit'
+                            ? 'bg-purple-100 text-purple-800 border-purple-200'
+                            : 'bg-amber-100 text-amber-800 border-amber-200'
+                        }`}>
+                          {t.proposal_type === 'edit' ? 'Đề xuất sửa' : 'Đề xuất mới'}
+                        </span>
+                      ) : t.status === 'rejected' ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">
+                          Từ chối
+                        </span>
+                      ) : t.status === 'Tạm khóa' ? (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
                           Tạm khóa
                         </span>
@@ -1098,6 +1404,16 @@ export default function StandardTasksTab({
                     <h4 className="font-bold text-slate-900 text-sm leading-snug">
                       {t.task_name}
                     </h4>
+                    {t.status === 'pending_approval' && (
+                      <div className="text-xs text-amber-700 font-medium mt-1 flex flex-wrap items-center gap-1">
+                        <span className="px-1.5 py-0.2 rounded bg-amber-100/80 border border-amber-200 text-[11px]">
+                          Đề xuất bởi: <strong>{t.proposed_by_name || 'Cán bộ'}</strong>
+                        </span>
+                        {t.proposal_note && (
+                          <span className="italic text-slate-500 text-[10.5px]">({t.proposal_note})</span>
+                        )}
+                      </div>
+                    )}
                     <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
                       <span className="text-[11px] text-slate-600">Đầu ra: <strong>{t.output_result || 'Báo cáo tổng hợp'}</strong></span>
                     </div>
@@ -1132,7 +1448,32 @@ export default function StandardTasksTab({
                       <span>Chi tiết</span>
                     </button>
 
-                    {isCBQL ? (
+                    {t.status === 'pending_approval' ? (
+                      isCBQL ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleApproveProposal(t)}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-2xs transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Duyệt đề xuất</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRejectProposal(t)}
+                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-2xs transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            <span>Từ chối</span>
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                          Chờ Lãnh đạo duyệt
+                        </span>
+                      )
+                    ) : isCBQL ? (
                       <>
                         <button
                           type="button"
@@ -1171,14 +1512,25 @@ export default function StandardTasksTab({
                         </button>
                       </>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => onAssignTask && onAssignTask(t)}
-                        className="px-3.5 py-1.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-2xs transition active:scale-95 flex items-center gap-1 cursor-pointer"
-                      >
-                        <UserCheck className="w-3.5 h-3.5" />
-                        <span>Đăng ký việc</span>
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onAssignTask && onAssignTask(t)}
+                          className="px-3.5 py-1.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-2xs transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                        >
+                          <UserCheck className="w-3.5 h-3.5" />
+                          <span>Đăng ký</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenProposeModal(t)}
+                          className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs rounded-xl shadow-2xs transition active:scale-95 flex items-center gap-1 cursor-pointer"
+                        >
+                          <SquarePen className="w-3.5 h-3.5 text-amber-700" />
+                          <span>Đề xuất sửa</span>
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -1647,6 +1999,187 @@ export default function StandardTasksTab({
                 >
                   <Check className="w-4 h-4" />
                   <span>Lưu</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* PROPOSE STANDARD TASK MODAL (CBNV Đề xuất thêm mới / sửa) */}
+      {showProposeModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 z-50 overflow-y-auto">
+          <div className="bg-white rounded-xl w-[95%] sm:max-w-lg p-4 sm:p-6 shadow-xl border border-slate-200 space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <SquarePen className="w-4 h-4 text-amber-600" />
+                  <span>
+                    {proposeForm.proposal_type === 'edit'
+                      ? 'Đề xuất Sửa đổi Công việc chuẩn'
+                      : 'Đề xuất Thêm Công việc chuẩn mới'}
+                  </span>
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Đề xuất sẽ được gửi đến Lãnh đạo đơn vị phê duyệt trước khi cập nhật vào Danh mục chung.
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowProposeModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitProposal} className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Tên công việc *</label>
+                <textarea
+                  required
+                  rows="2"
+                  value={proposeForm.task_name}
+                  onChange={(e) => setProposeForm({ ...proposeForm, task_name: e.target.value })}
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-md focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                  placeholder="Nhập tên nhiệm vụ, công việc đề xuất..."
+                ></textarea>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Kết quả đầu ra *</label>
+                  <select
+                    value={proposeForm.output_result}
+                    onChange={(e) => setProposeForm({ ...proposeForm, output_result: e.target.value })}
+                    className="w-full text-xs p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-amber-500 font-medium"
+                  >
+                    {OUTPUT_RESULT_OPTIONS.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                  {proposeForm.output_result === 'Khác' && (
+                    <input
+                      type="text"
+                      required
+                      value={customProposeOutput}
+                      onChange={(e) => setCustomProposeOutput(e.target.value)}
+                      placeholder="Mô tả cụ thể kết quả đầu ra..."
+                      className="mt-1.5 w-full text-xs p-1.5 border border-slate-300 rounded-md focus:ring-2 focus:ring-amber-500"
+                    />
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Thời hạn hoàn thành *</label>
+                  <input
+                    type="date"
+                    required
+                    value={toInputDateFormat(proposeForm.deadline)}
+                    onChange={(e) => setProposeForm({ ...proposeForm, deadline: e.target.value })}
+                    className="w-full text-xs p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Loại công việc</label>
+                  <select
+                    value={proposeForm.task_type}
+                    onChange={(e) => {
+                      const type = e.target.value;
+                      setProposeForm({
+                        ...proposeForm,
+                        task_type: type,
+                        standard_score: type === 'Đột xuất' ? 12 : 10
+                      });
+                    }}
+                    className="w-full text-xs p-2 border border-slate-300 rounded-md"
+                  >
+                    <option value="Thường xuyên">Thường xuyên (10đ)</option>
+                    <option value="Đột xuất">Đột xuất (12đ)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Điểm chuẩn</label>
+                  <input
+                    type="number"
+                    value={proposeForm.standard_score}
+                    readOnly
+                    className="w-full text-xs p-2 bg-slate-100 border border-slate-300 rounded-md font-bold text-slate-700"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Hệ số độ khó</label>
+                  <select
+                    value={proposeForm.difficulty_weight}
+                    onChange={(e) => setProposeForm({ ...proposeForm, difficulty_weight: parseFloat(e.target.value) })}
+                    className="w-full text-xs p-2 border border-slate-300 rounded-md"
+                  >
+                    <option value="1.0">100% (Thông thường - 1.0)</option>
+                    <option value="1.1">110% (Phối hợp - 1.1)</option>
+                    <option value="1.2">120% (Phức tạp / quan trọng - 1.2)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Trục kết quả trọng tâm *</label>
+                <select
+                  value={proposeForm.axis_code}
+                  onChange={(e) => setProposeForm({ ...proposeForm, axis_code: e.target.value })}
+                  className="w-full text-xs p-2 border border-slate-300 rounded-md"
+                >
+                  {axes.map((ax, i) => (
+                    <option key={ax.code} value={ax.code}>
+                      Trục {i + 1} - {ax.name.replace(`TRỤC ${i + 1} - `, '')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Minh chứng dự kiến</label>
+                <input
+                  type="text"
+                  value={proposeForm.expected_evidence}
+                  onChange={(e) => setProposeForm({ ...proposeForm, expected_evidence: e.target.value })}
+                  className="w-full text-xs p-2 border border-slate-300 rounded-md"
+                  placeholder="VD: Quyết định, biên bản, kế hoạch đã ban hành..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Lý do / Nội dung đề xuất điều chỉnh *
+                </label>
+                <textarea
+                  required
+                  rows="2"
+                  value={proposeForm.proposal_note}
+                  onChange={(e) => setProposeForm({ ...proposeForm, proposal_note: e.target.value })}
+                  className="w-full text-xs p-2.5 border border-amber-300 rounded-md bg-amber-50/40 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                  placeholder="Nêu rõ lý do đề xuất thêm mới hoặc đề xuất chỉnh sửa nội dung công việc này..."
+                ></textarea>
+              </div>
+
+              <div className="pt-4 flex items-center justify-end gap-2.5 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowProposeModal(false)}
+                  disabled={isSubmittingProposal}
+                  className="px-4 py-2 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg shadow-2xs transition cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingProposal}
+                  className="px-5 py-2 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{isSubmittingProposal ? 'Đang gửi đề xuất...' : 'Gửi đề xuất tới Lãnh đạo'}</span>
                 </button>
               </div>
             </form>

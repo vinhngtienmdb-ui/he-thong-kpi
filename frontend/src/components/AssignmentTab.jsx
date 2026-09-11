@@ -84,9 +84,15 @@ export default function AssignmentTab({
     deadline: '',
     task_name: '',
     output_result: '',
-    difficulty_weight: 1.0
+    difficulty_weight: 1.0,
+    new_user_id: ''
   });
   const [isSubmittingReassign, setIsSubmittingReassign] = useState(false);
+
+  // Return Task Modal State (Cán bộ trả lại công việc cho Lãnh đạo)
+  const [returnModalTask, setReturnModalTask] = useState(null);
+  const [returnTaskReason, setReturnTaskReason] = useState('');
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
 
   // Modal State for Assigning / Registering Tasks
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -445,14 +451,56 @@ export default function AssignmentTab({
     }
   }
 
-  // Bước 1 - Nhánh 2: Xác nhận tiếp nhận nhiệm vụ
+  // Bước 1: Xác nhận tiếp nhận nhiệm vụ (Chuyển vào công việc cá nhân)
   async function handleAcceptTask(taskId) {
     try {
       await api.acceptTask(taskId);
-      alert('Đã xác nhận tiếp nhận nhiệm vụ thành công! Nhiệm vụ đã chuyển sang trạng thái Đang thực hiện.');
+      alert('Đã tiếp nhận nhiệm vụ thành công! Nhiệm vụ đã được chuyển vào mục "Nhiệm vụ cá nhân" của bạn để thực hiện và nộp minh chứng.');
       loadData();
     } catch (err) {
       alert('Lỗi xác nhận: ' + err.message);
+    }
+  }
+
+  // Thu hồi công việc đã giao nhầm (Dành cho Lãnh đạo/Người giao)
+  async function handleRecallTask(task) {
+    if (!task) return;
+    const confirmMsg = `Bạn có chắc chắn muốn THU HỒI nhiệm vụ "${task.task_name}" đã giao cho ${task.user_name || 'cán bộ'}?\n\n(Lưu ý: Thao tác này sẽ hủy giao việc và xóa nhiệm vụ khỏi danh sách của cán bộ).`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await api.deleteAssignedTask(task.id);
+      alert(`Đã thu hồi công việc "${task.task_name}" thành công!`);
+      loadData();
+    } catch (err) {
+      alert('Lỗi thu hồi công việc: ' + (err.message || err));
+    }
+  }
+
+  // Bước 1: Cán bộ mở modal trả lại công việc cho Lãnh đạo
+  function openReturnModal(task) {
+    setReturnModalTask(task);
+    setReturnTaskReason('');
+  }
+
+  // Bước 1: Cán bộ xác nhận gửi trả lại công việc
+  async function handleSubmitReturn() {
+    if (!returnModalTask) return;
+    if (!returnTaskReason.trim()) {
+      alert('Vui lòng nhập lý do trả lại công việc');
+      return;
+    }
+    try {
+      setIsSubmittingReturn(true);
+      await api.returnTaskToAssigner(returnModalTask.id, { return_reason: returnTaskReason.trim() });
+      alert('Đã trả lại công việc cho Lãnh đạo/Người giao việc thành công!');
+      setReturnModalTask(null);
+      setReturnTaskReason('');
+      loadData();
+    } catch (err) {
+      alert('Lỗi trả lại công việc: ' + (err.message || err));
+    } finally {
+      setIsSubmittingReturn(false);
     }
   }
 
@@ -494,7 +542,8 @@ export default function AssignmentTab({
       deadline: task.deadline ? toInputDateFormat(task.deadline) : '2026-09-30',
       task_name: task.task_name,
       output_result: task.output_result || '',
-      difficulty_weight: task.difficulty_weight || 1.0
+      difficulty_weight: task.difficulty_weight || 1.0,
+      new_user_id: task.user_id
     });
   }
 
@@ -623,9 +672,14 @@ export default function AssignmentTab({
     return list;
   }, [assignedInTasks, searchTerm]);
 
-  // 3. Personal tasks self-registered (Nhiệm vụ cá nhân):
+  // 3. Personal tasks (Nhiệm vụ cá nhân - bao gồm việc tự đăng ký và việc được giao đã tiếp nhận):
   const personalTasks = useMemo(() => {
-    return assignedTasks.filter(t => t.user_id === currentUser?.id && t.origin === 'registered');
+    return assignedTasks.filter(t => {
+      if (t.user_id !== currentUser?.id) return false;
+      if (t.origin === 'registered') return true;
+      if (t.origin === 'assigned' && t.status !== 'pending_acceptance' && t.status !== 'returned') return true;
+      return false;
+    });
   }, [assignedTasks, currentUser]);
 
   // 4. Pending approval tasks:
@@ -1623,33 +1677,51 @@ export default function AssignmentTab({
                                                 </td>
                                                 <td className="py-2 px-3 text-center whitespace-nowrap">
                                                   {task.status === 'pending_acceptance' && currentUser?.id === task.user_id ? (
-                                                    <div className="flex items-center justify-center gap-1">
+                                                    <div className="flex items-center justify-center gap-1 flex-wrap">
                                                       <button
                                                         type="button"
                                                         onClick={() => handleAcceptTask(task.id)}
                                                         className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded shadow-2xs"
-                                                        title="Xác nhận tiếp nhận nhiệm vụ"
+                                                        title="Xác nhận tiếp nhận nhiệm vụ (chuyển vào Công việc cá nhân)"
                                                       >
                                                         Nhận việc
                                                       </button>
                                                       <button
                                                         type="button"
+                                                        onClick={() => openReturnModal(task)}
+                                                        className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] rounded shadow-2xs"
+                                                        title="Trả lại việc cho cấp trên với lý do"
+                                                      >
+                                                        Trả lại
+                                                      </button>
+                                                      <button
+                                                        type="button"
                                                         onClick={() => openFeedbackModal(task)}
                                                         className="px-2 py-0.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] rounded shadow-2xs"
-                                                        title="Phản hồi lý do chưa hợp lý"
+                                                        title="Phản hồi lý do chưa hợp lý (tối đa 1 lần)"
                                                       >
                                                         Phản hồi
                                                       </button>
                                                     </div>
                                                   ) : task.status === 'feedback_submitted' && isCBQL ? (
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => openReassignModal(task)}
-                                                      className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded shadow-2xs"
-                                                      title="Điều chỉnh thông tin và giao lại nhiệm vụ"
-                                                    >
-                                                      Giao lại
-                                                    </button>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => openReassignModal(task)}
+                                                        className="px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded shadow-2xs"
+                                                        title="Điều chỉnh thông tin và giao lại nhiệm vụ"
+                                                      >
+                                                        Giao lại
+                                                      </button>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => handleRecallTask(task)}
+                                                        className="px-2 py-0.5 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-[10px] rounded shadow-2xs"
+                                                        title="Thu hồi công việc đã giao nhầm"
+                                                      >
+                                                        Thu hồi
+                                                      </button>
+                                                    </div>
                                                   ) : currentUser?.id === task.user_id ? (
                                                     <button
                                                       type="button"
@@ -1659,7 +1731,20 @@ export default function AssignmentTab({
                                                       Nộp MC →
                                                     </button>
                                                   ) : (
-                                                    <span className="text-slate-400 italic text-[11px]">Theo dõi</span>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                      {(((currentUser?.id === task.assigned_by) || isCBQL) && task.origin === 'assigned' && task.status !== 'approved') ? (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => handleRecallTask(task)}
+                                                          className="px-2 py-0.5 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-[10px] rounded shadow-2xs"
+                                                          title="Thu hồi công việc đã giao nhầm"
+                                                        >
+                                                          Thu hồi
+                                                        </button>
+                                                      ) : (
+                                                        <span className="text-slate-400 italic text-[11px]">Theo dõi</span>
+                                                      )}
+                                                    </div>
                                                   )}
                                                 </td>
                                               </tr>
@@ -2065,9 +2150,17 @@ export default function AssignmentTab({
                                     type="button"
                                     onClick={() => handleAcceptTask(t.id)}
                                     className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-2xs"
-                                    title="Xác nhận tiếp nhận nhiệm vụ"
+                                    title="Xác nhận tiếp nhận nhiệm vụ (chuyển vào Công việc cá nhân)"
                                   >
                                     Nhận việc
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openReturnModal(t)}
+                                    className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg shadow-2xs"
+                                    title="Trả lại việc cho cấp trên với lý do"
+                                  >
+                                    Trả lại
                                   </button>
                                   <button
                                     type="button"
@@ -2079,14 +2172,24 @@ export default function AssignmentTab({
                                   </button>
                                 </div>
                               ) : t.status === 'feedback_submitted' && isCBQL ? (
-                                <button
-                                  type="button"
-                                  onClick={() => openReassignModal(t)}
-                                  className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs"
-                                  title="Điều chỉnh thông tin và giao lại nhiệm vụ"
-                                >
-                                  Giao lại
-                                </button>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => openReassignModal(t)}
+                                    className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs"
+                                    title="Điều chỉnh thông tin và giao lại nhiệm vụ"
+                                  >
+                                    Giao lại
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRecallTask(t)}
+                                    className="px-2.5 py-1 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-lg shadow-2xs"
+                                    title="Thu hồi công việc đã giao nhầm"
+                                  >
+                                    Thu hồi
+                                  </button>
+                                </div>
                               ) : isPending && isCBQL ? (
                                 <div className="flex items-center justify-center gap-1.5">
                                   <button
@@ -2105,17 +2208,42 @@ export default function AssignmentTab({
                                   </button>
                                 </div>
                               ) : t.user_id === currentUser?.id ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (setCurrentTab) setCurrentTab('execution');
-                                  }}
-                                  className="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold text-xs rounded-lg transition"
-                                >
-                                  Nộp MC
-                                </button>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (setCurrentTab) setCurrentTab('execution');
+                                    }}
+                                    className="px-3 py-1 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold text-xs rounded-lg transition"
+                                  >
+                                    Nộp MC
+                                  </button>
+                                  {(((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRecallTask(t)}
+                                      className="px-2.5 py-1 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-lg shadow-2xs"
+                                      title="Thu hồi công việc đã giao nhầm"
+                                    >
+                                      Thu hồi
+                                    </button>
+                                  )}
+                                </div>
                               ) : (
-                                <span className="text-xs text-slate-400 italic">Theo dõi</span>
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {(((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRecallTask(t)}
+                                      className="px-2.5 py-1 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-lg shadow-2xs"
+                                      title="Thu hồi công việc đã giao nhầm"
+                                    >
+                                      Thu hồi
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs text-slate-400 italic">Theo dõi</span>
+                                  )}
+                                </div>
                               )}
                             </td>
                           </tr>
@@ -2249,20 +2377,36 @@ export default function AssignmentTab({
                               </button>
                               <button
                                 type="button"
+                                onClick={() => openReturnModal(t)}
+                                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                              >
+                                Trả lại
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => openFeedbackModal(t)}
-                                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                                className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
                               >
                                 Phản hồi
                               </button>
                             </>
                           ) : t.status === 'feedback_submitted' && isCBQL ? (
-                            <button
-                              type="button"
-                              onClick={() => openReassignModal(t)}
-                              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
-                            >
-                              Giao lại
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => openReassignModal(t)}
+                                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                              >
+                                Giao lại
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRecallTask(t)}
+                                className="px-3.5 py-1.5 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                              >
+                                Thu hồi
+                              </button>
+                            </>
                           ) : isPending && isCBQL ? (
                             <>
                               <button
@@ -2275,23 +2419,46 @@ export default function AssignmentTab({
                               <button
                                 type="button"
                                 onClick={() => handleRejectTask(t)}
-                                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
                               >
                                 Từ chối
                               </button>
                             </>
                           ) : t.user_id === currentUser?.id ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (setCurrentTab) setCurrentTab('execution');
-                              }}
-                              className="px-4 py-1.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
-                            >
-                              Nộp MC →
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (setCurrentTab) setCurrentTab('execution');
+                                }}
+                                className="px-4 py-1.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                              >
+                                Nộp MC →
+                              </button>
+                              {(((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRecallTask(t)}
+                                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                                >
+                                  Thu hồi
+                                </button>
+                              )}
+                            </>
                           ) : (
-                            <span className="text-xs text-slate-400 italic">Theo dõi</span>
+                            <>
+                              {(((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRecallTask(t)}
+                                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                                >
+                                  Thu hồi
+                                </button>
+                              ) : (
+                                <span className="text-xs text-slate-400 italic">Theo dõi</span>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
@@ -3198,6 +3365,19 @@ export default function AssignmentTab({
               </div>
 
               <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Cán bộ thực hiện:</label>
+                <select
+                  value={reassignForm.new_user_id || ''}
+                  onChange={(e) => setReassignForm(prev => ({ ...prev, new_user_id: e.target.value }))}
+                  className="w-full text-xs p-2 border border-slate-300 rounded-lg font-semibold"
+                >
+                  {assignableUsers.map(u => (
+                    <option key={u.id} value={u.id}>{u.full_name} ({u.dept_name || 'Cơ quan'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Đầu ra yêu cầu:</label>
                 <input
                   type="text"
@@ -3227,6 +3407,73 @@ export default function AssignmentTab({
                 className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs disabled:opacity-50"
               >
                 {isSubmittingReassign ? 'Đang lưu...' : 'Xác nhận Giao lại'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CÁN BỘ TRẢ LẠI VIỆC CHO LÃNH ĐẠO */}
+      {returnModalTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-rose-50/70">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-rose-600" />
+                <h3 className="text-sm font-bold text-slate-900">Trả lại công việc cho Người giao việc</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReturnModalTask(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3.5">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                <div className="font-bold text-slate-800">{returnModalTask.task_name}</div>
+                <div className="text-slate-500 flex items-center gap-2">
+                  <span>Hạn chót: <strong>{formatDate(returnModalTask.deadline)}</strong></span>
+                  <span>•</span>
+                  <span>Người giao: <strong>{returnModalTask.assigner_name || 'Lãnh đạo'}</strong></span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Lý do trả lại công việc <span className="text-red-500">*</span>:
+                </label>
+                <textarea
+                  rows={3}
+                  value={returnTaskReason}
+                  onChange={(e) => setReturnTaskReason(e.target.value)}
+                  placeholder="Nhập chi tiết lý do bạn trả lại công việc này (ví dụ: công việc giao nhầm người, không đúng thẩm quyền chuyên môn, đã có cán bộ khác phụ trách...)"
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500 font-normal"
+                />
+              </div>
+
+              <p className="text-[11px] text-slate-500 italic">
+                Sau khi xác nhận trả lại, công việc sẽ được chuyển trả về cho Lãnh đạo / Người giao việc kèm lý do cụ thể và gỡ khỏi danh sách công việc của bạn.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 p-4 bg-slate-50 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setReturnModalTask(null)}
+                className="px-3.5 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-100 cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitReturn}
+                disabled={isSubmittingReturn || !returnTaskReason.trim()}
+                className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmittingReturn ? 'Đang gửi...' : 'Xác nhận Trả lại'}
               </button>
             </div>
           </div>

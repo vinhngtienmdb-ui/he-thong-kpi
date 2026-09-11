@@ -23,13 +23,34 @@ import { formatDate } from '../constants';
 import FinalizePeriodModal from './FinalizePeriodModal';
 
 export default function GradingTab({ selectedPeriod, currentUser, users, axes, periods = [], onReloadPeriods, onPeriodChange, setCurrentTab }) {
-  // Lọc danh sách cán bộ có thể thẩm định: TUYỆT ĐỐI KHÔNG ĐƯỢC CHẤM ĐIỂM CHO BẢN THÂN VÀ KHÔNG ĐÁNH GIÁ TÀI KHOẢN ADMIN NGHIỆP VỤ
-  const evaluatableUsers = users.filter(u => u.id !== currentUser?.id && u.role !== 'admin');
+  // Lọc danh sách cán bộ có thể thẩm định: TUYỆT ĐỐI KHÔNG ĐƯỢC CHẤM ĐIỂM CHO BẢN THÂN VÀ LOẠI BỎ TÀI KHOẢN ADMIN/CHỨC NĂNG
+  const evaluatableUsers = users.filter(u => 
+    u.id !== currentUser?.id && 
+    u.role !== 'admin' && 
+    u.role !== 'admin_donvi' &&
+    u.target_role !== 'admin' &&
+    u.target_role !== 'admin_donvi' &&
+    u.target_role !== 'exempt' &&
+    u.target_role !== 'none' &&
+    u.role_id !== 'role-admin' &&
+    u.role_id !== 'role-admin-donvi' &&
+    !['admin', 'quantri', 'quantrihethong', 'admin_donvi', 'vanthu', 'mnhy.andong'].includes(String(u.username || '').toLowerCase()) &&
+    !String(u.full_name || '').toLowerCase().startsWith('trường ')
+  );
   const [selectedUser, setSelectedUser] = useState('');
   const [evalData, setEvalData] = useState(null);
   const [userTasks, setUserTasks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isFinalizeModalOpen, setIsFinalizeModalOpen] = useState(false);
+
+  // Điều kiện chuyển lên Bước 5 (Đánh giá, nhận xét của CBQL):
+  // 1. CBNV đã nộp tự đánh giá cuối kỳ (status === 'submitted' || 'approved')
+  // 2. CBNV đã hoàn tất nộp sản phẩm công việc (tất cả nhiệm vụ đã nộp MC hoặc đã duyệt, không còn việc dang dở)
+  const isSelfEvalSubmitted = Boolean(evalData?.evaluation && (evalData.evaluation.status === 'submitted' || evalData.evaluation.status === 'approved'));
+  const hasTasks = userTasks.length > 0;
+  const unsubmittedTasks = userTasks.filter(t => t.status !== 'submitted' && t.status !== 'approved' && t.status !== 'rejected');
+  const allTasksSubmitted = hasTasks && unsubmittedTasks.length === 0;
+  const isReadyForStep5 = isSelfEvalSubmitted && allTasksSubmitted;
 
   // Active grading modal state
   const [gradingTask, setGradingTask] = useState(null);
@@ -204,6 +225,14 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
       alert('Kỳ đánh giá đã bị khóa hoặc hết hạn chấm điểm. Không thể lưu kết luận!');
       return;
     }
+    if (!isReadyForStep5) {
+      if (!isSelfEvalSubmitted) {
+        alert('Cán bộ chưa hoàn tất nộp bản tự đánh giá cuối kỳ (Bước 3). Chưa đủ điều kiện kết luận xếp loại Bước 5!');
+      } else {
+        alert(`Cán bộ còn ${unsubmittedTasks.length} nhiệm vụ chưa hoàn tất nộp sản phẩm/minh chứng (Bước 2). Cán bộ phải hoàn tất nộp toàn bộ sản phẩm công việc thì mới đủ điều kiện kết luận xếp loại Bước 5!`);
+      }
+      return;
+    }
     try {
       setSavingConclusion(true);
       await api.saveSuperiorConclusion({
@@ -212,7 +241,7 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
         superior_comment: superiorComment,
         status: 'approved'
       });
-      alert('Đã lưu kết luận và xếp loại của cấp có thẩm quyền thành công!');
+      alert('Đã lưu kết luận đánh giá Bước 5 thành công! Hồ sơ đã được chuyển tiếp lên Bước 6 (Tổng hợp tham mưu).');
       loadEvaluationData();
     } catch (err) {
       alert(err.message);
@@ -491,6 +520,53 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
               >
                 <span>👉 Chuyển sang phân hệ Tự đánh giá</span>
               </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Step 5 Prerequisite Status Banner */}
+      {selectedUserObj && !isSelf && (
+        <div className={`p-4 rounded-xl border flex items-start gap-3 shadow-2xs ${
+          isReadyForStep5 
+            ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900' 
+            : 'bg-amber-50/90 border-amber-300 text-amber-950'
+        }`}>
+          {isReadyForStep5 ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+          ) : (
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          )}
+          <div className="text-xs space-y-1">
+            <div className="font-bold text-sm flex items-center gap-2 flex-wrap">
+              <span>Điều kiện chuyển dữ liệu lên Bước 5 (Đánh giá, nhận xét của CBQL):</span>
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
+                isReadyForStep5 ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'
+              }`}>
+                {isReadyForStep5 ? '✓ ĐỦ ĐIỀU KIỆN BƯỚC 5' : '⏳ CHƯA ĐỦ ĐIỀU KIỆN'}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-700 pt-0.5">
+              <span>
+                1. Tự đánh giá cuối kỳ (Bước 3): {isSelfEvalSubmitted ? (
+                  <strong className="text-emerald-700">✓ Đã nộp ({evalData?.evaluation?.status === 'approved' ? 'Đã duyệt' : 'Đã nộp'})</strong>
+                ) : (
+                  <strong className="text-rose-700">⚠️ Chưa nộp tự đánh giá</strong>
+                )}
+              </span>
+              <span>•</span>
+              <span>
+                2. Nộp sản phẩm công việc (Bước 2): {allTasksSubmitted ? (
+                  <strong className="text-emerald-700">✓ Đã hoàn tất ({userTasks.length} nhiệm vụ đã nộp MC/duyệt)</strong>
+                ) : (
+                  <strong className="text-rose-700">⚠️ Còn {unsubmittedTasks.length} nhiệm vụ chưa hoàn tất nộp sản phẩm</strong>
+                )}
+              </span>
+            </div>
+            {!isReadyForStep5 && (
+              <p className="text-[11px] text-amber-800 italic pt-1">
+                Theo quy chế, hệ thống chỉ cho phép CBQL kết luận xếp loại Bước 5 khi cán bộ đã tự đánh giá cuối kỳ và hoàn tất nộp minh chứng tất cả sản phẩm công việc. Sau khi hoàn tất Bước 5, hồ sơ mới được đẩy lên Bước 6 (Tổng hợp tham mưu).
+              </p>
             )}
           </div>
         </div>
