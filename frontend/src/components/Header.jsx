@@ -1247,12 +1247,53 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 5.0 */}
+              {/* Version 5.1 */}
               <div className="relative pl-6 border-l-2 border-indigo-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-indigo-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-xs font-bold">Phiên bản 5.0</span>
-                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Đổi Tên Quản Lý Người Dùng, Cây Phân Cấp Đơn Vị & Hỗ Trợ Đa Chức Vụ / Kiêm Nhiệm)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-xs font-bold">Phiên bản 5.1</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Chuẩn Hóa Phân Quyền CBNV, Nhóm Đối Tượng Báo Cáo & Lọc Lãnh Đạo Trực Tiếp)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Phân Loại Đối Tượng Công Chức / Viên Chức / Người Lao Động, Tách Nhóm & Tỷ Lệ Xếp Loại Báo Cáo Mẫu 02, Cơ Chế Phân Quyền Động, Phân Quyền Giao Diện CBNV, Lọc Lãnh Đạo Trực Tiếp Theo Đơn Vị & Tinh Gọn Danh Mục Báo Cáo
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Phân loại Người dùng Công chức / Viên chức / Người lao động & Tách nhóm Báo cáo Mẫu 02:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Bổ sung trường phân loại đối tượng nhân sự chuẩn (<code>employee_type</code>): Công chức, Viên chức, Người lao động trong Quản lý người dùng và bộ lọc tìm kiếm.</li>
+                      <li>Báo cáo Mẫu 02 tự động phân tách danh sách và bảng thống kê tỷ lệ xếp loại (Hoàn thành xuất sắc, Tốt, Hoàn thành, Không hoàn thành) riêng biệt theo từng nhóm đối tượng Công chức / Viên chức / Người lao động.</li>
+                      <li>Thống nhất loại bỏ "Chức vụ chính quyền", quy chuẩn về "Chức vụ / Vị trí việc làm"; sắp xếp lại giao diện chi tiết người dùng gọn gàng, khoa học.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Phân định quyền hạn cho Cán bộ Nhân viên (CBNV) & Phân quyền động:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Đồng bộ trường phân quyền động (<code>permissions</code>) từ vai trò người dùng vào API, giúp các quyền cấp thêm tại Cấu hình hệ thống lập tức có hiệu lực trên toàn bộ giao diện người dùng.</li>
+                      <li>Tối ưu giao diện cho tài khoản CBNV thông thường: Ẩn các bước B4 (Chấm điểm CBQL), B5 (Tư vấn kết quả), B6 (Biểu quyết đánh giá) trên menu điều hướng; ẩn Báo cáo Mẫu 02 và các báo cáo tổng hợp toàn cơ quan; bảo vệ route tránh truy cập trực tiếp.</li>
+                      <li>Tài khoản CBNV chỉ xem và thực hiện tự đánh giá cá nhân (Mẫu 01) và tiến độ công việc cá nhân (Bảng 1 - PL5).</li>
+                    </ul>
+                  </li>
+                  <li><strong>Lọc Lãnh đạo trực tiếp theo Đơn vị công tác & Chuẩn hóa cấp bậc quản lý:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Khi chọn đơn vị công tác cho từng vị trí làm việc, danh sách chọn "LĐ trực tiếp vị trí này" và "Cán bộ Quản lý trực tiếp" chỉ lọc hiển thị cán bộ có chức danh lãnh đạo/quản lý trong chính đơn vị đó (Người đứng đầu, Cấp phó, Tổ trưởng, chức danh lãnh đạo thực tế), loại bỏ hoàn toàn danh sách toàn bộ cán bộ không liên quan.</li>
+                      <li>Tự động reset và sắp xếp thứ bậc lãnh đạo ưu tiên trực quan (👑 Lãnh đạo đứng đầu → ⭐ Cấp phó → 🏷️ Tổ trưởng → Tên A-Z).</li>
+                    </ul>
+                  </li>
+                  <li><strong>Tinh gọn Hệ thống Báo cáo & Bảng Danh sách Đơn vị:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Loại bỏ hoàn toàn báo cáo xếp loại Nghị quyết 98 TPHCM, tập trung tối ưu vào Mẫu 01, Mẫu 02 và Bảng 1 - PL5.</li>
+                      <li>Loại bỏ hiển thị cột "Thẩm quyền ký (Chuẩn NĐ 30)" trên bảng Danh sách Đơn vị / Phòng ban theo cây phân cấp, giúp giao diện thông thoáng, vừa vặn không bị tràn ngang màn hình.</li>
+                      <li>Chuẩn hóa dữ liệu Đảng viên / Đoàn viên: Không tự động gán mặc định cho toàn bộ tài khoản; chỉ hiển thị khi có phân công cụ thể.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 5.0 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-300 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 5.0</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Đổi Tên Quản Lý Người Dùng, Cây Phân Cấp Đơn Vị & Hỗ Trợ Đa Chức Vụ / Kiêm Nhiệm)</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Đổi Tên Quản Lý Phân Quyền Thành "Quản Lý Người Dùng", Quản Lý Người Dùng Theo Phân Cấp Đơn Vị (Hierarchical Organizational Unit Tree), Hỗ Trợ Cán Bộ Đa Chức Vụ / Kiêm Nhiệm Tại Một Hoặc Nhiều Đơn Vị Theo Chuẩn iCPV TP.HCM
