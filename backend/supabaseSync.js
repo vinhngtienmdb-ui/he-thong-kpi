@@ -1178,16 +1178,19 @@ async function syncWithSupabaseOnStartup() {
   }
 
   const localUserCount = db.prepare('SELECT COUNT(*) as count FROM users').get()?.count || 0;
-  console.log(`[Supabase Startup Sync] Kiểm tra trạng thái: Supabase = ${supUserCount} users | SQLite cục bộ = ${localUserCount} users.`);
+  const localStdTaskCount = db.prepare('SELECT COUNT(*) as count FROM standard_tasks').get()?.count || 0;
+  console.log(`[Supabase Startup Sync] Kiểm tra trạng thái: Supabase = ${supUserCount} users | SQLite cục bộ = ${localUserCount} users (${localStdTaskCount} standard tasks).`);
 
-  if (supUserCount > 0 && localUserCount === 0) {
-    console.log(`[Supabase Startup Sync] SQLite cục bộ đang trống. Kéo dữ liệu từ Supabase về...`);
+  // Nếu Supabase có dữ liệu và SQLite đang ở trạng thái sơ khai (chỉ có 1 user admin mặc định, hoặc ít hơn Supabase, hoặc thiếu công việc chuẩn)
+  // -> Tự động kéo toàn bộ dữ liệu từ Supabase Cloud về SQLite máy chủ (đặc biệt cần thiết cho container Render khi vừa deploy)
+  if (supUserCount > 0 && (localUserCount <= 1 || supUserCount > localUserCount || localStdTaskCount === 0)) {
+    console.log(`[Supabase Startup Sync] SQLite cục bộ thiếu dữ liệu so với Supabase (${localUserCount} users, ${localStdTaskCount} tasks vs ${supUserCount} users trên Supabase). Kéo dữ liệu từ Supabase về...`);
     const result = await pullFromSupabase();
     console.log('[Supabase Startup Sync] ✓ Đã nạp thành công CSDL từ Supabase vào SQLite:', result.stats);
     ensureUserPositionsPopulated();
     return result;
   } else if (localUserCount > 0) {
-    console.log('[Supabase Startup Sync] SQLite cục bộ đã có dữ liệu. Đẩy dữ liệu đồng bộ lên Supabase Cloud...');
+    console.log('[Supabase Startup Sync] SQLite cục bộ đã có dữ liệu đầy đủ. Đẩy dữ liệu đồng bộ lên Supabase Cloud...');
     const result = await pushToSupabase();
     console.log('[Supabase Startup Sync] ✓ Đã đồng bộ thành công CSDL lên Supabase Cloud:', result.stats);
     ensureUserPositionsPopulated();
