@@ -1239,12 +1239,48 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 4.2 */}
+              {/* Version 4.3 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.2</span>
-                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Chuẩn hóa Biểu mẫu Báo cáo Mẫu 01, Báo cáo Công việc & Mẫu 02)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.3</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Chuẩn hóa Thứ tự Ưu tiên Danh sách Người dùng)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Chuẩn Hóa Thứ Tự Ưu Tiên Hiển Thị Người Dùng Theo Chức Vụ (Lãnh Đạo - Quản Lý - Giáo Viên - Nhân Viên) & Sắp Xếp Theo Tên Chính Tiếng Việt
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Ưu tiên 1 - Phân tầng theo Chức vụ Hành chính:</strong>
+                    <p className="text-slate-500 mt-0.5">Danh sách nhân sự toàn hệ thống được sắp xếp chặt chẽ theo phân cấp chức danh:</p>
+                    <ol className="list-decimal pl-5 mt-1 space-y-0.5 text-slate-500">
+                      <li><strong>Lãnh đạo:</strong> Hiệu trưởng, Thủ trưởng, Giám đốc đơn vị, Bí thư cấp ủy...</li>
+                      <li><strong>Quản lý:</strong> Phó Hiệu trưởng, Phó Thủ trưởng, Cán bộ quản lý phòng/tổ, Tổ trưởng, Tổ phó chuyên môn...</li>
+                      <li><strong>Giáo viên:</strong> Toàn thể đội ngũ giáo viên trực tiếp giảng dạy.</li>
+                      <li><strong>Nhân viên:</strong> Chuyên viên, nhân viên kế toán, văn thư, thủ quỹ, y tế, phục vụ, bảo vệ...</li>
+                      <li><strong>Quản trị viên / Khác:</strong> Tài khoản quản trị hệ thống.</li>
+                    </ol>
+                  </li>
+                  <li><strong>Ưu tiên 2 - Sắp xếp theo Tên chính (không theo họ và chữ lót):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Trong từng nhóm chức vụ, hệ thống tự động bóc tách tên gọi chính cuối cùng để sắp xếp chuẩn mực theo thứ tự bảng chữ cái tiếng Việt (A, Ă, Â, B, C, D, Đ, E...).</li>
+                      <li>Trường hợp cán bộ có cùng tên gọi chính, hệ thống tự động căn cứ vào họ và chữ lót để phân định thứ tự chính xác.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Đồng bộ toàn diện trên toàn bộ hệ sinh thái:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Áp dụng đồng bộ tại Phân hệ Quản lý Tài khoản & Nhân sự, Danh bạ liên hệ toàn hệ thống, Hộp chọn phân công / giao việc, Thẩm định chấm điểm và Báo cáo cá nhân.</li>
+                      <li>Áp dụng chuẩn hóa vào Bảng tổng hợp xếp loại Mẫu 02 (cả trên bản xem trực tiếp và file xuất Excel chính thức).</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 4.2 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-300 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 4.2</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Bổ Sung Cột Loại Công Việc & Đánh Số STT Theo Từng Trục (Báo Cáo Công Việc), Chuẩn Hóa Chữ Ký Mẫu 01 & Tinh Gọn Chữ Ký Mẫu 02 Tổng Hợp

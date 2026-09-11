@@ -1,6 +1,7 @@
 const ExcelJS = require('exceljs');
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('./database');
+const { compareUsersByPositionAndName } = require('./userSorting');
 
 // Normalize Vietnamese string for robust column header / axis matching
 function normalizeStr(s) {
@@ -1560,7 +1561,7 @@ async function exportMau02Workbook(periodId) {
   const leaderTitle = sysConfigs.LEADER_SIGNER_TITLE || 'PHÓ TRƯỞNG BAN THƯỜNG TRỰC';
 
   const rows = db.prepare(`
-    SELECT u.id as user_id, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.union_title, d.name as dept_name,
+    SELECT u.id as user_id, u.full_name, u.role, u.target_role, u.management_role, u.party_title, u.gov_title, u.union_title, d.name as dept_name,
            e.id as evaluation_id, e.step, e.part1_score, e.part2_score, e.bonus_score, e.total_score,
            e.rank_proposed, e.superior_rank, e.summary_reason, e.cadre_proposal_note, e.superior_comment
     FROM users u
@@ -1572,6 +1573,7 @@ async function exportMau02Workbook(periodId) {
       AND COALESCE(u.role_id, '') NOT IN ('role-admin', 'role-admin-donvi')
     ORDER BY u.role DESC, u.full_name ASC
   `).all(periodId);
+  rows.sort(compareUsersByPositionAndName);
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = `${unitName} - Hệ thống quản lý công việc và chấm điểm hiệu suất`;
@@ -1864,7 +1866,8 @@ async function exportDirectoryWorkbook(users, options = {}) {
   });
 
   // Data rows
-  users.forEach((u, idx) => {
+  const sortedUsers = [...users].sort(compareUsersByPositionAndName);
+  sortedUsers.forEach((u, idx) => {
     let classification = 'Toàn hệ thống';
     if (u.is_self) classification = 'Bản thân';
     else if (u.is_direct_subordinate) classification = 'Cán bộ trực thuộc';

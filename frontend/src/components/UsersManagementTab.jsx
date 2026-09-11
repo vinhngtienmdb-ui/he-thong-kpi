@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import UserGroupManagementModal from './UserGroupManagementModal';
+import { compareUsersByPositionAndName } from '../userSorting';
 
 export default function UsersManagementTab({ currentUser, departments = [], onReloadUsers }) {
   const canManage = currentUser?.role === 'admin' || currentUser?.role_code === 'admin_donvi';
@@ -329,18 +330,20 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
     }
   };
 
-  const filteredUsers = users.filter((u) => {
-    const matchesSearch =
-      u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.username?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = filterRole === 'ALL' || u.role === filterRole;
-    const matchesDept = filterDept === 'ALL' || u.dept_id === filterDept;
-    const matchesStatus =
-      filterStatus === 'ALL' ||
-      (filterStatus === 'ACTIVE' && (u.is_active === 1 || u.is_active === undefined || u.is_active === null)) ||
-      (filterStatus === 'INACTIVE' && u.is_active === 0);
-    return matchesSearch && matchesRole && matchesDept && matchesStatus;
-  });
+  const filteredUsers = users
+    .filter((u) => {
+      const matchesSearch =
+        u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.username?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesRole = filterRole === 'ALL' || u.role === filterRole;
+      const matchesDept = filterDept === 'ALL' || u.dept_id === filterDept;
+      const matchesStatus =
+        filterStatus === 'ALL' ||
+        (filterStatus === 'ACTIVE' && (u.is_active === 1 || u.is_active === undefined || u.is_active === null)) ||
+        (filterStatus === 'INACTIVE' && u.is_active === 0);
+      return matchesSearch && matchesRole && matchesDept && matchesStatus;
+    })
+    .sort(compareUsersByPositionAndName);
 
   const selectedRoleObj = roles.find(r => r.id === formData.role_id);
   const isSelectedRoleExempt = 

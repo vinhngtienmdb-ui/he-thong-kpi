@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate, formatAdministrativeDate } from '../constants';
+import { compareUsersByPositionAndName } from '../userSorting';
 
 export default function ReportTab({ 
   selectedPeriod, 
@@ -102,7 +103,8 @@ export default function ReportTab({
     try {
       setMau02Loading(true);
       const data = await api.getMau02Report(activePeriodId);
-      setMau02List(data || []);
+      const sorted = (data || []).slice().sort(compareUsersByPositionAndName);
+      setMau02List(sorted);
     } catch (err) {
       console.error('Error loading Mau 02:', err);
     } finally {
@@ -290,7 +292,7 @@ export default function ReportTab({
                   onChange={(e) => setSelectedUser(e.target.value)}
                   className="text-xs font-semibold p-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-2 focus:ring-red-500"
                 >
-                  {users.filter(u => u.role !== 'admin').map(u => (
+                  {users.filter(u => u.role !== 'admin').slice().sort(compareUsersByPositionAndName).map(u => (
                     <option key={u.id} value={u.id}>
                       {u.full_name} ({u.role === 'cbql' ? 'CBQL' : 'CBNV'})
                     </option>

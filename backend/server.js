@@ -23,6 +23,7 @@ const {
   exportMau02Workbook,
   exportDirectoryWorkbook
 } = require('./excelService');
+const { compareUsersByPositionAndName } = require('./userSorting');
 const { 
   getSupabaseStatus, 
   pushToSupabase, 
@@ -755,6 +756,7 @@ app.get('/api/users', (req, res) => {
 
   query += ` ORDER BY u.role DESC, u.full_name ASC`;
   const users = db.prepare(query).all(...params);
+  users.sort(compareUsersByPositionAndName);
   res.json(users);
 });
 
@@ -851,6 +853,7 @@ app.get('/api/directory', (req, res) => {
       can_assign: isManagerOrAdmin && (isSubordinate || isInMyDept || viewer?.role === 'admin')
     };
   });
+  allAnnotatedUsers.sort(compareUsersByPositionAndName);
 
   // Lọc phạm vi hiển thị nếu có chỉ định scope
   let filteredUsers = allAnnotatedUsers;
@@ -948,6 +951,7 @@ app.get('/api/directory/export', async (req, res) => {
     } else if (scope === 'my_unit') {
       list = list.filter(u => u.is_in_my_dept);
     }
+    list.sort(compareUsersByPositionAndName);
 
     let subtitleScope = 'Toàn hệ thống';
     if (scope === 'subordinates') subtitleScope = 'Danh sách cán bộ trực thuộc';
@@ -3775,7 +3779,7 @@ app.get('/api/reports/mau-02', (req, res) => {
   const accessibleUserIds = getAccessibleUserIds(viewerId);
 
   let query = `
-    SELECT u.id as user_id, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.union_title, u.dept_id, d.name as dept_name,
+    SELECT u.id as user_id, u.full_name, u.role, u.target_role, u.management_role, u.party_title, u.gov_title, u.union_title, u.dept_id, d.name as dept_name,
            e.id as evaluation_id, e.step, e.part1_score, e.part2_score, e.bonus_score, e.total_score,
            e.rank_proposed, e.superior_rank, e.summary_reason, e.cadre_proposal_note, e.superior_comment,
            (SELECT COUNT(*) FROM assigned_tasks t WHERE t.user_id = u.id AND t.period_id = ? AND t.status != 'rejected') as total_tasks,
@@ -3801,6 +3805,7 @@ app.get('/api/reports/mau-02', (req, res) => {
 
   query += ` ORDER BY d.name ASC, u.role DESC, u.full_name ASC`;
   const list = db.prepare(query).all(...params);
+  list.sort(compareUsersByPositionAndName);
   res.json(list);
 });
 

@@ -17,6 +17,7 @@ import SystemConfigTab from './components/SystemConfigTab';
 import DirectoryTab from './components/DirectoryTab';
 import LoginScreen from './components/LoginScreen';
 import { api, setViewerId } from './api';
+import { compareUsersByPositionAndName } from './userSorting';
 import { Calendar, CheckCircle2, LayoutDashboard, Files, UserCheck, Award, Menu, Layers } from 'lucide-react';
 
 const VALID_TABS = [
@@ -94,13 +95,14 @@ export default function App() {
         setSelectedPeriod(activePeriod.id);
       }
 
-      setUsers(usersData);
+      const sortedUsers = (usersData || []).slice().sort(compareUsersByPositionAndName);
+      setUsers(sortedUsers);
       setAxes(axesData);
       setDepartments(deptsData);
 
       // Đồng bộ thông tin currentUser từ server để loại bỏ triệt để cache lỗi font cũ trong localStorage
       if (currentUser?.id) {
-        const freshUser = usersData.find(u => u.id === currentUser.id);
+        const freshUser = sortedUsers.find(u => u.id === currentUser.id);
         if (freshUser) {
           setCurrentUser(freshUser);
           localStorage.setItem('kpi_user', JSON.stringify(freshUser));
@@ -196,7 +198,7 @@ export default function App() {
       setViewerId(currentUser.id);
       api.getUsers({ filter_accessible: 'true' })
         .then(accData => {
-          setAccessibleUsers(accData);
+          setAccessibleUsers((accData || []).slice().sort(compareUsersByPositionAndName));
         })
         .catch(err => {
           console.error('Error fetching accessible users:', err);
@@ -210,9 +212,9 @@ export default function App() {
         api.getUsers(),
         currentUser?.id ? api.getUsers({ filter_accessible: 'true' }) : Promise.resolve([])
       ]);
-      setUsers(usersData);
+      setUsers((usersData || []).slice().sort(compareUsersByPositionAndName));
       if (accData && accData.length > 0) {
-        setAccessibleUsers(accData);
+        setAccessibleUsers((accData || []).slice().sort(compareUsersByPositionAndName));
       }
     } catch (err) {
       console.error('Error reloading users:', err);
