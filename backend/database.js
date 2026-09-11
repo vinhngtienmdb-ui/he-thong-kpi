@@ -376,6 +376,10 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_skip_level_mgr ON skip_level_authorizations(manager_id);
     CREATE INDEX IF NOT EXISTS idx_skip_level_dept ON skip_level_authorizations(dept_id);
     CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
+    CREATE INDEX IF NOT EXISTS idx_std_tasks_period_name ON standard_tasks(period_id, task_name);
+    CREATE INDEX IF NOT EXISTS idx_std_tasks_dept ON standard_tasks(dept_code);
+    CREATE INDEX IF NOT EXISTS idx_assigned_tasks_user_period ON assigned_tasks(user_id, period_id);
+    CREATE INDEX IF NOT EXISTS idx_assigned_tasks_period ON assigned_tasks(period_id);
   `);
 
   const migrations = [

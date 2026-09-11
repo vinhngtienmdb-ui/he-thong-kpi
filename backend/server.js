@@ -17,6 +17,7 @@ const {
 } = require('./database');
 const { 
   importStandardTasksFromExcel, 
+  importStandardTasksFromData,
   generateUserImportTemplate,
   importUsersFromExcel,
   exportCBQLWorkbook, 
@@ -61,7 +62,8 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization', 'x-viewer-id', 'x-user-id', 'x-requested-with', 'Accept', 'Origin']
 };
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Continuous Live Sync Middleware:
 // Tự động kích hoạt đồng bộ nền lên Supabase Cloud cho MỌI thao tác thay đổi dữ liệu thành công (POST, PUT, PATCH, DELETE)
@@ -2002,8 +2004,10 @@ app.get('/api/standard-tasks/template', (req, res) => {
   }
 });
 
-// Import standard tasks from Excel
+// Import standard tasks from Excel (.xlsx)
 app.post('/api/standard-tasks/import', upload.single('file'), requireManagerOrAdmin, async (req, res) => {
+  if (req.setTimeout) req.setTimeout(300000);
+  if (res.setTimeout) res.setTimeout(300000);
   try {
     let fileSource;
     if (req.file) {
@@ -2060,14 +2064,53 @@ app.post('/api/standard-tasks/import', upload.single('file'), requireManagerOrAd
     }
 
     res.json({ success: true, message: detailMsg, ...result });
-    triggerBackgroundSupabaseSync();
   } catch (error) {
-    console.error('Import error:', error);
+    console.error('Import standard tasks error:', error);
     let userMsg = error.message;
     if (error.message && (error.message.includes("Can't find end of central directory") || error.message.includes('invalid zip') || error.message.includes('corrupted'))) {
       userMsg = 'Định dạng file không hợp lệ hoặc bị lỗi. Vui lòng đảm bảo file có định dạng Excel (.xlsx) chuẩn.';
     }
     res.status(500).json({ success: false, message: userMsg });
+  }
+});
+
+// Direct import standard tasks from clipboard / table data (Zero memory overhead, bypasses ExcelJS parser)
+app.post('/api/standard-tasks/import-data', requireManagerOrAdmin, async (req, res) => {
+  try {
+    const { tasks, period_id, update_existing } = req.body || {};
+    if (!Array.isArray(tasks) || tasks.length === 0) {
+      return res.status(400).json({ success: false, message: 'Dữ liệu công việc trống. Vui lòng dán ít nhất 1 dòng dữ liệu.' });
+    }
+
+    const updateExisting = update_existing !== undefined
+      ? (update_existing === 'true' || update_existing === true || update_existing === '1')
+      : true;
+
+    const result = await importStandardTasksFromData(tasks, period_id, { updateExisting });
+
+    if (result.importedCount === 0 && (result.skippedCount || 0) === 0) {
+      return res.status(400).json({
+        success: false,
+        importedCount: 0,
+        message: 'Không tìm thấy dòng công việc hợp lệ nào. Vui lòng kiểm tra trường "Tên công việc".'
+      });
+    }
+
+    let detailMsg = `Đã nạp thành công ${result.importedCount} công việc chuẩn`;
+    if (result.insertedCount > 0 && result.updatedCount > 0) {
+      detailMsg += ` (Thêm mới ${result.insertedCount}, Cập nhật ${result.updatedCount}${result.skippedCount > 0 ? `, Bỏ qua ${result.skippedCount}` : ''})`;
+    } else if (result.updatedCount > 0) {
+      detailMsg += ` (Đã cập nhật ${result.updatedCount} công việc có sẵn${result.skippedCount > 0 ? `, Bỏ qua ${result.skippedCount}` : ''})`;
+    } else if (result.insertedCount > 0) {
+      detailMsg += ` (Thêm mới ${result.insertedCount}${result.skippedCount > 0 ? `, Bỏ qua ${result.skippedCount}` : ''})`;
+    } else if (result.skippedCount > 0) {
+      detailMsg = `Đã bỏ qua ${result.skippedCount} công việc do đã tồn tại trong danh mục`;
+    }
+
+    res.json({ success: true, message: detailMsg, ...result });
+  } catch (error) {
+    console.error('Import data standard tasks error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Lỗi nạp danh mục công việc' });
   }
 });
 

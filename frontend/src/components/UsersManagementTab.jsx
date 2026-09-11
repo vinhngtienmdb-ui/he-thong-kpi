@@ -1316,6 +1316,11 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                                   🚩 {u.party_title ? u.party_title : 'Đảng viên'}
                                 </span>
                               )}
+                              {u.union_title && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 text-[10px] font-semibold" title={u.union_title}>
+                                  ⭐ Đoàn thể: {u.union_title}
+                                </span>
+                              )}
                             </div>
                             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                               {(primaryPos.management_role === 'lanh_dao' || u.management_role === 'lanh_dao') ? (
@@ -1538,6 +1543,11 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                             {u.is_party_member === 1 && (
                               <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-800 border border-red-200 text-[10px] font-bold">
                                 🚩 {u.party_title || 'Đảng viên'}
+                              </span>
+                            )}
+                            {u.union_title && (
+                              <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 text-[10px] font-semibold">
+                                ⭐ {u.union_title}
                               </span>
                             )}
                           </div>
@@ -2022,52 +2032,101 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                     </div>
                   </div>
 
-                  {/* THÀNH PHẦN ĐẢNG & CHỨC VỤ ĐẢNG */}
-                  <div className="p-4 bg-red-50/60 border border-red-200 rounded-xl space-y-3">
-                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(formData.is_party_member)}
-                        onChange={(e) => setFormData({ 
-                          ...formData, 
-                          is_party_member: e.target.checked,
-                          party_title: e.target.checked ? (formData.party_title || 'Đảng viên') : ''
-                        })}
-                        className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500 cursor-pointer"
-                      />
-                      <span className="text-xs font-bold text-red-950 flex items-center gap-1.5">
-                        <span>🚩 Là Đảng viên Đảng Cộng sản Việt Nam</span>
+                  {/* PHÂN ĐỊNH RÕ 3 TRƯỜNG: CHỨC VỤ CHÍNH QUYỀN - CHỨC VỤ ĐẢNG - CHỨC DANH ĐOÀN THỂ */}
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                        <Briefcase className="w-4 h-4 text-indigo-600" />
+                        Chức vụ & Tư cách công tác (Chính quyền - Đảng - Đoàn thể)
                       </span>
-                    </label>
+                    </div>
 
-                    {formData.is_party_member && (
-                      <div className="pt-2 border-t border-red-200/60 grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in">
-                        <div>
-                          <label className="block text-xs font-semibold text-red-900 mb-1">
-                            Chức vụ / Danh hiệu công tác Đảng
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.party_title}
-                            onChange={(e) => setFormData({ ...formData, party_title: e.target.value })}
-                            className="w-full px-3 py-2 border border-red-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-red-500 bg-white"
-                            placeholder="vd: Đảng viên, Bí thư Chi bộ, Phó Bí thư, Chi ủy viên..."
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">
-                            Chức danh Đoàn thể (nếu có)
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.union_title}
-                            onChange={(e) => setFormData({ ...formData, union_title: e.target.value })}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 bg-white"
-                            placeholder="vd: Chủ tịch Công đoàn, Bí thư Đoàn..."
-                          />
-                        </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                      {/* TRƯỜNG 1: CHỨC VỤ CHÍNH QUYỀN */}
+                      <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1.5">
+                        <label className="block text-xs font-bold text-slate-800">
+                          🏛️ Chức vụ Chính quyền <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={formData.gov_title}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setFormData(prev => {
+                              const updatedPositions = [...(prev.positions || [])];
+                              if (updatedPositions.length > 0) {
+                                updatedPositions[0] = { ...updatedPositions[0], position_title: val };
+                              }
+                              return { ...prev, gov_title: val, positions: updatedPositions };
+                            });
+                          }}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-indigo-500 bg-white"
+                          placeholder="vd: Hiệu trưởng, Trưởng phòng, Chuyên viên..."
+                        />
+                        <span className="text-[10px] text-slate-400 block">Vị trí chính quyền chính</span>
                       </div>
-                    )}
+
+                      {/* TRƯỜNG 2: ĐẢNG & CHỨC VỤ ĐẢNG */}
+                      <div className={`p-3 rounded-lg border transition-colors space-y-2 ${
+                        formData.is_party_member ? 'bg-red-50/70 border-red-200' : 'bg-white border-slate-200'
+                      }`}>
+                        <div className="flex items-center justify-between">
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(formData.is_party_member)}
+                              onChange={(e) => setFormData({ 
+                                ...formData, 
+                                is_party_member: e.target.checked,
+                                party_title: e.target.checked ? (formData.party_title || 'Đảng viên') : ''
+                              })}
+                              className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500 cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-red-950 flex items-center gap-1">
+                              🚩 Là Đảng viên
+                            </span>
+                          </label>
+                          {!formData.is_party_member && (
+                            <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-medium">Quần chúng</span>
+                          )}
+                        </div>
+
+                        {formData.is_party_member ? (
+                          <div>
+                            <label className="block text-[11px] font-semibold text-red-900 mb-1">
+                              Chức vụ Đảng:
+                            </label>
+                            <input
+                              type="text"
+                              value={formData.party_title}
+                              onChange={(e) => setFormData({ ...formData, party_title: e.target.value })}
+                              className="w-full px-2.5 py-1.5 border border-red-300 rounded-md text-xs font-medium focus:ring-2 focus:ring-red-500 bg-white"
+                              placeholder="vd: Bí thư Chi bộ, Đảng viên..."
+                            />
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-slate-400 italic pt-1">
+                            Tích chọn nếu cán bộ là Đảng viên ĐCSVN
+                          </p>
+                        )}
+                      </div>
+
+                      {/* TRƯỜNG 3: CHỨC DANH ĐOÀN THỂ (TÁCH RIÊNG HOÀN TOÀN) */}
+                      <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1.5">
+                        <label className="block text-xs font-bold text-slate-800">
+                          ⭐ Chức danh Đoàn thể (nếu có)
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.union_title || ''}
+                          onChange={(e) => setFormData({ ...formData, union_title: e.target.value })}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 bg-white"
+                          placeholder="vd: Chủ tịch Công đoàn, Bí thư Chi đoàn..."
+                        />
+                        <span className="text-[10px] text-slate-400 block">Công đoàn, Đoàn TN, Ban TTND...</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 

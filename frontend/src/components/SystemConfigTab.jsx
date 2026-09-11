@@ -689,8 +689,118 @@ export default function SystemConfigTab({
         const inactiveCount = localDepts.filter(d => d.is_active === 0).length;
 
         return (
-          <div className="bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden space-y-0">
-            <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="space-y-6">
+            {/* THÔNG TIN CƠ QUAN, ĐỊA PHƯƠNG & THẨM QUYỀN KÝ BÁO CÁO (CHUẨN NGHỊ ĐỊNH 30/2020/NĐ-CP) */}
+            <form onSubmit={handleSaveConfigs} className="bg-white rounded-xl shadow-xs border border-slate-200 p-6 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5 text-red-800">
+                    <Building2 className="w-4 h-4 text-red-600" />
+                    Thông tin Cơ quan, Địa phương & Thẩm quyền ký Báo cáo (Chuẩn NĐ 30/2020/NĐ-CP)
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Các thông tin này sẽ được tự động đồng bộ lên tiêu ngữ, đầu trang và chân trang chữ ký của các biểu mẫu Mẫu 01-A, Mẫu 01-B, Báo cáo công việc và Mẫu 02 (cả trên giao diện xem trước, bản in PDF và file Excel xuất ra).
+                  </p>
+                </div>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="bg-red-700 hover:bg-red-800 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-xs transition flex items-center gap-2 shrink-0 cursor-pointer disabled:opacity-50"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  {saving ? 'Đang lưu...' : 'Lưu Thông tin Cơ quan & Thẩm quyền ký'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1 text-xs">
+                    Tên Cơ quan chủ quản / Cấp trên
+                  </label>
+                  <input
+                    type="text"
+                    value={configs.PARENT_AGENCY_NAME || ''}
+                    onChange={(e) => handleConfigChange('PARENT_AGENCY_NAME', e.target.value)}
+                    placeholder="THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH"
+                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-red-500 uppercase"
+                  />
+                  <span className="text-slate-400 text-[10px]">Tiêu đề góc trái dòng 1 (in hoa)</span>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1 text-xs">
+                    Tên Cơ quan, Đơn vị
+                  </label>
+                  <input
+                    type="text"
+                    value={configs.UNIT_NAME || ''}
+                    onChange={(e) => handleConfigChange('UNIT_NAME', e.target.value)}
+                    placeholder="BAN TỔ CHỨC THÀNH ỦY TP. HỒ CHÍ MINH"
+                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-red-500 uppercase"
+                  />
+                  <span className="text-slate-400 text-[10px]">Tiêu đề góc trái dòng 2 (in hoa đậm)</span>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1 text-xs">
+                    Địa danh lập văn bản
+                  </label>
+                  <input
+                    type="text"
+                    value={configs.LOCATION_NAME || ''}
+                    onChange={(e) => handleConfigChange('LOCATION_NAME', e.target.value)}
+                    placeholder="TP. Hồ Chí Minh"
+                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-red-500"
+                  />
+                  <span className="text-slate-400 text-[10px]">Xuất hiện ở dòng: [Địa phương], ngày ...</span>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1 text-xs">
+                    Chức danh Người quản lý đơn vị / Cấp phòng
+                  </label>
+                  <input
+                    type="text"
+                    value={configs.DEPT_LEADER_TITLE || ''}
+                    onChange={(e) => handleConfigChange('DEPT_LEADER_TITLE', e.target.value)}
+                    placeholder="TRƯỞNG PHÒNG"
+                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:ring-2 focus:ring-red-500 uppercase"
+                  />
+                  <span className="text-slate-400 text-[10px]">Chức danh ký duyệt tại đơn vị / CBQL</span>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1 text-xs">
+                    Chức danh Thủ trưởng / Lãnh đạo cơ quan ký
+                  </label>
+                  <input
+                    type="text"
+                    value={configs.LEADER_SIGNER_TITLE || ''}
+                    onChange={(e) => handleConfigChange('LEADER_SIGNER_TITLE', e.target.value)}
+                    placeholder="PHÓ TRƯỞNG BAN THƯỜNG TRỰC"
+                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:ring-2 focus:ring-red-500 uppercase"
+                  />
+                  <span className="text-slate-400 text-[10px]">Chức vụ in hoa đậm dưới chữ ký bên phải</span>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1 text-xs">
+                    Họ và tên Thủ trưởng / Lãnh đạo cơ quan ký
+                  </label>
+                  <input
+                    type="text"
+                    value={configs.LEADER_SIGNER_NAME || ''}
+                    onChange={(e) => handleConfigChange('LEADER_SIGNER_NAME', e.target.value)}
+                    placeholder="Thái Thị Bích Liên"
+                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-red-500"
+                  />
+                  <span className="text-slate-400 text-[10px]">Họ tên đầy đủ người ký duyệt</span>
+                </div>
+              </div>
+            </form>
+
+            <div className="bg-white rounded-xl shadow-xs border border-slate-200 overflow-hidden space-y-0">
+              <div className="p-4 border-b border-slate-200 bg-slate-50/50 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <Building2 className="w-4 h-4 text-red-600" />
@@ -901,6 +1011,7 @@ export default function SystemConfigTab({
               </table>
             </div>
           </div>
+        </div>
         );
       })()}
 
@@ -1148,102 +1259,7 @@ export default function SystemConfigTab({
                 <p>4. Tỷ lệ tối đa không vượt quá 20% tổng số CBNV của cơ quan.</p>
               </div>
 
-              {/* THÔNG TIN CƠ QUAN, ĐỊA PHƯƠNG & THẨM QUYỀN KÝ BÁO CÁO (NGHỊ ĐỊNH 30/2020/NĐ-CP & HD 06) */}
-              <div className="pt-4 border-t border-slate-200 space-y-3">
-                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5 text-red-800">
-                  <Building2 className="w-4 h-4 text-red-600" />
-                  Thông tin Cơ quan, Địa phương & Thẩm quyền ký Báo cáo (Chuẩn NĐ 30/2020/NĐ-CP)
-                </h4>
-                <p className="text-[11px] text-slate-500">
-                  Các thông tin này sẽ được tự động đồng bộ lên tiêu ngữ, đầu trang và chân trang chữ ký của các biểu mẫu Mẫu 01-A, Mẫu 01-B, Báo cáo công việc và Mẫu 02 (cả trên giao diện xem trước, bản in PDF và file Excel xuất ra).
-                </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Tên Cơ quan chủ quản / Cấp trên
-                    </label>
-                    <input
-                      type="text"
-                      value={configs.PARENT_AGENCY_NAME || ''}
-                      onChange={(e) => handleConfigChange('PARENT_AGENCY_NAME', e.target.value)}
-                      placeholder="THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH"
-                      className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-red-500 uppercase"
-                    />
-                    <span className="text-slate-400 text-[10px]">Tiêu đề góc trái dòng 1 (in hoa)</span>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Tên Cơ quan, Đơn vị
-                    </label>
-                    <input
-                      type="text"
-                      value={configs.UNIT_NAME || ''}
-                      onChange={(e) => handleConfigChange('UNIT_NAME', e.target.value)}
-                      placeholder="BAN TỔ CHỨC THÀNH ỦY TP. HỒ CHÍ MINH"
-                      className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-red-500 uppercase"
-                    />
-                    <span className="text-slate-400 text-[10px]">Tiêu đề góc trái dòng 2 (in hoa đậm)</span>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Địa danh lập văn bản
-                    </label>
-                    <input
-                      type="text"
-                      value={configs.LOCATION_NAME || ''}
-                      onChange={(e) => handleConfigChange('LOCATION_NAME', e.target.value)}
-                      placeholder="TP. Hồ Chí Minh"
-                      className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-red-500"
-                    />
-                    <span className="text-slate-400 text-[10px]">Xuất hiện ở dòng: [Địa phương], ngày ...</span>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Chức danh Người quản lý đơn vị / Cấp phòng
-                    </label>
-                    <input
-                      type="text"
-                      value={configs.DEPT_LEADER_TITLE || ''}
-                      onChange={(e) => handleConfigChange('DEPT_LEADER_TITLE', e.target.value)}
-                      placeholder="TRƯỞNG PHÒNG"
-                      className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:ring-2 focus:ring-red-500 uppercase"
-                    />
-                    <span className="text-slate-400 text-[10px]">Chức danh ký duyệt tại đơn vị / CBQL</span>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Chức danh Thủ trưởng / Lãnh đạo cơ quan ký
-                    </label>
-                    <input
-                      type="text"
-                      value={configs.LEADER_SIGNER_TITLE || ''}
-                      onChange={(e) => handleConfigChange('LEADER_SIGNER_TITLE', e.target.value)}
-                      placeholder="PHÓ TRƯỞNG BAN THƯỜNG TRỰC"
-                      className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:ring-2 focus:ring-red-500 uppercase"
-                    />
-                    <span className="text-slate-400 text-[10px]">Chức vụ in hoa đậm dưới chữ ký bên phải</span>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Họ và tên Thủ trưởng / Lãnh đạo cơ quan ký
-                    </label>
-                    <input
-                      type="text"
-                      value={configs.LEADER_SIGNER_NAME || ''}
-                      onChange={(e) => handleConfigChange('LEADER_SIGNER_NAME', e.target.value)}
-                      placeholder="Thái Thị Bích Liên"
-                      className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-slate-900 focus:ring-2 focus:ring-red-500"
-                    />
-                    <span className="text-slate-400 text-[10px]">Họ tên đầy đủ người ký duyệt</span>
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div className="pt-3 border-t flex justify-end">

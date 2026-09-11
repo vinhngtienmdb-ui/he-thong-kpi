@@ -156,6 +156,13 @@ export const api = {
     }
     throw lastError;
   },
+  importStandardTasksData: (payload) => {
+    return fetchApi('/standard-tasks/import-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  },
   createStandardTask: (data) => {
     return fetchApi('/standard-tasks', {
       method: 'POST',
@@ -537,9 +544,9 @@ export const api = {
     }
 
     if (lastError && (lastError.message === 'Failed to fetch' || lastError.name === 'TypeError')) {
-      throw new Error('Không thể kết nối tới máy chủ (Failed to fetch). Máy chủ Render đang trong quá trình build hoặc khởi động lại; vui lòng đợi khoảng 30-60 giây rồi bấm "Thử lại ngay".');
+      throw new Error('Không thể kết nối tới máy chủ (Failed to fetch). Máy chủ đang xử lý dữ liệu lớn hoặc khởi động lại; vui lòng đợi một chút rồi thử lại.');
     }
-    throw lastError;
+    throw lastError || new Error('Lỗi không xác định khi nhập file');
   },
   createAdminUser: (data) => {
     return fetchApi('/admin/users', {

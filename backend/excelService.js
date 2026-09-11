@@ -353,19 +353,25 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null, o
   `);
 
   const runImport = db.transaction(() => {
-    sheet.eachRow((row, rowNumber) => {
-      // Skip header and title rows
-      if (rowNumber <= headerRowIndex) return;
+    let consecutiveEmptyRows = 0;
+    const maxRow = Math.min(sheet.rowCount || 0, 5000);
 
+    for (let r = headerRowIndex + 1; r <= maxRow; r++) {
+      const row = sheet.getRow(r);
       // Get task name
       const taskNameCell = mapping.task_name ? row.getCell(mapping.task_name) : null;
       const taskName = extractCellText(taskNameCell).trim();
-      if (!taskName) return;
+      if (!taskName) {
+        consecutiveEmptyRows++;
+        if (consecutiveEmptyRows >= 25) break; // Dừng sớm khi hết dữ liệu, tránh quét hàng ngàn ô trống được format
+        continue;
+      }
+      consecutiveEmptyRows = 0;
 
       // Skip numeric sub-header rows (e.g. Row 3: 1, 2, 3...) or repeated headers
-      if (/^\d+$/.test(taskName)) return;
+      if (/^\d+$/.test(taskName)) continue;
       const taskNameNorm = normalizeStr(taskName);
-      if (taskNameNorm.includes('ten cong viec') || taskNameNorm.includes('ten nhiem vu') || taskNameNorm.includes('noi dung cong viec')) return;
+      if (taskNameNorm.includes('ten cong viec') || taskNameNorm.includes('ten nhiem vu') || taskNameNorm.includes('noi dung cong viec')) continue;
 
       // Resolve row-level period if specified
       let rowPeriodId = periodId;
@@ -443,10 +449,10 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null, o
             axisCode, status, existing.id
           );
           updatedCount++;
-          tasks.push({ id: existing.id, taskName, standardScore, difficultyWeight, axisCode, isUpdated: true });
+          if (tasks.length < 100) tasks.push({ id: existing.id, taskName, standardScore, difficultyWeight, axisCode, isUpdated: true });
         } else {
           skippedCount++;
-          tasks.push({ id: existing.id, taskName, standardScore, difficultyWeight, axisCode, isSkipped: true });
+          if (tasks.length < 100) tasks.push({ id: existing.id, taskName, standardScore, difficultyWeight, axisCode, isSkipped: true });
         }
       } else {
         const id = uuidv4();
@@ -456,9 +462,9 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null, o
           expectedEvidence, note, axisCode, status
         );
         insertedCount++;
-        tasks.push({ id, taskName, standardScore, difficultyWeight, axisCode, isInserted: true });
+        if (tasks.length < 100) tasks.push({ id, taskName, standardScore, difficultyWeight, axisCode, isInserted: true });
       }
-    });
+    }
   });
 
   runImport();
@@ -469,6 +475,157 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null, o
     updatedCount,
     skippedCount,
     sheetName: sheet.name,
+    tasks
+  };
+}
+
+// Direct import standard tasks from structured data (e.g. from pasted spreadsheet rows)
+async function importStandardTasksFromData(rawTasks = [], targetPeriodId = null, options = {}) {
+  const updateExisting = options.updateExisting !== undefined ? Boolean(options.updateExisting) : true;
+  if (!Array.isArray(rawTasks) || rawTasks.length === 0) {
+    return { importedCount: 0, insertedCount: 0, updatedCount: 0, skippedCount: 0, tasks: [] };
+  }
+
+  const allPeriods = db.prepare('SELECT id, code, name FROM periods').all();
+  const periodLookup = new Map();
+  allPeriods.forEach(p => {
+    periodLookup.set(p.id.toLowerCase(), p.id);
+    if (p.code) periodLookup.set(p.code.toLowerCase().trim(), p.id);
+    if (p.name) periodLookup.set(normalizeStr(p.name), p.id);
+  });
+
+  let periodId = targetPeriodId;
+  const targetExists = (periodId && typeof periodId === 'string' && periodId !== 'undefined' && periodId !== 'null' && periodId !== 'all')
+    ? periodLookup.get(periodId.toLowerCase())
+    : null;
+
+  if (targetExists) {
+    periodId = targetExists;
+  } else {
+    const defaultPeriod = db.prepare('SELECT id FROM periods WHERE is_active = 1 ORDER BY id DESC LIMIT 1').get();
+    periodId = defaultPeriod ? defaultPeriod.id : (allPeriods[0]?.id || 'p-1');
+  }
+
+  const allDepts = db.prepare('SELECT id, code, name FROM departments').all();
+  const deptLookup = new Map();
+  allDepts.forEach(d => {
+    if (d.code) deptLookup.set(d.code.toLowerCase().trim(), d.code);
+    if (d.name) deptLookup.set(normalizeStr(d.name), d.code);
+    deptLookup.set(d.id.toLowerCase(), d.code || d.id);
+  });
+
+  const checkExisting = db.prepare(`
+    SELECT id FROM standard_tasks 
+    WHERE period_id = ? AND LOWER(TRIM(task_name)) = ? AND (deadline = ? OR (deadline IS NULL AND ? IS NULL))
+    LIMIT 1
+  `);
+
+  const updateTask = db.prepare(`
+    UPDATE standard_tasks SET
+      dept_code = COALESCE(?, dept_code),
+      output_result = ?,
+      deadline = ?,
+      task_type = ?,
+      standard_score = ?,
+      difficulty_weight = ?,
+      max_converted_score = ?,
+      expected_evidence = ?,
+      note = ?,
+      axis_code = ?,
+      status = COALESCE(?, status)
+    WHERE id = ?
+  `);
+
+  const insertTask = db.prepare(`
+    INSERT INTO standard_tasks (
+      id, period_id, dept_code, task_name, output_result, deadline,
+      task_type, standard_score, difficulty_weight, max_converted_score,
+      expected_evidence, note, axis_code, status
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const tasks = [];
+  let insertedCount = 0;
+  let updatedCount = 0;
+  let skippedCount = 0;
+
+  const runImport = db.transaction(() => {
+    for (const item of rawTasks) {
+      const taskName = String(item.task_name || item['Tên công việc'] || item.taskName || '').trim();
+      if (!taskName || /^\d+$/.test(taskName)) continue;
+      const taskNameNorm = normalizeStr(taskName);
+      if (taskNameNorm.includes('ten cong viec') || taskNameNorm.includes('ten nhiem vu')) continue;
+
+      let rowPeriodId = periodId;
+      const rawPeriod = item.period || item['Kỳ đánh giá'] || item.period_id;
+      if (rawPeriod) {
+        const matched = periodLookup.get(String(rawPeriod).toLowerCase().trim()) || periodLookup.get(normalizeStr(String(rawPeriod)));
+        if (matched) rowPeriodId = matched;
+      }
+
+      let deptCode = '';
+      const rawDept = item.dept_code || item['Mã đơn vị'] || item.department || '';
+      if (rawDept) {
+        deptCode = deptLookup.get(String(rawDept).toLowerCase().trim()) || deptLookup.get(normalizeStr(String(rawDept))) || String(rawDept).trim();
+      }
+      if (!deptCode && allDepts.length > 0) {
+        deptCode = allDepts[0].code || 'A29.123.22';
+      }
+
+      const outputResult = normalizeOutputResult(item.output_result || item['Kết quả đầu ra'] || '');
+      const deadline = formatDate(item.deadline || item['Thời hạn hoàn thành']) || '2026-09-30';
+      const taskType = normalizeTaskType(item.task_type || item['Loại công việc'] || '');
+      let standardScore = parseFloat(item.standard_score || item['Điểm chuẩn']) || (taskType === 'Đột xuất' ? 12 : 10);
+      if (standardScore <= 0) standardScore = (taskType === 'Đột xuất' ? 12 : 10);
+
+      let difficultyWeight = parseFloat(item.difficulty_weight || item['Hệ số độ khó']) || 1.0;
+      if (difficultyWeight > 10 && difficultyWeight <= 200) difficultyWeight /= 100;
+      if (difficultyWeight <= 0) difficultyWeight = 1.0;
+
+      let maxConvertedScore = parseFloat(item.max_converted_score || item['Điểm quy đổi tối đa']) || 0;
+      if (maxConvertedScore <= 0) {
+        maxConvertedScore = Math.round(standardScore * difficultyWeight * 100) / 100;
+      }
+
+      const expectedEvidence = String(item.expected_evidence || item['Minh chứng'] || '').trim();
+      const note = String(item.note || item['Ghi chú'] || '').trim();
+      const axisCode = parseAxisCode(item.axis_code || item['Trục kết quả trọng tâm'] || item.axis || 'TRUC_1');
+      const status = item.status || item['Trạng thái'] || 'Hoạt động';
+
+      const existing = checkExisting.get(rowPeriodId, taskName.toLowerCase(), deadline, deadline);
+      if (existing) {
+        if (updateExisting) {
+          updateTask.run(
+            deptCode, outputResult, deadline, taskType, standardScore,
+            difficultyWeight, maxConvertedScore, expectedEvidence, note,
+            axisCode, status, existing.id
+          );
+          updatedCount++;
+          if (tasks.length < 100) tasks.push({ id: existing.id, taskName, standardScore, difficultyWeight, axisCode, isUpdated: true });
+        } else {
+          skippedCount++;
+          if (tasks.length < 100) tasks.push({ id: existing.id, taskName, standardScore, difficultyWeight, axisCode, isSkipped: true });
+        }
+      } else {
+        const id = uuidv4();
+        insertTask.run(
+          id, rowPeriodId, deptCode, taskName, outputResult, deadline,
+          taskType, standardScore, difficultyWeight, maxConvertedScore,
+          expectedEvidence, note, axisCode, status
+        );
+        insertedCount++;
+        if (tasks.length < 100) tasks.push({ id, taskName, standardScore, difficultyWeight, axisCode, isInserted: true });
+      }
+    }
+  });
+
+  runImport();
+
+  return {
+    importedCount: insertedCount + updatedCount,
+    insertedCount,
+    updatedCount,
+    skippedCount,
     tasks
   };
 }
@@ -1921,6 +2078,7 @@ async function exportDirectoryWorkbook(users, options = {}) {
 
 module.exports = {
   importStandardTasksFromExcel,
+  importStandardTasksFromData,
   generateUserImportTemplate,
   importUsersFromExcel,
   exportCBQLWorkbook,
