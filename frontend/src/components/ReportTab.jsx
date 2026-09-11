@@ -717,7 +717,6 @@ export default function ReportTab({
                 </div>
                 <div>
                   <p className="font-bold text-[14pt] text-black">{targetUser.full_name}</p>
-                  <p className="italic text-[14pt] text-slate-700">{targetUser.gov_title || targetUser.party_title || 'Chuyên viên'}</p>
                 </div>
               </div>
 
@@ -766,11 +765,8 @@ export default function ReportTab({
                     </p>
                   </div>
                   <div>
-                    <p className="font-bold text-[14pt] text-black uppercase">
-                      {configs.LEADER_SIGNER_TITLE || 'PHÓ TRƯỞNG BAN THƯỜNG TRỰC'}
-                    </p>
                     {!isUnitLeader && (
-                      <p className="font-bold text-[14pt] text-black mt-1">
+                      <p className="font-bold text-[14pt] text-black">
                         {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
                       </p>
                     )}
@@ -791,7 +787,6 @@ export default function ReportTab({
                 </div>
                 <div>
                   <p className="font-bold text-[14pt] text-black">{targetUser.full_name}</p>
-                  <p className="italic text-[14pt] text-slate-700">{targetUser.gov_title || targetUser.party_title || 'Cán bộ lãnh đạo'}</p>
                 </div>
               </div>
             </div>
@@ -826,11 +821,8 @@ export default function ReportTab({
                     </p>
                   </div>
                   <div>
-                    <p className="font-bold text-[14pt] text-black uppercase">
-                      {configs.LEADER_SIGNER_TITLE || 'PHÓ TRƯỞNG BAN THƯỜNG TRỰC'}
-                    </p>
                     {!isUnitLeader && (
-                      <p className="font-bold text-[14pt] text-black mt-1">
+                      <p className="font-bold text-[14pt] text-black">
                         {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
                       </p>
                     )}
@@ -1014,7 +1006,8 @@ export default function ReportTab({
                 <thead>
                   <tr className="bg-slate-100 font-bold text-black border-b border-black text-center text-[14pt]">
                     <th className="border border-black p-2.5 text-center w-12">STT</th>
-                    <th className="border border-black p-2.5 min-w-[320px]">Tên công việc / Nhiệm vụ</th>
+                    <th className="border border-black p-2.5 min-w-[300px]">Tên công việc / Nhiệm vụ</th>
+                    <th className="border border-black p-2.5 min-w-[130px] text-center">Loại công việc</th>
                     <th className="border border-black p-2.5 min-w-[180px]">Kết quả đầu ra</th>
                     <th className="border border-black p-2.5 min-w-[110px] text-center">Hạn chót</th>
                     <th className="border border-black p-2.5 min-w-[110px] text-center">Ngày HT</th>
@@ -1029,122 +1022,121 @@ export default function ReportTab({
                 <tbody>
                   {groupedTasksByAxis.length === 0 ? (
                     <tr>
-                      <td colSpan="11" className="border border-black p-6 text-center text-slate-500 italic">
+                      <td colSpan="12" className="border border-black p-6 text-center text-slate-500 italic">
                         Không có công việc nào thỏa mãn bộ lọc hiện tại.
                       </td>
                     </tr>
                   ) : (
-                    (() => {
-                      let overallIdx = 0;
-                      return groupedTasksByAxis.map((group) => (
-                        <React.Fragment key={group.code}>
-                          {/* Dòng phân nhóm theo từng trụ cột (ghi rõ nội dung trụ cột) */}
-                          <tr className="bg-slate-200/90 font-bold text-black border-y-2 border-black">
-                            <td colSpan="11" className="border border-black px-3 py-2 text-left uppercase text-[14pt]">
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <span className="font-bold">{group.name}</span>
-                                <span className="text-[13pt] font-semibold text-slate-800 normal-case">
-                                  ({group.tasks.length} nhiệm vụ • Tổng điểm QĐ: {group.totalConvScore} đ)
-                                </span>
-                              </div>
-                            </td>
-                          </tr>
+                    groupedTasksByAxis.map((group) => (
+                      <React.Fragment key={group.code}>
+                        {/* Dòng phân nhóm theo từng trụ cột (ghi rõ nội dung trụ cột) */}
+                        <tr className="bg-slate-200/90 font-bold text-black border-y-2 border-black">
+                          <td colSpan="12" className="border border-black px-3 py-2 text-left uppercase text-[14pt]">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-bold">{group.name}</span>
+                              <span className="text-[13pt] font-semibold text-slate-800 normal-case">
+                                ({group.tasks.length} nhiệm vụ • Tổng điểm QĐ: {group.totalConvScore} đ)
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
 
-                          {group.tasks.map((t) => {
-                            overallIdx++;
-                            const isApproved = t.status === 'approved';
-                            const isSubmitted = t.status === 'submitted';
-                            return (
-                              <tr key={t.id} className="hover:bg-slate-50">
-                                <td className="border border-black p-2 text-center text-slate-700">{overallIdx}</td>
+                        {group.tasks.map((t, taskIdx) => {
+                          const isApproved = t.status === 'approved';
+                          const isSubmitted = t.status === 'submitted';
+                          return (
+                            <tr key={t.id} className="hover:bg-slate-50">
+                              {/* Ở mỗi trục, đánh số thứ tự nhiệm vụ bắt đầu từ 1 */}
+                              <td className="border border-black p-2 text-center text-slate-700">{taskIdx + 1}</td>
 
-                                {/* Tên công việc */}
-                                <td className="border border-black p-2">
-                                  <div className="font-bold text-black leading-snug">{t.task_name}</div>
-                                  <div className="text-[12pt] text-slate-600 mt-0.5">
-                                    {t.task_type || 'Chuyên môn'}
-                                  </div>
-                                </td>
+                              {/* Tên công việc / Nhiệm vụ: không thêm ghi chú nào khác */}
+                              <td className="border border-black p-2 font-bold text-black leading-snug">
+                                {t.task_name}
+                              </td>
 
-                                {/* Kết quả đầu ra */}
-                                <td className="border border-black p-2 text-black">
-                                  {t.output_result}
-                                </td>
+                              {/* Cột Loại công việc sau cột Tên công việc */}
+                              <td className="border border-black p-2 text-center text-slate-800 whitespace-nowrap">
+                                {t.task_type || 'Chuyên môn'}
+                              </td>
 
-                                {/* Deadline & Actual Finish */}
-                                <td className="border border-black p-2 text-center whitespace-nowrap text-slate-800">
-                                  {formatDate(t.deadline)}
-                                </td>
-                                <td className="border border-black p-2 text-center whitespace-nowrap">
-                                  {t.actual_finish_date ? (
-                                    <span className="text-emerald-800 font-bold">{formatDate(t.actual_finish_date)}</span>
-                                  ) : (
-                                    <span className="text-slate-400">-</span>
-                                  )}
-                                </td>
+                              {/* Kết quả đầu ra */}
+                              <td className="border border-black p-2 text-black">
+                                {t.output_result}
+                              </td>
 
-                                {/* Tiến độ % */}
-                                <td className="border border-black p-2 text-center whitespace-nowrap">
-                                  {t.progress_pct !== null && t.progress_pct !== undefined ? (
-                                    <span className="font-bold text-black">
-                                      {Math.round(t.progress_pct * 100)}%
-                                    </span>
-                                  ) : (
-                                    <span className="text-slate-400">-</span>
-                                  )}
-                                </td>
+                              {/* Deadline & Actual Finish */}
+                              <td className="border border-black p-2 text-center whitespace-nowrap text-slate-800">
+                                {formatDate(t.deadline)}
+                              </td>
+                              <td className="border border-black p-2 text-center whitespace-nowrap">
+                                {t.actual_finish_date ? (
+                                  <span className="text-emerald-800 font-bold">{formatDate(t.actual_finish_date)}</span>
+                                ) : (
+                                  <span className="text-slate-400">-</span>
+                                )}
+                              </td>
 
-                                {/* Minh chứng */}
-                                <td className="border border-black p-2">
-                                  {t.evidence_text && (
-                                    <div className="text-black text-[13pt]">{t.evidence_text}</div>
-                                  )}
-                                  {t.evidence_file_url && (
-                                    <div className="flex items-center space-x-1 text-blue-800 text-[13pt] mt-0.5">
-                                      <Paperclip className="w-3.5 h-3.5 shrink-0" />
-                                      <a 
-                                        href={t.evidence_file_url} 
-                                        target="_blank" 
-                                        rel="noreferrer" 
-                                        className="truncate hover:underline font-medium"
-                                      >
-                                        {t.evidence_file_name || 'Tệp đính kèm'}
-                                      </a>
-                                    </div>
-                                  )}
-                                  {!t.evidence_text && !t.evidence_file_url && (
-                                    <span className="text-slate-400 italic text-[13pt]">Chưa nộp</span>
-                                  )}
-                                </td>
-
-                                {/* Điểm chuẩn & HS */}
-                                <td className="border border-black p-2 text-center font-bold">{t.standard_score}</td>
-                                <td className="border border-black p-2 text-center font-bold">{t.difficulty_weight}</td>
-
-                                {/* Điểm quy đổi */}
-                                <td className="border border-black p-2 text-center font-bold text-black">
-                                  {isApproved ? (
-                                    <span className="text-emerald-800 font-bold">{Number(Number(t.converted_score || 0).toFixed(2))}</span>
-                                  ) : (
-                                    <span className="text-slate-500 font-normal">{Number(Number(t.converted_score || 0).toFixed(2))}</span>
-                                  )}
-                                </td>
-
-                                {/* Trạng thái */}
-                                <td className="border border-black p-2 text-center whitespace-nowrap">
-                                  <span className="font-bold">
-                                    {isApproved ? 'Đã duyệt' :
-                                     isSubmitted ? 'Đã nộp MC' :
-                                     t.status === 'pending_approval' ? 'Chờ duyệt' :
-                                     t.status === 'rejected' ? 'Bị từ chối' : 'Đang làm'}
+                              {/* Tiến độ % */}
+                              <td className="border border-black p-2 text-center whitespace-nowrap">
+                                {t.progress_pct !== null && t.progress_pct !== undefined ? (
+                                  <span className="font-bold text-black">
+                                    {Math.round(t.progress_pct * 100)}%
                                   </span>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </React.Fragment>
-                      ));
-                    })()
+                                ) : (
+                                  <span className="text-slate-400">-</span>
+                                )}
+                              </td>
+
+                              {/* Minh chứng */}
+                              <td className="border border-black p-2">
+                                {t.evidence_text && (
+                                  <div className="text-black text-[13pt]">{t.evidence_text}</div>
+                                )}
+                                {t.evidence_file_url && (
+                                  <div className="flex items-center space-x-1 text-blue-800 text-[13pt] mt-0.5">
+                                    <Paperclip className="w-3.5 h-3.5 shrink-0" />
+                                    <a 
+                                      href={t.evidence_file_url} 
+                                      target="_blank" 
+                                      rel="noreferrer" 
+                                      className="truncate hover:underline font-medium"
+                                    >
+                                      {t.evidence_file_name || 'Tệp đính kèm'}
+                                    </a>
+                                  </div>
+                                )}
+                                {!t.evidence_text && !t.evidence_file_url && (
+                                  <span className="text-slate-400 italic text-[13pt]">Chưa nộp</span>
+                                )}
+                              </td>
+
+                              {/* Điểm chuẩn & HS */}
+                              <td className="border border-black p-2 text-center font-bold">{t.standard_score}</td>
+                              <td className="border border-black p-2 text-center font-bold">{t.difficulty_weight}</td>
+
+                              {/* Điểm quy đổi */}
+                              <td className="border border-black p-2 text-center font-bold text-black">
+                                {isApproved ? (
+                                  <span className="text-emerald-800 font-bold">{Number(Number(t.converted_score || 0).toFixed(2))}</span>
+                                ) : (
+                                  <span className="text-slate-500 font-normal">{Number(Number(t.converted_score || 0).toFixed(2))}</span>
+                                )}
+                              </td>
+
+                              {/* Trạng thái */}
+                              <td className="border border-black p-2 text-center whitespace-nowrap">
+                                <span className="font-bold">
+                                  {isApproved ? 'Đã duyệt' :
+                                   isSubmitted ? 'Đã nộp MC' :
+                                   t.status === 'pending_approval' ? 'Chờ duyệt' :
+                                   t.status === 'rejected' ? 'Bị từ chối' : 'Đang làm'}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))
                   )}
                 </tbody>
 
@@ -1152,7 +1144,7 @@ export default function ReportTab({
                 {filteredExecutionTasks.length > 0 && (
                   <tfoot className="bg-slate-100 font-bold text-black border-t-2 border-black">
                     <tr>
-                      <td colSpan="7" className="border border-black p-2.5 text-right uppercase text-[14pt] tracking-wide">
+                      <td colSpan="8" className="border border-black p-2.5 text-right uppercase text-[14pt] tracking-wide">
                         Tổng cộng ({filteredExecutionTasks.length} việc) =
                       </td>
                       <td className="border border-black p-2.5 text-center text-black">
@@ -1173,12 +1165,11 @@ export default function ReportTab({
             <div className="grid grid-cols-2 text-center pt-8 text-[14pt] text-black">
               <div className="space-y-20">
                 <div>
-                  <p className="font-bold uppercase text-black">NGƯỜI LẬP BIỂU</p>
+                  <p className="font-bold uppercase text-black">CÁ NHÂN TỰ ĐÁNH GIÁ</p>
                   <p className="italic text-[14pt] text-slate-700">(Ký, ghi rõ họ tên)</p>
                 </div>
                 <div>
                   <p className="font-bold text-[14pt] text-black">{targetUser.full_name}</p>
-                  <p className="italic text-[14pt] text-slate-700">{targetUser.gov_title || targetUser.party_title || 'Cán bộ'}</p>
                 </div>
               </div>
 
@@ -1196,11 +1187,8 @@ export default function ReportTab({
                   </p>
                 </div>
                 <div>
-                  <p className="font-bold text-[14pt] text-black uppercase">
-                    {configs.LEADER_SIGNER_TITLE || 'PHÓ TRƯỞNG BAN THƯỜNG TRỰC'}
-                  </p>
                   {!isUnitLeader && (
-                    <p className="font-bold text-[14pt] text-black mt-1">
+                    <p className="font-bold text-[14pt] text-black">
                       {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
                     </p>
                   )}
@@ -1473,36 +1461,20 @@ export default function ReportTab({
               </table>
             </div>
 
-            {/* Bottom 3-Column Signatures */}
-            <div className="grid grid-cols-3 text-center pt-8 text-[14pt] text-black">
-              {/* Col 1: Người lập biểu */}
+            {/* Bottom 2-Column Signatures */}
+            <div className="grid grid-cols-2 text-center pt-8 text-[14pt] text-black">
+              {/* Col 1: Người lập biểu (để trống tên và chức danh) */}
               <div className="space-y-20">
                 <div>
                   <p className="font-bold uppercase text-black">NGƯỜI LẬP BIỂU</p>
                   <p className="italic text-[14pt] text-slate-700">(Ký, ghi rõ họ tên)</p>
                 </div>
-                <div>
-                  <p className="font-bold text-[14pt] text-black">{currentUser?.full_name || 'Cán bộ tổng hợp'}</p>
-                  <p className="italic text-[14pt] text-slate-700">{currentUser?.gov_title || currentUser?.party_title || 'Chuyên viên'}</p>
+                <div className="h-6">
+                  {/* Để trống tên và chức danh */}
                 </div>
               </div>
 
-              {/* Col 2: Lãnh đạo Phòng TCCB */}
-              <div className="space-y-20">
-                <div>
-                  <p className="font-bold uppercase text-black leading-tight">
-                    LÃNH ĐẠO PHÒNG TỔ CHỨC CÁN BỘ
-                  </p>
-                  <p className="italic text-[14pt] text-slate-700">(Ký, ghi rõ họ tên)</p>
-                </div>
-                <div>
-                  <p className="font-bold text-[14pt] text-black uppercase">
-                    {configs.DEPT_LEADER_TITLE || 'TRƯỞNG PHÒNG'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Col 3: Thủ trưởng cơ quan */}
+              {/* Col 2: Thủ trưởng cơ quan, đơn vị (Lấy Lãnh đạo đơn vị, loại bỏ chức danh bên dưới) */}
               <div className="space-y-20">
                 <div>
                   <p className="italic text-[14pt] text-black mb-1">
@@ -1516,10 +1488,7 @@ export default function ReportTab({
                   </p>
                 </div>
                 <div>
-                  <p className="font-bold text-[14pt] text-black uppercase">
-                    {configs.LEADER_SIGNER_TITLE || 'PHÓ TRƯỞNG BAN THƯỜNG TRỰC'}
-                  </p>
-                  <p className="font-bold text-[14pt] text-black mt-1">
+                  <p className="font-bold text-[14pt] text-black">
                     {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
                   </p>
                 </div>

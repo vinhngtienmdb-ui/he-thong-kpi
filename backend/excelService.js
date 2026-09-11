@@ -1268,11 +1268,6 @@ async function exportCBQLWorkbook(periodId, userId) {
   sigName.getCell(6).alignment = { horizontal: 'center' };
   ws.mergeCells(`F${sigName.number}:I${sigName.number}`);
 
-  const sigRole = ws.addRow(['', '', '', '', '', user.gov_title || user.party_title || 'Cán bộ']);
-  sigRole.font = { name: 'Times New Roman', size: 14, italic: true };
-  sigRole.getCell(6).alignment = { horizontal: 'center' };
-  ws.mergeCells(`F${sigRole.number}:I${sigRole.number}`);
-
   // III. Nhận xét, đánh giá của cấp có thẩm quyền
   ws.addRow([]);
   const rSup1 = ws.addRow(['', 'III. Nhận xét, đánh giá của cấp có thẩm quyền']);
@@ -1323,11 +1318,6 @@ async function exportCBQLWorkbook(periodId, userId) {
   confName.alignment = { horizontal: 'center' };
   ws.mergeCells(`D${confName.number}:I${confName.number}`);
 
-  const confTitle = ws.addRow(['', '', '', leaderTitle]);
-  confTitle.font = { name: 'Times New Roman', size: 14, bold: true };
-  confTitle.alignment = { horizontal: 'center' };
-  ws.mergeCells(`D${confTitle.number}:I${confTitle.number}`);
-
   // -----------------------------------------------------------------------------------
   // Sheet 2: BÁO CÁO KẾT QUẢ THỰC HIỆN CÔNG VIỆC (BẢNG 1 - PHỤ LỤC 5 HD.06)
   // -----------------------------------------------------------------------------------
@@ -1346,10 +1336,9 @@ async function exportCBQLWorkbook(periodId, userId) {
   // Setup column widths
   wsTasks.columns = [
     { width: 7 },  // STT
-    { width: 22 }, // Nguồn việc
-    { width: 26 }, // Người giao
     { width: 18 }, // Trục
     { width: 45 }, // Tên công việc
+    { width: 18 }, // Loại công việc
     { width: 30 }, // Kết quả đầu ra
     { width: 16 }, // Thời hạn
     { width: 16 }, // Ngày HT
@@ -1367,34 +1356,33 @@ async function exportCBQLWorkbook(periodId, userId) {
   const t1 = wsTasks.addRow(['BÁO CÁO KẾT QUẢ THỰC HIỆN CÔNG VIỆC (BẢNG TÍNH ĐIỂM KPI CHI TIẾT)']);
   t1.font = { name: 'Times New Roman', size: 16, bold: true, color: { argb: 'FF990000' } };
   t1.alignment = { horizontal: 'center' };
-  wsTasks.mergeCells(`A1:P1`);
+  wsTasks.mergeCells(`A1:O1`);
 
   const t2 = wsTasks.addRow([`(Theo Phụ lục 5 - Hướng dẫn 06-HD/BTCTU Ban Tổ chức Thành ủy)`]);
   t2.font = { name: 'Times New Roman', size: 14, italic: true };
   t2.alignment = { horizontal: 'center' };
-  wsTasks.mergeCells(`A2:P2`);
+  wsTasks.mergeCells(`A2:O2`);
 
   wsTasks.addRow([]);
 
   const rInfo1 = wsTasks.addRow([`Họ và tên cán bộ: ${user.full_name} (Ngày sinh: ${birthStr})`, '', '', '', '', `Chức vụ: ${user.gov_title || user.party_title || 'Cán bộ'}`, '', '', '', '', `Đơn vị: ${unitName}`]);
   rInfo1.font = { name: 'Times New Roman', size: 14, bold: true };
   wsTasks.mergeCells(`A4:E4`);
-  wsTasks.mergeCells(`F4:J4`);
-  wsTasks.mergeCells(`K4:P4`);
+  wsTasks.mergeCells(`F4:I4`);
+  wsTasks.mergeCells(`J4:O4`);
 
   const assignedCount = allUserTasks.filter(t => t.origin === 'assigned').length;
   const registeredCount = allUserTasks.filter(t => t.origin === 'registered').length;
   const rInfo2 = wsTasks.addRow([`Kỳ đánh giá: ${period.name}`, '', '', '', '', `Tổng số công việc: ${allUserTasks.length} (Lãnh đạo giao: ${assignedCount}, Tự đăng ký: ${registeredCount})`]);
   rInfo2.font = { name: 'Times New Roman', size: 14, italic: true };
   wsTasks.mergeCells(`A5:E5`);
-  wsTasks.mergeCells(`F5:P5`);
+  wsTasks.mergeCells(`F5:O5`);
 
   wsTasks.addRow([]);
 
   // Table header
   const taskHeader = wsTasks.addRow([
-    'STT', 'Nguồn việc', 'Người giao việc', 'Trục kết quả',
-    'Nội dung công việc', 'Sản phẩm đầu ra', 'Thời hạn',
+    'STT', 'Trục kết quả', 'Nội dung công việc', 'Loại công việc', 'Sản phẩm đầu ra', 'Thời hạn',
     'Ngày hoàn thành', 'Tiến độ %', 'Minh chứng thực hiện',
     'Điểm chuẩn', 'Hệ số ĐK', 'Điểm quy đổi', 'Điểm thưởng (5%)', 'Trạng thái', 'Ý kiến CBQL'
   ]);
@@ -1402,7 +1390,7 @@ async function exportCBQLWorkbook(periodId, userId) {
   taskHeader.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
   taskHeader.height = 42;
 
-  for (let c = 1; c <= 16; c++) {
+  for (let c = 1; c <= 15; c++) {
     const cell = taskHeader.getCell(c);
     cell.fill = {
       type: 'pattern',
@@ -1421,14 +1409,21 @@ async function exportCBQLWorkbook(periodId, userId) {
   let totalConvScore = 0;
   let totalBonusScore = 0;
 
-  allUserTasks.forEach((t, idx) => {
+  let currentAxis = null;
+  let axisTaskIdx = 0;
+
+  allUserTasks.forEach((t) => {
     totalStdScore += (t.standard_score || 0);
     totalConvScore += (t.converted_score || 0);
     const bSc = t.is_bonus_approved ? (t.bonus_score || ((t.converted_score || 0) * 0.05)) : 0;
     totalBonusScore += bSc;
 
-    const originText = t.origin === 'assigned' ? 'Lãnh đạo giao' : 'Tự đăng ký';
-    const assignerText = t.origin === 'assigned' ? (t.assigner_name || 'Lãnh đạo') : 'Cá nhân';
+    if (t.axis_code !== currentAxis) {
+      currentAxis = t.axis_code;
+      axisTaskIdx = 0;
+    }
+    axisTaskIdx++;
+
     const statusText = t.status === 'approved' ? 'Đã duyệt' :
                        t.status === 'submitted' ? 'Đã nộp MC' :
                        t.status === 'pending_approval' ? 'Chờ duyệt việc' :
@@ -1437,11 +1432,10 @@ async function exportCBQLWorkbook(periodId, userId) {
     const evidenceText = [t.evidence_text, t.detailed_result_note, t.evidence_file_name].filter(Boolean).join(' | ');
 
     const row = wsTasks.addRow([
-      idx + 1,
-      originText,
-      assignerText,
+      axisTaskIdx,
       t.axis_code,
       t.task_name,
+      t.task_type || 'Chuyên môn',
       t.output_result,
       formatDateVN(t.deadline),
       formatDateVN(t.actual_finish_date),
@@ -1461,18 +1455,17 @@ async function exportCBQLWorkbook(periodId, userId) {
 
     row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
     row.getCell(2).alignment = { horizontal: 'center', vertical: 'middle' };
-    row.getCell(3).alignment = { horizontal: 'left', vertical: 'middle' };
     row.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell(6).alignment = { horizontal: 'center', vertical: 'middle' };
     row.getCell(7).alignment = { horizontal: 'center', vertical: 'middle' };
     row.getCell(8).alignment = { horizontal: 'center', vertical: 'middle' };
-    row.getCell(9).alignment = { horizontal: 'center', vertical: 'middle' };
-    row.getCell(11).alignment = { horizontal: 'right', vertical: 'middle' };
-    row.getCell(12).alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell(10).alignment = { horizontal: 'right', vertical: 'middle' };
+    row.getCell(11).alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell(12).alignment = { horizontal: 'right', vertical: 'middle' };
     row.getCell(13).alignment = { horizontal: 'right', vertical: 'middle' };
-    row.getCell(14).alignment = { horizontal: 'right', vertical: 'middle' };
-    row.getCell(15).alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell(14).alignment = { horizontal: 'center', vertical: 'middle' };
 
-    for (let c = 1; c <= 16; c++) {
+    for (let c = 1; c <= 15; c++) {
       row.getCell(c).border = {
         top: { style: 'thin' },
         bottom: { style: 'thin' },
@@ -1485,18 +1478,18 @@ async function exportCBQLWorkbook(periodId, userId) {
   // Summary row
   if (allUserTasks.length > 0) {
     const sumRow = wsTasks.addRow([
-      '', 'TỔNG CỘNG', '', '', '', '', '', '', '', '',
+      '', 'TỔNG CỘNG', '', '', '', '', '', '', '',
       totalStdScore, '', Number(totalConvScore.toFixed(2)), Number(totalBonusScore.toFixed(2)), '', ''
     ]);
     sumRow.font = { name: 'Times New Roman', size: 14, bold: true };
     sumRow.alignment = { vertical: 'middle' };
     sumRow.height = 32;
     sumRow.getCell(2).alignment = { horizontal: 'center' };
-    sumRow.getCell(11).alignment = { horizontal: 'right' };
+    sumRow.getCell(10).alignment = { horizontal: 'right' };
+    sumRow.getCell(12).alignment = { horizontal: 'right' };
     sumRow.getCell(13).alignment = { horizontal: 'right' };
-    sumRow.getCell(14).alignment = { horizontal: 'right' };
-    wsTasks.mergeCells(`B${sumRow.number}:J${sumRow.number}`);
-    for (let c = 1; c <= 16; c++) {
+    wsTasks.mergeCells(`B${sumRow.number}:I${sumRow.number}`);
+    for (let c = 1; c <= 15; c++) {
       sumRow.getCell(c).border = {
         top: { style: 'thin' },
         bottom: { style: 'double' },
@@ -1515,51 +1508,41 @@ async function exportCBQLWorkbook(periodId, userId) {
   wsTasks.addRow([]);
   const s2Date = wsTasks.addRow(['', '', '', '', '', '', '', '', '', '', '', '', '', '', formatAdministrativeDate(locationName)]);
   s2Date.font = { name: 'Times New Roman', size: 14, italic: true };
-  wsTasks.mergeCells(`O${s2Date.number}:P${s2Date.number}`);
-  s2Date.getCell(15).alignment = { horizontal: 'center' };
+  wsTasks.mergeCells(`M${s2Date.number}:O${s2Date.number}`);
+  s2Date.getCell(13).alignment = { horizontal: 'center' };
 
   const s2SigHead = wsTasks.addRow([
-    '', 'NGƯỜI LẬP BIỂU', '', '', '', '', '', '', '', '', '', '',
-    'THỦ TRƯỞNG CƠ QUAN, ĐƠN VỊ'
+    '', 'CÁ NHÂN TỰ ĐÁNH GIÁ', '', '', '', '', '', '', '', '', '',
+    'XÁC NHẬN CỦA BAN THƯỜNG VỤ CẤP ỦY\nHOẶC TẬP THỂ LÃNH ĐẠO CƠ QUAN, ĐƠN VỊ'
   ]);
   s2SigHead.font = { name: 'Times New Roman', size: 14, bold: true };
   wsTasks.mergeCells(`B${s2SigHead.number}:E${s2SigHead.number}`);
-  wsTasks.mergeCells(`M${s2SigHead.number}:P${s2SigHead.number}`);
+  wsTasks.mergeCells(`L${s2SigHead.number}:O${s2SigHead.number}`);
   s2SigHead.getCell(2).alignment = { horizontal: 'center' };
-  s2SigHead.getCell(13).alignment = { horizontal: 'center' };
+  s2SigHead.getCell(12).alignment = { horizontal: 'center', wrapText: true };
 
   const s2SigSub = wsTasks.addRow([
-    '', '(Ký, ghi rõ họ tên)', '', '', '', '', '', '', '', '', '', '',
-    '(Ký, ghi rõ họ tên và đóng dấu)'
+    '', '(Ký, ghi rõ họ tên)', '', '', '', '', '', '', '', '', '',
+    '(Xác lập thời điểm, ký, ghi rõ họ tên và đóng dấu)'
   ]);
   s2SigSub.font = { name: 'Times New Roman', size: 14, italic: true };
   wsTasks.mergeCells(`B${s2SigSub.number}:E${s2SigSub.number}`);
-  wsTasks.mergeCells(`M${s2SigSub.number}:P${s2SigSub.number}`);
+  wsTasks.mergeCells(`L${s2SigSub.number}:O${s2SigSub.number}`);
   s2SigSub.getCell(2).alignment = { horizontal: 'center' };
-  s2SigSub.getCell(13).alignment = { horizontal: 'center' };
+  s2SigSub.getCell(12).alignment = { horizontal: 'center' };
 
   wsTasks.addRow([]);
   wsTasks.addRow([]);
 
   const s2SigNames = wsTasks.addRow([
-    '', user.full_name, '', '', '', '', '', '', '', '', '', '',
+    '', user.full_name, '', '', '', '', '', '', '', '', '',
     isUnitLeader ? '' : leaderName
   ]);
   s2SigNames.font = { name: 'Times New Roman', size: 14, bold: true };
   wsTasks.mergeCells(`B${s2SigNames.number}:E${s2SigNames.number}`);
-  wsTasks.mergeCells(`M${s2SigNames.number}:P${s2SigNames.number}`);
+  wsTasks.mergeCells(`L${s2SigNames.number}:O${s2SigNames.number}`);
   s2SigNames.getCell(2).alignment = { horizontal: 'center' };
-  s2SigNames.getCell(13).alignment = { horizontal: 'center' };
-
-  const s2SigTitles = wsTasks.addRow([
-    '', user.gov_title || user.party_title || 'Cán bộ', '', '', '', '', '', '', '', '', '', '',
-    leaderTitle
-  ]);
-  s2SigTitles.font = { name: 'Times New Roman', size: 14, italic: true };
-  wsTasks.mergeCells(`B${s2SigTitles.number}:E${s2SigTitles.number}`);
-  wsTasks.mergeCells(`M${s2SigTitles.number}:P${s2SigTitles.number}`);
-  s2SigTitles.getCell(2).alignment = { horizontal: 'center' };
-  s2SigTitles.getCell(13).alignment = { horizontal: 'center' };
+  s2SigNames.getCell(12).alignment = { horizontal: 'center' };
 
   return workbook;
 }
@@ -1784,61 +1767,42 @@ async function exportMau02Workbook(periodId) {
 
   // Signatures for Mẫu 02
   ws.addRow([]);
-  const m2Date = ws.addRow(['', '', '', '', '', '', '', '', '', '', formatAdministrativeDate(locationName)]);
+  const m2Date = ws.addRow(['', '', '', '', '', '', '', '', '', formatAdministrativeDate(locationName)]);
   m2Date.font = { name: 'Times New Roman', size: 14, italic: true };
-  ws.mergeCells(`K${m2Date.number}:M${m2Date.number}`);
-  m2Date.getCell(11).alignment = { horizontal: 'center' };
+  ws.mergeCells(`J${m2Date.number}:M${m2Date.number}`);
+  m2Date.getCell(10).alignment = { horizontal: 'center' };
 
   const sigRow1 = ws.addRow([
-    '', 'NGƯỜI LẬP BIỂU', '', '', '', '',
-    'LÃNH ĐẠO PHÒNG TỔ CHỨC CÁN BỘ', '', '',
+    '', 'NGƯỜI LẬP BIỂU', '', '', '', '', '', '', '',
     'THỦ TRƯỞNG CƠ QUAN, ĐƠN VỊ'
   ]);
   sigRow1.font = { name: 'Times New Roman', size: 14, bold: true };
-  ws.mergeCells(`B${sigRow1.number}:D${sigRow1.number}`);
-  ws.mergeCells(`G${sigRow1.number}:I${sigRow1.number}`);
-  ws.mergeCells(`K${sigRow1.number}:M${sigRow1.number}`);
+  ws.mergeCells(`B${sigRow1.number}:E${sigRow1.number}`);
+  ws.mergeCells(`J${sigRow1.number}:M${sigRow1.number}`);
   sigRow1.getCell(2).alignment = { horizontal: 'center' };
-  sigRow1.getCell(7).alignment = { horizontal: 'center' };
-  sigRow1.getCell(11).alignment = { horizontal: 'center' };
+  sigRow1.getCell(10).alignment = { horizontal: 'center' };
 
   const sigRow2 = ws.addRow([
-    '', '(Ký, ghi rõ họ tên)', '', '', '', '',
-    '(Ký, ghi rõ họ tên)', '', '',
+    '', '(Ký, ghi rõ họ tên)', '', '', '', '', '', '', '',
     '(Ký, ghi rõ họ tên và đóng dấu)'
   ]);
   sigRow2.font = { name: 'Times New Roman', size: 14, italic: true };
-  ws.mergeCells(`B${sigRow2.number}:D${sigRow2.number}`);
-  ws.mergeCells(`G${sigRow2.number}:I${sigRow2.number}`);
-  ws.mergeCells(`K${sigRow2.number}:M${sigRow2.number}`);
+  ws.mergeCells(`B${sigRow2.number}:E${sigRow2.number}`);
+  ws.mergeCells(`J${sigRow2.number}:M${sigRow2.number}`);
   sigRow2.getCell(2).alignment = { horizontal: 'center' };
-  sigRow2.getCell(7).alignment = { horizontal: 'center' };
-  sigRow2.getCell(11).alignment = { horizontal: 'center' };
+  sigRow2.getCell(10).alignment = { horizontal: 'center' };
 
   ws.addRow([]);
   ws.addRow([]);
 
   const sigRow3 = ws.addRow([
-    '', 'Cán bộ tổng hợp', '', '', '', '',
-    'Trưởng phòng', '', '',
+    '', '', '', '', '', '', '', '', '',
     leaderName
   ]);
   sigRow3.font = { name: 'Times New Roman', size: 14, bold: true };
-  ws.mergeCells(`B${sigRow3.number}:D${sigRow3.number}`);
-  ws.mergeCells(`G${sigRow3.number}:I${sigRow3.number}`);
-  ws.mergeCells(`K${sigRow3.number}:M${sigRow3.number}`);
-  sigRow3.getCell(2).alignment = { horizontal: 'center' };
-  sigRow3.getCell(7).alignment = { horizontal: 'center' };
-  sigRow3.getCell(11).alignment = { horizontal: 'center' };
-
-  const sigRow4 = ws.addRow([
-    '', '', '', '', '', '',
-    '', '', '',
-    leaderTitle
-  ]);
-  sigRow4.font = { name: 'Times New Roman', size: 14, italic: true };
-  ws.mergeCells(`K${sigRow4.number}:M${sigRow4.number}`);
-  sigRow4.getCell(11).alignment = { horizontal: 'center' };
+  ws.mergeCells(`B${sigRow3.number}:E${sigRow3.number}`);
+  ws.mergeCells(`J${sigRow3.number}:M${sigRow3.number}`);
+  sigRow3.getCell(10).alignment = { horizontal: 'center' };
 
   return workbook;
 }

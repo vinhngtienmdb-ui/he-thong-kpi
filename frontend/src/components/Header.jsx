@@ -1239,12 +1239,48 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 4.1 */}
+              {/* Version 4.2 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.1</span>
-                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Ghi chú Kết quả & Tinh gọn Giao diện)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.2</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Chuẩn hóa Biểu mẫu Báo cáo Mẫu 01, Báo cáo Công việc & Mẫu 02)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Bổ Sung Cột Loại Công Việc & Đánh Số STT Theo Từng Trục (Báo Cáo Công Việc), Chuẩn Hóa Chữ Ký Mẫu 01 & Tinh Gọn Chữ Ký Mẫu 02 Tổng Hợp
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Chuẩn hóa Chữ ký Báo cáo Tự đánh giá Mẫu 01 (Mẫu 01-A & 01-B):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Loại bỏ chức danh ở mục <em>Cá nhân tự đánh giá</em> (chỉ hiển thị họ và tên cán bộ).</li>
+                      <li>Loại bỏ chức danh ở mục <em>Xác nhận của Ban Thường vụ cấp ủy hoặc Tập thể lãnh đạo cơ quan, đơn vị</em> (chỉ hiển thị họ và tên Lãnh đạo đơn vị, tự động để trống nếu chính Lãnh đạo tự đánh giá).</li>
+                      <li>Đồng bộ đồng nhất cả trên bản xem in HTML và file xuất Excel.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Nâng cấp Báo cáo Kết quả Thực hiện Công việc (Bảng 1 - Phụ lục 5):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Bổ sung cột <strong>Loại công việc</strong> độc lập ngay sau cột Tên công việc, nhiệm vụ (hiển thị rõ Chuyên môn, Định kỳ, Đột xuất...).</li>
+                      <li>Cột <em>Tên công việc / Nhiệm vụ</em> được tinh gọn, không thêm bất kỳ ghi chú phụ hay chữ nhỏ nào bên dưới.</li>
+                      <li>Ở mỗi trục kết quả trọng tâm, <strong>số thứ tự (STT) công việc được đánh số bắt đầu lại từ 1</strong> (1, 2, 3...) giúp theo dõi trực quan theo từng trục.</li>
+                      <li>Loại bỏ chức danh ở mục Cá nhân tự đánh giá và Xác nhận của BTV / Lãnh đạo cơ quan đơn vị.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Chuẩn hóa Mẫu 02 Bảng Tổng hợp Xếp loại Toàn cơ quan:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Mục <em>Người lập biểu</em>: Để trống họ tên và chức danh để bộ phận phụ trách linh hoạt ký duyệt thực tế.</li>
+                      <li>Loại bỏ hoàn toàn cột/chỗ ký của <em>Lãnh đạo phòng Tổ chức cán bộ</em>.</li>
+                      <li>Mục <em>Thủ trưởng cơ quan, đơn vị</em>: Lấy thông tin họ tên Lãnh đạo đơn vị và loại bỏ chức danh in bên dưới chữ ký.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 4.1 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-300 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 4.1</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Bổ Sung Trường "Ghi Chú Chi Tiết Kết Quả" Khi Nộp Minh Chứng & Loại Bỏ Ghi Chú Ràng Buộc Thẩm Quyền Chấm Điểm
