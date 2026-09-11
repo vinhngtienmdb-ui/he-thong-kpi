@@ -159,6 +159,7 @@ CREATE TABLE IF NOT EXISTS assigned_tasks (
     status TEXT DEFAULT 'in_progress',
     actual_finish_date TEXT,
     evidence_text TEXT,
+    detailed_result_note TEXT,
     evidence_file_url TEXT,
     evidence_file_name TEXT,
     quantity_pct NUMERIC DEFAULT 1.0,
@@ -333,3 +334,5 @@ CREATE INDEX IF NOT EXISTS idx_votes_voter ON votes(voter_id, period_id);
 CREATE INDEX IF NOT EXISTS idx_documents_date ON documents(doc_date);
 CREATE INDEX IF NOT EXISTS idx_doc_dispatches_user ON document_dispatches(assigned_to_user_id);
 CREATE INDEX IF NOT EXISTS idx_doc_dispatches_doc ON document_dispatches(document_id);
+
+ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS detailed_result_note TEXT;

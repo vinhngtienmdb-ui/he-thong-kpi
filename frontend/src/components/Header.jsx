@@ -1239,12 +1239,40 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 4.0 */}
+              {/* Version 4.1 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.0</span>
-                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Gia hạn Tiến độ & Thông báo Nhắc hạn Tự động)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.1</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Ghi chú Kết quả & Tinh gọn Giao diện)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Bổ Sung Trường "Ghi Chú Chi Tiết Kết Quả" Khi Nộp Minh Chứng & Loại Bỏ Ghi Chú Ràng Buộc Thẩm Quyền Chấm Điểm
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Bổ sung trường Ghi chú chi tiết kết quả khi Nộp Minh chứng:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Tại màn hình <em>Nộp sản phẩm công việc (B2)</em>: Bổ sung ô nhập liệu chuyên biệt <em>"Ghi chú chi tiết kết quả"</em> (Textarea) giúp cán bộ giải trình, nêu rõ các kết quả định lượng, sản phẩm cụ thể hoặc thông tin bổ trợ trong quá trình thực hiện nhiệm vụ.</li>
+                      <li>Lưu trữ bền vững tại cơ sở dữ liệu SQLite và tự động đồng bộ hai chiều với Supabase Cloud PostgreSQL.</li>
+                      <li>Hiển thị trực quan tại Thẻ công việc cá nhân, Thẻ di động, Bảng thẩm định chấm điểm của Quản lý (B4) và Modal chấm điểm hoàn thành giúp người thẩm định nắm bắt đầy đủ thông tin trước khi cho điểm.</li>
+                      <li>Tự động liên thông đưa thông tin ghi chú chi tiết kết quả vào file xuất Excel Báo cáo thực hiện công việc (Phụ lục 5).</li>
+                    </ul>
+                  </li>
+                  <li><strong>Tinh gọn Giao diện & Loại bỏ Ghi chú Cũ:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Loại bỏ toàn bộ thông báo ghi chú <em>"Việc ai giao thì người đó chấm điểm hoàn thành trong hệ thống"</em> tại các phân hệ Giao việc, Nộp sản phẩm công việc và Đánh giá, chấm điểm (B4).</li>
+                      <li>Giúp giao diện người dùng trở nên thông thoáng, thanh lịch, tập trung vào trọng tâm nghiệp vụ theo đúng quy định.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 4.0 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-300 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 4.0</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Gia Hạn Tiến Độ Công Việc (Lãnh Đạo Gia Hạn, CBNV Xin Gia Hạn Khi Đến/Quá Hạn) & Hệ Thống Quét Tự Động Thông Báo Hàng Ngày Việc Đến Hạn / Quá Hạn

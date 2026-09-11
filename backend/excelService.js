@@ -1434,7 +1434,7 @@ async function exportCBQLWorkbook(periodId, userId) {
                        t.status === 'pending_approval' ? 'Chờ duyệt việc' :
                        t.status === 'rejected' ? 'Bị từ chối' : 'Đang làm';
 
-    const evidenceText = [t.evidence_text, t.evidence_file_name].filter(Boolean).join(' | ');
+    const evidenceText = [t.evidence_text, t.detailed_result_note, t.evidence_file_name].filter(Boolean).join(' | ');
 
     const row = wsTasks.addRow([
       idx + 1,

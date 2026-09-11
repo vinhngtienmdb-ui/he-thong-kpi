@@ -2466,6 +2466,8 @@ app.post('/api/assigned-tasks/:id/evidence', upload.single('evidence_file'), asy
   const { 
     actual_finish_date, 
     evidence_text, 
+    detailed_result_note,
+    result_note,
     self_quality_pct, 
     is_bonus_proposed, 
     bonus_reason,
@@ -2499,23 +2501,26 @@ app.post('/api/assigned-tasks/:id/evidence', upload.single('evidence_file'), asy
   const progressPct = calculateProgressPct(task.deadline, finishDate);
   const qualityPct = parseFloat(self_quality_pct) !== undefined ? parseFloat(self_quality_pct) : 1.0;
   const proposeBonus = is_bonus_proposed === 'true' || is_bonus_proposed === true || is_bonus_proposed === 1 ? 1 : 0;
+  const noteContent = detailed_result_note !== undefined ? detailed_result_note : (result_note || '');
 
   const scores = calculateScores(task.standard_score, task.difficulty_weight, progressPct, qualityPct, false);
 
   db.prepare(`
     UPDATE assigned_tasks
-    SET actual_finish_date = ?, evidence_text = ?, evidence_file_url = ?, evidence_file_name = ?,
+    SET actual_finish_date = ?, evidence_text = ?, detailed_result_note = ?, evidence_file_url = ?, evidence_file_name = ?,
         progress_pct = ?, quality_pct = ?, execution_score = ?, converted_score = ?,
         is_bonus_proposed = ?, bonus_reason = ?,
         inherited_from_task_id = ?, inherited_from_user_name = ?,
         status = 'submitted', updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(
-    finishDate, evidence_text || '', fileUrl, fileName,
+    finishDate, evidence_text || '', noteContent || '', fileUrl, fileName,
     progressPct, qualityPct, scores.executionScore, scores.convertedScore,
     proposeBonus, bonus_reason || '',
     inherited_from_task_id || null, inherited_from_user_name || null, id
   );
+
+  triggerBackgroundSupabaseSync();
 
   res.json({ success: true, message: 'Đã nộp minh chứng thành công, chờ CBQL chấm điểm', ...scores, progressPct });
 });

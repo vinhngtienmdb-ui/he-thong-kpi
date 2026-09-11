@@ -633,7 +633,7 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
             <div className="mt-2.5 p-2.5 bg-blue-50/80 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-start gap-2">
               <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
               <div>
-                <strong>Lưu ý nguyên tắc chấm điểm:</strong> Việc ai giao thì người đó trực tiếp thẩm định và chấm điểm hoàn thành. Nếu cán bộ tự đăng ký, mặc định thẩm quyền thẩm định và chấm điểm là <strong>Lãnh đạo đơn vị</strong>.
+                <strong>Lưu ý:</strong> Đối với nhiệm vụ cán bộ tự đăng ký, thẩm quyền thẩm định và chấm điểm là <strong>Lãnh đạo đơn vị</strong>.
               </div>
             </div>
           </div>
@@ -674,6 +674,12 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                   {t.evidence_text && (
                     <div className="text-xs text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-200">
                       <span className="font-semibold text-indigo-700">Minh chứng: </span>{t.evidence_text}
+                    </div>
+                  )}
+
+                  {t.detailed_result_note && (
+                    <div className="text-xs text-slate-700 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                      <span className="font-semibold text-indigo-700">Ghi chú kết quả: </span>{t.detailed_result_note}
                     </div>
                   )}
 
@@ -786,8 +792,13 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                         </div>
                       )}
                       {t.evidence_text && (
-                        <div className="text-xs text-indigo-600 mt-1">
+                        <div className="text-xs text-slate-500 mt-1">
                           Minh chứng: {t.evidence_text}
+                        </div>
+                      )}
+                      {t.detailed_result_note && (
+                        <div className="text-xs text-slate-700 mt-1 bg-slate-100/80 p-1.5 rounded">
+                          <span className="font-semibold text-slate-800">Ghi chú kết quả: </span>{t.detailed_result_note}
                         </div>
                       )}
                       {t.evidence_file_url && (
@@ -1124,6 +1135,9 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                 <div><span className="font-semibold text-slate-700">Thời hạn:</span> {formatDate(gradingTask.deadline)}</div>
                 <div><span className="font-semibold text-slate-700">Ngày hoàn thành thực tế:</span> {gradingTask.actual_finish_date ? formatDate(gradingTask.actual_finish_date) : 'Chưa cập nhật'}</div>
                 <div><span className="font-semibold text-slate-700">Minh chứng đã nộp:</span> {gradingTask.evidence_text || 'Không có'}</div>
+                {gradingTask.detailed_result_note && (
+                  <div><span className="font-semibold text-slate-700">Ghi chú chi tiết kết quả:</span> <span className="text-slate-900">{gradingTask.detailed_result_note}</span></div>
+                )}
                 {gradingTask.evidence_file_url && (
                   <div>
                     <a href={gradingTask.evidence_file_url} target="_blank" rel="noreferrer" className="text-blue-700 underline font-semibold">
@@ -1139,7 +1153,7 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                 <div><span className="font-semibold text-slate-700">Hình thức nhiệm vụ:</span>{' '}
                   {gradingTask.origin === 'assigned' ? (
                     <span className="text-indigo-800 font-bold">
-                      Được giao (Bởi: {gradingTask.assigner_name || 'Lãnh đạo'}) — <em>Việc ai giao thì người đó chấm điểm hoàn thành</em>
+                      Được giao (Bởi: {gradingTask.assigner_name || 'Lãnh đạo'})
                     </span>
                   ) : (
                     <span className="text-amber-800 font-bold">

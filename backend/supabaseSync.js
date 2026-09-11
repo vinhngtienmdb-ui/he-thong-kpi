@@ -176,6 +176,7 @@ async function pushToSupabase() {
         ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_reviewed_at TEXT;
         ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_reject_reason TEXT;
         ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_count INTEGER DEFAULT 0;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS detailed_result_note TEXT;
 
         CREATE TABLE IF NOT EXISTS notifications (
           id TEXT PRIMARY KEY,
@@ -334,7 +335,7 @@ async function pushToSupabase() {
       client, 'assigned_tasks',
       ['id', 'period_id', 'user_id', 'standard_task_id', 'task_name', 'output_result',
        'deadline', 'task_type', 'standard_score', 'difficulty_weight', 'max_converted_score',
-       'axis_code', 'origin', 'status', 'actual_finish_date', 'evidence_text',
+       'axis_code', 'origin', 'status', 'actual_finish_date', 'evidence_text', 'detailed_result_note',
        'evidence_file_url', 'evidence_file_name', 'quantity_pct', 'progress_pct',
        'quality_pct', 'leadership_pct', 'execution_score', 'converted_score',
        'cbql_comment', 'assigned_by', 'created_at', 'updated_at', 'group_id',
@@ -344,7 +345,7 @@ async function pushToSupabase() {
        'extension_reviewed_by', 'extension_reviewed_at', 'extension_reject_reason', 'extension_count'],
       ['id'],
       ['period_id', 'task_name', 'deadline', 'status', 'execution_score', 'converted_score',
-       'evidence_file_url', 'actual_finish_date', 'evidence_text', 'original_deadline',
+       'evidence_file_url', 'actual_finish_date', 'evidence_text', 'detailed_result_note', 'original_deadline',
        'requested_deadline', 'extension_reason', 'extension_status', 'extension_requested_at',
        'extension_reviewed_by', 'extension_reviewed_at', 'extension_reject_reason', 'extension_count'],
       assignedTasks.map(at => ({
@@ -671,7 +672,7 @@ async function pullFromSupabase() {
       INSERT OR REPLACE INTO assigned_tasks (
         id, period_id, user_id, standard_task_id, task_name, output_result,
         deadline, task_type, standard_score, difficulty_weight, max_converted_score,
-        axis_code, origin, status, actual_finish_date, evidence_text,
+        axis_code, origin, status, actual_finish_date, evidence_text, detailed_result_note,
         evidence_file_url, evidence_file_name, quantity_pct, progress_pct,
         quality_pct, leadership_pct, execution_score, converted_score,
         cbql_comment, assigned_by, created_at, updated_at, group_id,
@@ -679,7 +680,7 @@ async function pullFromSupabase() {
         is_returned, document_id, original_deadline, requested_deadline,
         extension_reason, extension_status, extension_requested_at,
         extension_reviewed_by, extension_reviewed_at, extension_reject_reason, extension_count
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
       for (const t of supAssigned.rows) {
@@ -688,7 +689,7 @@ async function pullFromSupabase() {
           toSqliteVal(t.task_name), toSqliteVal(t.output_result), toSqliteVal(t.deadline), toSqliteVal(t.task_type),
           toSqliteVal(t.standard_score), toSqliteVal(t.difficulty_weight), toSqliteVal(t.max_converted_score),
           toSqliteVal(t.axis_code), toSqliteVal(t.origin), toSqliteVal(t.status), toSqliteVal(t.actual_finish_date),
-          toSqliteVal(t.evidence_text), toSqliteVal(t.evidence_file_url), toSqliteVal(t.evidence_file_name),
+          toSqliteVal(t.evidence_text), toSqliteVal(t.detailed_result_note), toSqliteVal(t.evidence_file_url), toSqliteVal(t.evidence_file_name),
           toSqliteVal(t.quantity_pct), toSqliteVal(t.progress_pct), toSqliteVal(t.quality_pct),
           toSqliteVal(t.leadership_pct), toSqliteVal(t.execution_score), toSqliteVal(t.converted_score),
           toSqliteVal(t.cbql_comment), toSqliteVal(t.assigned_by), toSqliteVal(t.created_at), toSqliteVal(t.updated_at),

@@ -39,6 +39,7 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
   // Modal form state
   const [finishDate, setFinishDate] = useState(new Date().toISOString().split('T')[0]);
   const [evidenceText, setEvidenceText] = useState('');
+  const [detailedResultNote, setDetailedResultNote] = useState('');
   const [evidenceFile, setEvidenceFile] = useState(null);
   const [quantityPct, setQuantityPct] = useState(1.0);
   const [selfQualityPct, setSelfQualityPct] = useState(1.0);
@@ -127,6 +128,7 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
     setActiveTask(task);
     setFinishDate(task.actual_finish_date || new Date().toISOString().split('T')[0]);
     setEvidenceText(task.evidence_text || '');
+    setDetailedResultNote(task.detailed_result_note || '');
     setQuantityPct(task.quantity_pct !== undefined ? task.quantity_pct : 1.0);
     setSelfQualityPct(task.quality_pct !== undefined ? task.quality_pct : 1.0);
     setEvidenceFile(null);
@@ -167,6 +169,7 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
       const formData = new FormData();
       formData.append('actual_finish_date', finishDate);
       formData.append('evidence_text', evidenceText);
+      formData.append('detailed_result_note', detailedResultNote);
       formData.append('quantity_pct', quantityPct);
       formData.append('self_quality_pct', selfQualityPct);
       if (evidenceFile) {
@@ -263,8 +266,6 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
             <span>Lưu ý nguyên tắc thẩm định & chấm điểm hoàn thành công việc:</span>
           </div>
           <p className="text-blue-900 leading-relaxed">
-            • <strong>Nhiệm vụ được phân công:</strong> Việc ai giao thì người đó trực tiếp theo dõi, thẩm định và chấm điểm hoàn thành.
-            <br />
             • <strong>Nhiệm vụ do cá nhân tự đăng ký:</strong> Mặc định người thẩm định và chấm điểm là <strong>Lãnh đạo đơn vị</strong> (Trưởng phòng/ban hoặc Lãnh đạo phụ trách).
           </p>
         </div>
@@ -394,12 +395,18 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
                   )}
 
                   {/* Evidence details if present */}
-                  {(task.evidence_text || task.evidence_file_name) && (
+                  {(task.evidence_text || task.detailed_result_note || task.evidence_file_name) && (
                     <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs space-y-1">
                       {task.evidence_text && (
                         <div className="text-slate-700">
                           <span className="font-semibold text-slate-900">Minh chứng: </span>
                           {task.evidence_text}
+                        </div>
+                      )}
+                      {task.detailed_result_note && (
+                        <div className="text-slate-700">
+                          <span className="font-semibold text-slate-900">Ghi chú chi tiết kết quả: </span>
+                          {task.detailed_result_note}
                         </div>
                       )}
                       {task.evidence_file_url && (
@@ -632,6 +639,20 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
                 ></textarea>
               </div>
 
+              {/* Detailed result note */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Ghi chú chi tiết kết quả
+                </label>
+                <textarea
+                  rows="2"
+                  value={detailedResultNote}
+                  onChange={(e) => setDetailedResultNote(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-md focus:ring-2 focus:ring-red-500 font-normal"
+                  placeholder="Nhập ghi chú chi tiết về kết quả đạt được, tiến độ thực hiện hoặc giải trình bổ sung (nếu có)..."
+                ></textarea>
+              </div>
+
               {/* Feature: Lấy tệp kết quả từ cấp dưới cho cùng nhiệm vụ */}
               <div className="space-y-2 p-3.5 bg-slate-50 rounded-xl border border-slate-200">
                 <div className="flex items-center justify-between">
@@ -819,9 +840,9 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes }) {
                 </div>
                 <p className="leading-relaxed text-[11px] text-indigo-900">
                   {activeTask.origin === 'assigned' ? (
-                    <>Nhiệm vụ do <strong>{activeTask.assigner_name || 'Lãnh đạo'}</strong> giao việc. Theo quy chế: <em>Việc ai giao thì người đó trực tiếp thẩm định và chấm điểm hoàn thành</em>.</>
+                    <>Nhiệm vụ do <strong>{activeTask.assigner_name || 'Lãnh đạo'}</strong> giao việc.</>
                   ) : (
-                    <>Nhiệm vụ do cán bộ <strong>tự đăng ký</strong>. Theo quy định: Mặc định <strong>Lãnh đạo đơn vị</strong> ({activeTask.grader_name || 'Trưởng phòng/Ban hoặc Lãnh đạo phụ trách'}) sẽ thẩm định và chấm điểm hoàn thành.</>
+                    <>Nhiệm vụ do cán bộ <strong>tự đăng ký</strong>. Mặc định <strong>Lãnh đạo đơn vị</strong> ({activeTask.grader_name || 'Trưởng phòng/Ban hoặc Lãnh đạo phụ trách'}) sẽ thẩm định và chấm điểm hoàn thành.</>
                   )}
                 </p>
               </div>

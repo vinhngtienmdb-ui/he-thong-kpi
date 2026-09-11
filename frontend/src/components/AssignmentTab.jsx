@@ -2947,8 +2947,6 @@ export default function AssignmentTab({
                   <span>Nguyên tắc thẩm định & chấm điểm hoàn thành công việc:</span>
                 </div>
                 <p className="leading-relaxed text-[11px] text-amber-900">
-                  • <strong>Việc ai giao thì người đó chấm điểm hoàn thành</strong> (Lãnh đạo giao việc trực tiếp theo dõi và đánh giá kết quả).
-                  <br />
                   • <strong>Nếu cá nhân tự đăng ký:</strong> Mặc định người thẩm định và chấm điểm là <strong>Lãnh đạo đơn vị</strong> (Trưởng phòng/ban hoặc Lãnh đạo phụ trách).
                 </p>
               </div>

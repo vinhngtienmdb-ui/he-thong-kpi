@@ -172,6 +172,7 @@ function initDatabase() {
       status TEXT DEFAULT 'in_progress', -- 'pending_approval', 'in_progress', 'submitted', 'approved', 'rejected'
       actual_finish_date TEXT,
       evidence_text TEXT,
+      detailed_result_note TEXT,
       evidence_file_url TEXT,
       evidence_file_name TEXT,
       quantity_pct REAL DEFAULT 1.0,    -- 1.0 (100%) or 0
@@ -416,7 +417,8 @@ function initDatabase() {
     "ALTER TABLE assigned_tasks ADD COLUMN extension_reviewed_by TEXT;",
     "ALTER TABLE assigned_tasks ADD COLUMN extension_reviewed_at TEXT;",
     "ALTER TABLE assigned_tasks ADD COLUMN extension_reject_reason TEXT;",
-    "ALTER TABLE assigned_tasks ADD COLUMN extension_count INTEGER DEFAULT 0;"
+    "ALTER TABLE assigned_tasks ADD COLUMN extension_count INTEGER DEFAULT 0;",
+    "ALTER TABLE assigned_tasks ADD COLUMN detailed_result_note TEXT;"
   ];
 
   for (const m of migrations) {
