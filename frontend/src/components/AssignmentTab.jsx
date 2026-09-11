@@ -95,6 +95,24 @@ export default function AssignmentTab({
   const [returnTaskReason, setReturnTaskReason] = useState('');
   const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
 
+  // Extension Modal States
+  // 1. CBNV xin gia hạn (chỉ hiển thị khi công việc đã đến hạn hoặc quá hạn)
+  const [extensionRequestModalTask, setExtensionRequestModalTask] = useState(null);
+  const [requestedDeadline, setRequestedDeadline] = useState('');
+  const [extensionReason, setExtensionReason] = useState('');
+  const [isSubmittingExtensionRequest, setIsSubmittingExtensionRequest] = useState(false);
+
+  // 2. Lãnh đạo xem xét duyệt/từ chối yêu cầu gia hạn
+  const [extensionReviewModalTask, setExtensionReviewModalTask] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isReviewingExtension, setIsReviewingExtension] = useState(false);
+
+  // 3. Lãnh đạo chủ động gia hạn tiến độ
+  const [leaderExtendModalTask, setLeaderExtendModalTask] = useState(null);
+  const [leaderNewDeadline, setLeaderNewDeadline] = useState('');
+  const [leaderExtendReason, setLeaderExtendReason] = useState('');
+  const [isSubmittingLeaderExtend, setIsSubmittingLeaderExtend] = useState(false);
+
   // Modal State for Assigning / Registering Tasks
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('assign'); // 'assign' or 'register'
@@ -640,6 +658,122 @@ export default function AssignmentTab({
       return { text: `Còn ${diffDays} ngày`, color: 'amber', isOverdue: false, isNear: true, days: diffDays };
     }
     return { text: `Còn ${diffDays} ngày`, color: 'slate', isOverdue: false, isNear: false, days: diffDays };
+  }
+
+  const todayStr = useMemo(() => {
+    return new Date(Date.now() + 7 * 3600000).toISOString().split('T')[0];
+  }, []);
+
+  function isTaskDueOrOverdue(task) {
+    if (!task || !task.deadline || task.status === 'approved') return false;
+    return task.deadline <= todayStr;
+  }
+
+  // 1. CBNV Mở modal xin gia hạn
+  function openExtensionRequestModal(task) {
+    if (!isTaskDueOrOverdue(task)) {
+      alert('Theo quy định, chỉ được gửi yêu cầu xin gia hạn khi công việc đã đến hạn hoặc quá hạn!');
+      return;
+    }
+    setExtensionRequestModalTask(task);
+    const base = new Date();
+    base.setDate(base.getDate() + 7);
+    setRequestedDeadline(toInputDateFormat(base.toISOString().split('T')[0]));
+    setExtensionReason('');
+  }
+
+  // 1. CBNV Gửi yêu cầu xin gia hạn
+  async function handleSubmitExtensionRequest() {
+    if (!extensionRequestModalTask) return;
+    if (!requestedDeadline) {
+      alert('Vui lòng chọn thời hạn hoàn thành mới đề xuất!');
+      return;
+    }
+    if (requestedDeadline <= extensionRequestModalTask.deadline) {
+      alert('Thời hạn mới đề xuất phải sau thời hạn hiện tại của nhiệm vụ!');
+      return;
+    }
+    if (!extensionReason.trim()) {
+      alert('Vui lòng nhập lý do xin gia hạn công việc!');
+      return;
+    }
+
+    try {
+      setIsSubmittingExtensionRequest(true);
+      const res = await api.requestTaskExtension(extensionRequestModalTask.id, {
+        requested_deadline: requestedDeadline,
+        reason: extensionReason.trim()
+      });
+      alert(res.message || 'Đã gửi yêu cầu xin gia hạn tới Lãnh đạo xem xét thành công!');
+      setExtensionRequestModalTask(null);
+      loadData();
+    } catch (err) {
+      alert('Lỗi gửi yêu cầu gia hạn: ' + (err.message || err));
+    } finally {
+      setIsSubmittingExtensionRequest(false);
+    }
+  }
+
+  // 2. Lãnh đạo mở modal xem xét yêu cầu gia hạn
+  function openExtensionReviewModal(task) {
+    setExtensionReviewModalTask(task);
+    setRejectReason('');
+  }
+
+  // 2. Lãnh đạo phê duyệt hoặc từ chối yêu cầu gia hạn
+  async function handleReviewExtension(action) {
+    if (!extensionReviewModalTask) return;
+    if (action === 'reject' && !rejectReason.trim()) {
+      alert('Vui lòng nhập lý do từ chối gia hạn!');
+      return;
+    }
+    try {
+      setIsReviewingExtension(true);
+      const res = await api.reviewTaskExtension(extensionReviewModalTask.id, {
+        action,
+        reject_reason: rejectReason.trim()
+      });
+      alert(res.message || (action === 'approve' ? 'Đã phê duyệt gia hạn nhiệm vụ thành công!' : 'Đã từ chối gia hạn nhiệm vụ.'));
+      setExtensionReviewModalTask(null);
+      loadData();
+    } catch (err) {
+      alert('Lỗi xử lý gia hạn: ' + (err.message || err));
+    } finally {
+      setIsReviewingExtension(false);
+    }
+  }
+
+  // 3. Lãnh đạo mở modal chủ động gia hạn tiến độ
+  function openLeaderExtendModal(task) {
+    setLeaderExtendModalTask(task);
+    const curr = task.deadline || todayStr;
+    const next = new Date(curr);
+    next.setDate(next.getDate() + 7);
+    setLeaderNewDeadline(toInputDateFormat(next.toISOString().split('T')[0]));
+    setLeaderExtendReason('Điều chỉnh tiến độ hoàn thành');
+  }
+
+  // 3. Lãnh đạo xác nhận chủ động gia hạn
+  async function handleSubmitLeaderExtend() {
+    if (!leaderExtendModalTask) return;
+    if (!leaderNewDeadline) {
+      alert('Vui lòng chọn thời hạn hoàn thành mới!');
+      return;
+    }
+    try {
+      setIsSubmittingLeaderExtend(true);
+      const res = await api.extendTaskDeadline(leaderExtendModalTask.id, {
+        new_deadline: leaderNewDeadline,
+        reason: leaderExtendReason.trim()
+      });
+      alert(res.message || `Đã gia hạn nhiệm vụ đến ngày ${leaderNewDeadline} thành công!`);
+      setLeaderExtendModalTask(null);
+      loadData();
+    } catch (err) {
+      alert('Lỗi gia hạn nhiệm vụ: ' + (err.message || err));
+    } finally {
+      setIsSubmittingLeaderExtend(false);
+    }
   }
 
   // --- SUBSETS OF TASKS ---
@@ -2235,7 +2369,7 @@ export default function AssignmentTab({
                             {/* Deadline & Warning */}
                             <td className="px-4 py-3.5 whitespace-nowrap">
                               <div className="font-medium text-slate-800 text-sm">{formatDate(t.deadline)}</div>
-                              <div className="mt-1">
+                              <div className="mt-1 flex flex-col gap-0.5">
                                 <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${
                                   dl.isOverdue ? 'bg-rose-100 text-rose-800 border border-rose-200' :
                                   dl.isNear ? 'bg-amber-100 text-amber-800 border border-amber-200' :
@@ -2243,6 +2377,27 @@ export default function AssignmentTab({
                                 }`}>
                                   {dl.text}
                                 </span>
+                                {t.extension_count > 0 && (
+                                  <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.2 rounded border border-indigo-200 w-fit">
+                                    Đã gia hạn: {t.extension_count} lần
+                                  </span>
+                                )}
+                                {t.extension_status === 'pending' && (
+                                  <span 
+                                    className="text-[10px] font-bold text-amber-900 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300 w-fit"
+                                    title={`Đề xuất hạn mới: ${formatDate(t.requested_deadline)} - Lý do: ${t.extension_reason || ''}`}
+                                  >
+                                    ⏳ Chờ duyệt GH
+                                  </span>
+                                )}
+                                {t.extension_status === 'rejected' && (
+                                  <span 
+                                    className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 w-fit"
+                                    title={`Lý do từ chối: ${t.extension_reject_reason || ''}`}
+                                  >
+                                    ✕ Bị từ chối GH
+                                  </span>
+                                )}
                               </div>
                             </td>
 
@@ -2280,6 +2435,18 @@ export default function AssignmentTab({
                             {/* Actions */}
                             <td className="px-4 py-3.5 text-center whitespace-nowrap">
                               <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                                {/* Lãnh đạo duyệt gia hạn nếu có yêu cầu pending */}
+                                {t.extension_status === 'pending' && (isCBQL || currentUser?.id === t.assigned_by) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openExtensionReviewModal(t)}
+                                    className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-lg shadow-2xs transition animate-pulse"
+                                    title="Xem xét duyệt / từ chối yêu cầu gia hạn"
+                                  >
+                                    Duyệt GH
+                                  </button>
+                                )}
+
                                 {t.status === 'pending_acceptance' && currentUser?.id === t.user_id ? (
                                   <>
                                     <button
@@ -2356,6 +2523,37 @@ export default function AssignmentTab({
                                     >
                                       Nộp MC
                                     </button>
+
+                                    {/* Nút xin gia hạn: CHỈ HIỂN THỊ KHI VIỆC ĐÃ ĐẾN HẠN HOẶC QUÁ HẠN */}
+                                    {isTaskDueOrOverdue(t) && (
+                                      t.extension_status === 'pending' ? (
+                                        <span className="px-2 py-1 bg-amber-50 text-amber-800 border border-amber-300 font-bold text-[11px] rounded-lg">
+                                          ⏳ Chờ duyệt GH
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => openExtensionRequestModal(t)}
+                                          className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-lg shadow-2xs transition active:scale-95"
+                                          title="Yêu cầu xin gia hạn tới Lãnh đạo (chỉ khả dụng khi việc đã đến hạn hoặc quá hạn)"
+                                        >
+                                          Xin gia hạn
+                                        </button>
+                                      )
+                                    )}
+
+                                    {/* Lãnh đạo chủ động gia hạn */}
+                                    {t.extension_status !== 'pending' && t.status !== 'approved' && ((currentUser?.id === t.assigned_by) || isCBQL) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => openLeaderExtendModal(t)}
+                                        className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold text-xs rounded-lg shadow-2xs"
+                                        title="Chủ động gia hạn thời gian hoàn thành"
+                                      >
+                                        Gia hạn
+                                      </button>
+                                    )}
+
                                     {!isAdmin && (((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') && (
                                       <button
                                         type="button"
@@ -2369,6 +2567,18 @@ export default function AssignmentTab({
                                   </>
                                 ) : (
                                   <>
+                                    {/* Lãnh đạo chủ động gia hạn cho việc của người khác */}
+                                    {t.extension_status !== 'pending' && t.status !== 'approved' && ((currentUser?.id === t.assigned_by) || isCBQL) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => openLeaderExtendModal(t)}
+                                        className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold text-xs rounded-lg shadow-2xs"
+                                        title="Chủ động gia hạn thời gian hoàn thành"
+                                      >
+                                        Gia hạn
+                                      </button>
+                                    )}
+
                                     {!isAdmin && (((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') ? (
                                       <button
                                         type="button"
@@ -2378,7 +2588,7 @@ export default function AssignmentTab({
                                       >
                                         Thu hồi
                                       </button>
-                                    ) : !isAdmin && (
+                                    ) : !isAdmin && t.extension_status !== 'pending' && (
                                       <span className="text-xs text-slate-400 italic">Theo dõi</span>
                                     )}
                                   </>
@@ -2500,12 +2710,27 @@ export default function AssignmentTab({
                           <div>
                             <span className="text-[10px] text-slate-400 block font-medium">Hạn chót:</span>
                             <span className="font-bold text-slate-800">{formatDate(t.deadline)}</span>
-                            <div className="mt-0.5">
+                            <div className="mt-0.5 flex flex-col gap-0.5">
                               <span className={`text-[10px] font-bold ${
                                 dl.isOverdue ? 'text-rose-600' : dl.isNear ? 'text-amber-600' : 'text-slate-400'
                               }`}>
                                 {dl.text}
                               </span>
+                              {t.extension_count > 0 && (
+                                <span className="text-[10px] font-semibold text-indigo-700">
+                                  Đã gia hạn: {t.extension_count} lần
+                                </span>
+                              )}
+                              {t.extension_status === 'pending' && (
+                                <span className="text-[10px] font-bold text-amber-900 bg-amber-100 px-1.5 py-0.2 rounded border border-amber-300 w-fit">
+                                  ⏳ Chờ duyệt GH
+                                </span>
+                              )}
+                              {t.extension_status === 'rejected' && (
+                                <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 w-fit">
+                                  ✕ Bị từ chối GH
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div>
@@ -2517,6 +2742,18 @@ export default function AssignmentTab({
 
                         {/* Actions for Mobile Touch */}
                         <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 flex-wrap">
+                          {/* Lãnh đạo duyệt gia hạn */}
+                          {t.extension_status === 'pending' && (isCBQL || currentUser?.id === t.assigned_by) && (
+                            <button
+                              type="button"
+                              onClick={() => openExtensionReviewModal(t)}
+                              className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95 animate-pulse"
+                              title="Xem xét duyệt / từ chối yêu cầu gia hạn"
+                            >
+                              Duyệt GH
+                            </button>
+                          )}
+
                           {t.status === 'pending_acceptance' && currentUser?.id === t.user_id ? (
                             <>
                               <button
@@ -2588,6 +2825,37 @@ export default function AssignmentTab({
                               >
                                 Nộp MC →
                               </button>
+
+                              {/* Nút xin gia hạn: CHỈ HIỂN THỊ KHI VIỆC ĐÃ ĐẾN HẠN HOẶC QUÁ HẠN */}
+                              {isTaskDueOrOverdue(t) && (
+                                t.extension_status === 'pending' ? (
+                                  <span className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-300 font-bold text-xs rounded-xl">
+                                    ⏳ Chờ duyệt GH
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => openExtensionRequestModal(t)}
+                                    className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                                    title="Yêu cầu xin gia hạn tới Lãnh đạo"
+                                  >
+                                    Xin gia hạn
+                                  </button>
+                                )
+                              )}
+
+                              {/* Lãnh đạo chủ động gia hạn */}
+                              {t.extension_status !== 'pending' && t.status !== 'approved' && ((currentUser?.id === t.assigned_by) || isCBQL) && (
+                                <button
+                                  type="button"
+                                  onClick={() => openLeaderExtendModal(t)}
+                                  className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                                  title="Chủ động gia hạn thời gian"
+                                >
+                                  Gia hạn
+                                </button>
+                              )}
+
                               {!isAdmin && (((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') && (
                                 <button
                                   type="button"
@@ -2600,6 +2868,18 @@ export default function AssignmentTab({
                             </>
                           ) : (
                             <>
+                              {/* Lãnh đạo chủ động gia hạn */}
+                              {t.extension_status !== 'pending' && t.status !== 'approved' && ((currentUser?.id === t.assigned_by) || isCBQL) && (
+                                <button
+                                  type="button"
+                                  onClick={() => openLeaderExtendModal(t)}
+                                  className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-semibold text-xs rounded-xl shadow-2xs cursor-pointer active:scale-95"
+                                  title="Chủ động gia hạn thời gian"
+                                >
+                                  Gia hạn
+                                </button>
+                              )}
+
                               {!isAdmin && (((currentUser?.id === t.assigned_by) || isCBQL) && t.origin === 'assigned' && t.status !== 'approved') ? (
                                 <button
                                   type="button"
@@ -2608,7 +2888,7 @@ export default function AssignmentTab({
                                 >
                                   Thu hồi
                                 </button>
-                              ) : !isAdmin && (
+                              ) : !isAdmin && t.extension_status !== 'pending' && (
                                 <span className="text-xs text-slate-400 italic">Theo dõi</span>
                               )}
                             </>
@@ -3639,6 +3919,255 @@ export default function AssignmentTab({
                 className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer"
               >
                 {isSubmittingReturn ? 'Đang gửi...' : 'Xác nhận Trả lại'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1: CBNV XIN GIA HẠN CÔNG VIỆC (CHỈ HIỂN THỊ KHI ĐÃ ĐẾN HẠN HOẶC QUÁ HẠN) */}
+      {extensionRequestModalTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-amber-50/80">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-amber-600" />
+                <h3 className="text-sm font-bold text-slate-900">Yêu cầu xin gia hạn tiến độ công việc</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExtensionRequestModalTask(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3.5">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                <div className="font-bold text-slate-800">{extensionRequestModalTask.task_name}</div>
+                <div className="text-slate-500 flex items-center gap-2 flex-wrap">
+                  <span>Hạn hiện tại: <strong className="text-rose-600">{formatDate(extensionRequestModalTask.deadline)}</strong></span>
+                  <span>•</span>
+                  <span>Người giao / duyệt: <strong>{extensionRequestModalTask.assigner_name || 'Lãnh đạo đơn vị'}</strong></span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Thời hạn mới đề xuất <span className="text-red-500">*</span>:
+                </label>
+                <input
+                  type="date"
+                  value={requestedDeadline}
+                  onChange={(e) => setRequestedDeadline(e.target.value)}
+                  min={toInputDateFormat(new Date().toISOString().split('T')[0])}
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 font-semibold text-slate-800"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Hạn mới phải sau ngày hạn hiện tại ({formatDate(extensionRequestModalTask.deadline)}).
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Lý do xin gia hạn <span className="text-red-500">*</span>:
+                </label>
+                <textarea
+                  rows={3}
+                  value={extensionReason}
+                  onChange={(e) => setExtensionReason(e.target.value)}
+                  placeholder="Nhập chi tiết khó khăn, vướng mắc hoặc nguyên nhân khách quan cần gia hạn tiến độ..."
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500 font-normal"
+                />
+              </div>
+
+              <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
+                ℹ️ <strong>Quy định:</strong> Tính năng xin gia hạn chỉ khả dụng khi công việc đã đến hạn hoặc quá hạn. Yêu cầu sẽ được gửi tới Lãnh đạo xem xét và phê duyệt.
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 p-4 bg-slate-50 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setExtensionRequestModalTask(null)}
+                className="px-3.5 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-100 cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitExtensionRequest}
+                disabled={isSubmittingExtensionRequest || !requestedDeadline || !extensionReason.trim()}
+                className="px-4 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmittingExtensionRequest ? 'Đang gửi...' : 'Gửi yêu cầu gia hạn'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: LÃNH ĐẠO XEM XÉT DUYỆT / TỪ CHỐI GIA HẠN */}
+      {extensionReviewModalTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-indigo-50/80">
+              <div className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-sm font-bold text-slate-900">Xem xét yêu cầu xin gia hạn công việc</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setExtensionReviewModalTask(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3.5">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1.5">
+                <div className="font-bold text-slate-900 text-sm">{extensionReviewModalTask.task_name}</div>
+                <div className="text-slate-600">
+                  Cán bộ xin gia hạn: <strong className="text-slate-900">{extensionReviewModalTask.user_name}</strong>
+                </div>
+                <div className="flex items-center gap-2 text-xs flex-wrap">
+                  <span>Hạn hiện tại: <strong className="text-rose-600 line-through">{formatDate(extensionReviewModalTask.deadline)}</strong></span>
+                  <span>→</span>
+                  <span>Hạn mới đề xuất: <strong className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">{formatDate(extensionReviewModalTask.requested_deadline)}</strong></span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-xs space-y-1">
+                <span className="font-bold text-amber-900 block">Lý do xin gia hạn của cán bộ:</span>
+                <p className="text-slate-800 whitespace-pre-wrap leading-relaxed">
+                  "{extensionReviewModalTask.extension_reason || 'Không có lý do cụ thể'}"
+                </p>
+                {extensionReviewModalTask.extension_requested_at && (
+                  <span className="text-[10px] text-slate-400 block pt-1">
+                    Gửi lúc: {new Date(extensionReviewModalTask.extension_requested_at).toLocaleString('vi-VN')}
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Ý kiến / Lý do từ chối (bắt buộc nếu từ chối):
+                </label>
+                <textarea
+                  rows={2}
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Nhập lý do không đồng ý gia hạn (nếu bấm Từ chối)..."
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-normal"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-slate-50 border-t border-slate-200 gap-2">
+              <button
+                type="button"
+                onClick={() => setExtensionReviewModalTask(null)}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-100 cursor-pointer"
+              >
+                Đóng
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleReviewExtension('reject')}
+                  disabled={isReviewingExtension || !rejectReason.trim()}
+                  className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer"
+                  title="Từ chối yêu cầu gia hạn kèm lý do"
+                >
+                  Từ chối
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleReviewExtension('approve')}
+                  disabled={isReviewingExtension}
+                  className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer"
+                  title="Đồng ý cập nhật hạn chót mới theo đề xuất của cán bộ"
+                >
+                  {isReviewingExtension ? 'Đang duyệt...' : '✓ Phê duyệt gia hạn'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 3: LÃNH ĐẠO CHỦ ĐỘNG GIA HẠN TIẾN ĐỘ */}
+      {leaderExtendModalTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-indigo-50/80">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-sm font-bold text-slate-900">Lãnh đạo điều chỉnh & Gia hạn tiến độ</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLeaderExtendModalTask(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3.5">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+                <div className="font-bold text-slate-900">{leaderExtendModalTask.task_name}</div>
+                <div className="text-slate-600 flex items-center gap-2 flex-wrap">
+                  <span>Cán bộ thực hiện: <strong>{leaderExtendModalTask.user_name}</strong></span>
+                  <span>•</span>
+                  <span>Hạn hiện tại: <strong className="text-indigo-700">{formatDate(leaderExtendModalTask.deadline)}</strong></span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Thời hạn hoàn thành mới (Hạn chót mới) <span className="text-red-500">*</span>:
+                </label>
+                <input
+                  type="date"
+                  value={leaderNewDeadline}
+                  onChange={(e) => setLeaderNewDeadline(e.target.value)}
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Lý do điều chỉnh / gia hạn:
+                </label>
+                <textarea
+                  rows={3}
+                  value={leaderExtendReason}
+                  onChange={(e) => setLeaderExtendReason(e.target.value)}
+                  placeholder="Nhập lý do điều chỉnh gia hạn tiến độ công việc..."
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 font-normal"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 p-4 bg-slate-50 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setLeaderExtendModalTask(null)}
+                className="px-3.5 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-100 cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitLeaderExtend}
+                disabled={isSubmittingLeaderExtend || !leaderNewDeadline}
+                className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmittingLeaderExtend ? 'Đang lưu...' : 'Xác nhận Gia hạn'}
               </button>
             </div>
           </div>

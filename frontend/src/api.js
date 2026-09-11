@@ -353,6 +353,53 @@ export const api = {
     });
   },
 
+  // Task Extension & Deadlines
+  requestTaskExtension: (id, data) => {
+    return fetchApi(`/assigned-tasks/${id}/request-extension`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  reviewTaskExtension: (id, data) => {
+    return fetchApi(`/assigned-tasks/${id}/review-extension`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  extendTaskDeadline: (id, data) => {
+    return fetchApi(`/assigned-tasks/${id}/extend-deadline`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Notifications
+  getNotifications: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return fetchApi(`/notifications${query ? `?${query}` : ''}`);
+  },
+  markNotificationAsRead: (id) => {
+    return fetchApi(`/notifications/${id}/read`, {
+      method: 'PUT',
+    });
+  },
+  markAllNotificationsAsRead: (data = {}) => {
+    return fetchApi('/notifications/read-all', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  clearNotifications: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return fetchApi(`/notifications/clear${query ? `?${query}` : ''}`, {
+      method: 'DELETE',
+    });
+  },
+
   // Advisory (Bước 6: Cơ quan Tham mưu Tổng hợp & Trình biểu quyết)
   getAdvisorySummary: (periodId) => {
     return fetchApi(`/advisory-summary?period_id=${periodId}`);

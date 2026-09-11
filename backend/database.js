@@ -322,6 +322,22 @@ function initDatabase() {
       FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
       UNIQUE(group_id, user_id)
     );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      type TEXT NOT NULL,
+      task_id TEXT,
+      tab TEXT DEFAULT 'assignment',
+      is_read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read);
+    CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
   `);
 
   const migrations = [
@@ -391,7 +407,16 @@ function initDatabase() {
     "ALTER TABLE standard_tasks ADD COLUMN approved_by TEXT;",
     "ALTER TABLE standard_tasks ADD COLUMN approved_at TEXT;",
     "ALTER TABLE standard_tasks ADD COLUMN rejection_reason TEXT;",
-    "ALTER TABLE users ADD COLUMN union_title TEXT;"
+    "ALTER TABLE users ADD COLUMN union_title TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN original_deadline TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN requested_deadline TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN extension_reason TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN extension_status TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN extension_requested_at TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN extension_reviewed_by TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN extension_reviewed_at TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN extension_reject_reason TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN extension_count INTEGER DEFAULT 0;"
   ];
 
   for (const m of migrations) {

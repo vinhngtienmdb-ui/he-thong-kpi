@@ -183,7 +183,16 @@ CREATE TABLE IF NOT EXISTS assigned_tasks (
     reassigned_at TEXT,
     evaluation_feedback TEXT,
     inherited_from_task_id TEXT,
-    inherited_from_user_name TEXT
+    inherited_from_user_name TEXT,
+    original_deadline TEXT,
+    requested_deadline TEXT,
+    extension_reason TEXT,
+    extension_status TEXT,
+    extension_requested_at TEXT,
+    extension_reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    extension_reviewed_at TEXT,
+    extension_reject_reason TEXT,
+    extension_count INTEGER DEFAULT 0
 );
 
 -- 10. Evaluations (Bang tong hop danh gia KPI ca nhan)
@@ -284,6 +293,19 @@ CREATE TABLE IF NOT EXISTS user_group_members (
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (group_id, user_id)
+);
+
+-- 17. Notifications (He thong thong bao thong minh)
+CREATE TABLE IF NOT EXISTS notifications (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    type TEXT NOT NULL,
+    task_id TEXT,
+    tab TEXT DEFAULT 'assignment',
+    is_read INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ==============================================================================

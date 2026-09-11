@@ -165,8 +165,35 @@ async function pushToSupabase() {
 
   try {
     try {
-      await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS union_title TEXT;');
-    } catch (e) {}
+      await client.query(`
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS union_title TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS original_deadline TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS requested_deadline TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_reason TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_status TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_requested_at TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_reviewed_by TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_reviewed_at TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_reject_reason TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_count INTEGER DEFAULT 0;
+
+        CREATE TABLE IF NOT EXISTS notifications (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          title TEXT NOT NULL,
+          message TEXT NOT NULL,
+          type TEXT NOT NULL,
+          task_id TEXT,
+          tab TEXT DEFAULT 'assignment',
+          is_read INTEGER DEFAULT 0,
+          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read);
+        CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
+      `);
+    } catch (e) {
+      console.warn('[Supabase Sync Migration Warning]:', e.message);
+    }
 
     // 1. system_configs
     const configs = db.prepare('SELECT * FROM system_configs').all();
@@ -312,16 +339,22 @@ async function pushToSupabase() {
        'quality_pct', 'leadership_pct', 'execution_score', 'converted_score',
        'cbql_comment', 'assigned_by', 'created_at', 'updated_at', 'group_id',
        'is_bonus_proposed', 'bonus_score', 'bonus_reason', 'return_reason',
-       'is_returned', 'document_id'],
+       'is_returned', 'document_id', 'original_deadline', 'requested_deadline',
+       'extension_reason', 'extension_status', 'extension_requested_at',
+       'extension_reviewed_by', 'extension_reviewed_at', 'extension_reject_reason', 'extension_count'],
       ['id'],
-      ['period_id', 'task_name', 'status', 'execution_score', 'converted_score',
-       'evidence_file_url', 'actual_finish_date', 'evidence_text'],
+      ['period_id', 'task_name', 'deadline', 'status', 'execution_score', 'converted_score',
+       'evidence_file_url', 'actual_finish_date', 'evidence_text', 'original_deadline',
+       'requested_deadline', 'extension_reason', 'extension_status', 'extension_requested_at',
+       'extension_reviewed_by', 'extension_reviewed_at', 'extension_reject_reason', 'extension_count'],
       assignedTasks.map(at => ({
         ...at,
         assigned_by: validUserIds.has(at.assigned_by) ? at.assigned_by : null,
+        extension_reviewed_by: validUserIds.has(at.extension_reviewed_by) ? at.extension_reviewed_by : null,
         is_bonus_proposed: at.is_bonus_proposed ?? 0,
         bonus_score: at.bonus_score ?? 0,
-        is_returned: at.is_returned ?? 0
+        is_returned: at.is_returned ?? 0,
+        extension_count: at.extension_count ?? 0
       })),
       100
     );
@@ -415,6 +448,22 @@ async function pushToSupabase() {
       groupMembers.filter(gm => validUserIds.has(gm.user_id))
     );
     stats.user_group_members = groupMembers.length;
+
+    // 17. notifications
+    try {
+      const notifs = db.prepare('SELECT * FROM notifications').all();
+      await batchUpsert(
+        client, 'notifications',
+        ['id', 'user_id', 'title', 'message', 'type', 'task_id', 'tab', 'is_read', 'created_at'],
+        ['id'],
+        ['title', 'message', 'type', 'task_id', 'tab', 'is_read'],
+        notifs.filter(n => validUserIds.has(n.user_id)),
+        100
+      );
+      stats.notifications = notifs.length;
+    } catch (e) {
+      stats.notifications = 0;
+    }
 
     return { success: true, stats, message: 'Đã sao lưu thành công toàn bộ dữ liệu lên Supabase Cloud' };
   } finally {
@@ -627,8 +676,10 @@ async function pullFromSupabase() {
         quality_pct, leadership_pct, execution_score, converted_score,
         cbql_comment, assigned_by, created_at, updated_at, group_id,
         is_bonus_proposed, bonus_score, bonus_reason, return_reason,
-        is_returned, document_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        is_returned, document_id, original_deadline, requested_deadline,
+        extension_reason, extension_status, extension_requested_at,
+        extension_reviewed_by, extension_reviewed_at, extension_reject_reason, extension_count
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
       for (const t of supAssigned.rows) {
@@ -642,7 +693,10 @@ async function pullFromSupabase() {
           toSqliteVal(t.leadership_pct), toSqliteVal(t.execution_score), toSqliteVal(t.converted_score),
           toSqliteVal(t.cbql_comment), toSqliteVal(t.assigned_by), toSqliteVal(t.created_at), toSqliteVal(t.updated_at),
           toSqliteVal(t.group_id), t.is_bonus_proposed ? 1 : 0, toSqliteVal(t.bonus_score || 0),
-          toSqliteVal(t.bonus_reason), toSqliteVal(t.return_reason), t.is_returned ? 1 : 0, toSqliteVal(t.document_id)
+          toSqliteVal(t.bonus_reason), toSqliteVal(t.return_reason), t.is_returned ? 1 : 0, toSqliteVal(t.document_id),
+          toSqliteVal(t.original_deadline), toSqliteVal(t.requested_deadline), toSqliteVal(t.extension_reason),
+          toSqliteVal(t.extension_status), toSqliteVal(t.extension_requested_at), toSqliteVal(t.extension_reviewed_by),
+          toSqliteVal(t.extension_reviewed_at), toSqliteVal(t.extension_reject_reason), toSqliteVal(t.extension_count || 0)
         );
       }
     })();
@@ -769,6 +823,28 @@ async function pullFromSupabase() {
       stats.user_group_members = supGroupMembers.rows.length;
     } catch (e) {
       stats.user_group_members = 0;
+    }
+
+    // 17. notifications
+    try {
+      const supNotifs = await client.query('SELECT * FROM notifications');
+      const insNotif = db.prepare(`
+        INSERT OR REPLACE INTO notifications (
+          id, user_id, title, message, type, task_id, tab, is_read, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      db.transaction(() => {
+        for (const n of supNotifs.rows) {
+          insNotif.run(
+            toSqliteVal(n.id), toSqliteVal(n.user_id), toSqliteVal(n.title),
+            toSqliteVal(n.message), toSqliteVal(n.type), toSqliteVal(n.task_id),
+            toSqliteVal(n.tab), n.is_read ? 1 : 0, toSqliteVal(n.created_at)
+          );
+        }
+      })();
+      stats.notifications = supNotifs.rows.length;
+    } catch (e) {
+      stats.notifications = 0;
     }
 
     checkpointDatabase();

@@ -82,8 +82,28 @@ export default function Header({
   const notifRef = useRef(null);
   const userMenuRef = useRef(null);
 
-  // Notifications State (Clean empty state for production)
+  // Notifications State & Realtime Fetch
   const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchNotifications = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const res = await api.getNotifications({ user_id: currentUser.id, limit: 50 });
+      if (res && res.success) {
+        setNotifications(res.data || []);
+        setUnreadCount(res.unread_count || 0);
+      }
+    } catch (e) {
+      console.warn('Error fetching notifications:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60000); // Polling every minute
+    return () => clearInterval(interval);
+  }, [currentUser?.id]);
 
   // Realtime Clock & Date
   useEffect(() => {
@@ -148,22 +168,59 @@ export default function Header({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const unreadNotifsCount = notifications.filter(n => !n.read).length;
+  const unreadNotifsCount = unreadCount !== undefined ? unreadCount : notifications.filter(n => !n.is_read && !n.read).length;
 
-  const markAllNotifsAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  const markAllNotifsAsRead = async () => {
+    try {
+      await api.markAllNotificationsAsRead({ user_id: currentUser?.id });
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: 1, read: true })));
+      setUnreadCount(0);
+    } catch (e) {
+      console.error('Error marking all read:', e);
+    }
   };
 
-  const clearAllNotifications = () => {
-    setNotifications([]);
+  const clearAllNotifications = async () => {
+    try {
+      await api.clearNotifications({ user_id: currentUser?.id });
+      setNotifications([]);
+      setUnreadCount(0);
+    } catch (e) {
+      console.error('Error clearing notifications:', e);
+    }
   };
 
-  const handleNotificationClick = (notif) => {
-    // Mark as read
-    setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+  const handleNotificationClick = async (notif) => {
+    try {
+      if (!notif.is_read) {
+        await api.markNotificationAsRead(notif.id);
+        setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, is_read: 1, read: true } : n));
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (e) {}
+
     setShowNotificationsDropdown(false);
     if (notif.tab && setCurrentTab) {
       setCurrentTab(notif.tab);
+    }
+  };
+
+  const formatNotifTime = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now - d;
+      const diffMin = Math.floor(diffMs / 60000);
+      if (diffMin < 1) return 'Vừa xong';
+      if (diffMin < 60) return `${diffMin} phút trước`;
+      const diffHours = Math.floor(diffMin / 60);
+      if (diffHours < 24) return `${diffHours} giờ trước`;
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays <= 3) return `${diffDays} ngày trước`;
+      return formatDate(dateStr);
+    } catch (e) {
+      return dateStr;
     }
   };
 
@@ -485,18 +542,24 @@ export default function Header({
                           key={notif.id}
                           onClick={() => handleNotificationClick(notif)}
                           className={`p-3.5 hover:bg-slate-50 transition cursor-pointer flex gap-3 items-start ${
-                            !notif.read ? 'bg-red-50/40' : ''
+                            (!notif.is_read && !notif.read) ? 'bg-red-50/40' : ''
                           }`}
                         >
                           <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 shadow-2xs ${
                             notif.type === 'task_assigned' ? 'bg-indigo-100 text-indigo-700' :
                             notif.type === 'task_approved' ? 'bg-emerald-100 text-emerald-700' :
+                            notif.type === 'extension_approved' ? 'bg-emerald-100 text-emerald-700' :
+                            notif.type === 'extension_requested' ? 'bg-amber-100 text-amber-700' :
+                            notif.type === 'extension_rejected' ? 'bg-rose-100 text-rose-700' :
                             notif.type === 'deadline_warning' ? 'bg-rose-100 text-rose-700' :
                             notif.type === 'voting_result' ? 'bg-purple-100 text-purple-700' :
                             'bg-slate-100 text-slate-700'
                           }`}>
                             {notif.type === 'task_assigned' ? <Layers className="w-4 h-4" /> :
                              notif.type === 'task_approved' ? <FileCheck2 className="w-4 h-4" /> :
+                             notif.type === 'extension_approved' ? <CheckCircle2 className="w-4 h-4" /> :
+                             notif.type === 'extension_requested' ? <Clock className="w-4 h-4" /> :
+                             notif.type === 'extension_rejected' ? <AlertTriangle className="w-4 h-4" /> :
                              notif.type === 'deadline_warning' ? <AlertTriangle className="w-4 h-4" /> :
                              notif.type === 'voting_result' ? <Vote className="w-4 h-4" /> :
                              <Sparkles className="w-4 h-4" />}
@@ -504,10 +567,10 @@ export default function Header({
 
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-1">
-                              <h5 className={`text-xs font-semibold truncate ${!notif.read ? 'text-red-950 font-bold' : 'text-slate-700'}`}>
+                              <h5 className={`text-xs font-semibold truncate ${(!notif.is_read && !notif.read) ? 'text-red-950 font-bold' : 'text-slate-700'}`}>
                                 {notif.title}
                               </h5>
-                              {!notif.read && (
+                              {(!notif.is_read && !notif.read) && (
                                 <span className="w-2 h-2 rounded-full bg-red-600 shrink-0"></span>
                               )}
                             </div>
@@ -515,7 +578,7 @@ export default function Header({
                               {notif.message}
                             </p>
                             <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1.5">
-                              <span>{notif.time}</span>
+                              <span>{notif.time || formatNotifTime(notif.created_at)}</span>
                               <span className="font-semibold text-red-700 hover:underline flex items-center gap-0.5">
                                 Xem ngay →
                               </span>
@@ -1176,12 +1239,42 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 3.9 */}
+              {/* Version 4.0 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 3.9</span>
-                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Chuẩn hóa Quy trình Đánh giá 6 Bước & Phân quyền Quản trị)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.0</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Gia hạn Tiến độ & Thông báo Nhắc hạn Tự động)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Gia Hạn Tiến Độ Công Việc (Lãnh Đạo Gia Hạn, CBNV Xin Gia Hạn Khi Đến/Quá Hạn) & Hệ Thống Quét Tự Động Thông Báo Hàng Ngày Việc Đến Hạn / Quá Hạn
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Lãnh đạo Chủ động Gia hạn Tiến độ:</strong> Cho phép Lãnh đạo / Người giao việc chủ động cập nhật thời hạn hoàn thành mới (deadline) kèm lý do điều chỉnh trực tiếp trên giao diện Giao việc.</li>
+                  <li><strong>CBNV Yêu cầu Gia hạn Gửi Lãnh đạo Duyệt:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Cán bộ nhân viên có nút <em>Xin gia hạn</em> tại mục Nhiệm vụ cá nhân và Nộp sản phẩm công việc để đề xuất hạn mới và nêu rõ lý do.</li>
+                      <li><strong>Ràng buộc bảo đảm kỷ cương hành chính:</strong> Nút <em>Xin gia hạn</em> <strong>chỉ hiển thị khi công việc đã đến hạn hôm nay hoặc đã quá hạn</strong> theo đúng thời gian thực.</li>
+                      <li>Lãnh đạo nhận được thông báo yêu cầu gia hạn và có thể chọn <em>Phê duyệt</em> (tự động cập nhật hạn mới vào nhiệm vụ) hoặc <em>Từ chối</em> kèm lý do.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Hệ thống Quét Định kỳ Tự động & Thông báo Nhắc hạn Hàng ngày:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Hệ thống backend tự động quét định kỳ mỗi ngày các nhiệm vụ đang thực hiện: gửi cảnh báo đỏ đối với việc đã quá hạn và nhắc nhở vàng đối với việc đến hạn hôm nay hoặc còn 1-3 ngày.</li>
+                      <li>Cơ chế thông minh chống gửi lặp thông báo trong ngày (idempotency), lưu trữ bền vững tại cơ sở dữ liệu và đồng bộ lên Supabase Cloud.</li>
+                      <li>Kết nối trực tiếp Chuông thông báo trên Header với cơ sở dữ liệu: hiển thị số lượng chưa đọc theo thời gian thực, xem chi tiết và click để chuyển ngay tới nhiệm vụ cần xử lý.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Hoàn thiện Báo cáo Đánh giá & Chức vụ Đoàn thể:</strong> Bổ sung mục Chức vụ đoàn thể trong hồ sơ người dùng và các báo cáo; tự động bỏ trống người ký xác nhận nếu cá nhân được đánh giá là Lãnh đạo đơn vị; phân nhóm 6 Trục kết quả trọng tâm trong Báo cáo thực hiện công việc.</li>
+                </ul>
+              </div>
+
+              {/* Version 3.9 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-300 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 3.9</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Chuẩn Hóa Đánh Số Quy Trình 6 Bước (B1 - B6), Phân Quyền Admin Xóa Công Việc Đã Giao, Thu Hồi & Trả Lại Nhiệm Vụ, Loại Bỏ Tài Khoản Chức Năng Khỏi Hội Đồng Biểu Quyết
