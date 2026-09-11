@@ -103,10 +103,14 @@ export default function App() {
       const savedPeriod = localStorage.getItem('kpi_selected_period');
       const isSavedPeriodValid = periodsData.some(p => p.id === savedPeriod);
 
-      if (isSavedPeriodValid) {
+      if (isSavedPeriodValid && savedPeriod) {
         setSelectedPeriod(savedPeriod);
       } else if (periodsData.length > 0 && !selectedPeriod) {
-        const activePeriod = periodsData.find(p => p.is_active === 1 || p.is_active === true || p.status === 'active') || periodsData[0];
+        const today = new Date().toISOString().slice(0, 10);
+        const activePeriod = periodsData.find(p => p.start_date <= today && today <= p.end_date)
+          || periodsData.find(p => p.code === 'KPI-Q3-2026')
+          || periodsData.find(p => p.is_active === 1 || p.is_active === true || p.status === 'active') 
+          || periodsData[0];
         setSelectedPeriod(activePeriod.id);
       }
 
