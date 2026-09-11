@@ -1239,12 +1239,53 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 4.6 */}
+              {/* Version 4.7 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.6</span>
-                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Gửi Đánh Giá Từng Việc & Ủy Quyền Đánh Giá)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.7</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Không Giới Hạn Điểm Tối Đa Mỗi Trục)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Bỏ Giới Hạn Cứng Điểm Tối Đa Mỗi Trục Công Việc (Điểm Tối Đa Là Tổng Điểm Các Công Việc Được Giao) & Giữ Nguyên Cách Tính KPI Hiện Hữu Chuẩn Hướng Dẫn 06
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Không Giới Hạn Điểm Tối Đa Đối Với Mỗi Trục Công Việc:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Loại bỏ hoàn toàn mức trần cố định trước đây của 6 trục (10đ, 15đ, 10đ, 20đ, 10đ, 5đ).</li>
+                      <li><strong>Điểm tối đa của mỗi trục:</strong> Được tính bằng chính <strong>tổng điểm các công việc được giao</strong> (hoặc tự đăng ký) thuộc trục đó của cán bộ trong kỳ (Tổng: Điểm chuẩn × Hệ số độ khó).</li>
+                      <li>Trục nào cán bộ không được phân công việc sẽ hiển thị điểm tối đa là 0 đ và 0 việc (không còn hiển thị số giả mặc định).</li>
+                    </ul>
+                  </li>
+                  <li><strong>Điểm Đạt Được Của Mỗi Trục & Tỷ Lệ Hoàn Thành:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Điểm đạt được của mỗi trục là tổng điểm quy đổi thực tế của các nhiệm vụ đã hoàn thành và được phê duyệt thuộc trục đó.</li>
+                      <li>Tỷ lệ KPI của trục phản ánh chính xác tỷ lệ hoàn thành thực tế so với khối lượng công việc được giao của trục đó.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Điểm Tính KPI Giữ Nguyên Theo Cách Tính Hiện Hữu:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li><strong>Phần B (Kết quả công việc):</strong> Vẫn tính theo công thức chuẩn Hướng dẫn 06-HD/BTCTU: KPI Phần B = 70 × (Tổng điểm quy đổi hoàn thành B / Tổng điểm công việc được giao A) (tối đa 70 điểm).</li>
+                      <li><strong>Phần A (Tiêu chí chung):</strong> Tối đa 30 điểm.</li>
+                      <li><strong>Điểm thưởng:</strong> Tối đa 7 điểm (10% Phần B).</li>
+                      <li><strong>Tổng điểm KPI:</strong> Thang 100 điểm, tự động xếp loại 4 mức theo quy định.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Chuẩn Hóa Giao Diện Bảng Giám Sát (Dashboard):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Cả hai chế độ xem dạng Thẻ (Grid) và dạng Bảng (Table) hiển thị minh bạch: Điểm quy đổi / Điểm được giao.</li>
+                      <li>Hàng tổng kết Phần II hiển thị đầy đủ tổng điểm công việc được giao (A), tổng điểm quy đổi đạt được (B) và điểm KPI Phần II quy đổi theo thang 70.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 4.6 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-300 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 4.6</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Hoàn Thành Việc Nào Gửi Đánh Giá Việc Đó, Tự Động Chuyển Tuyến Người Giao Việc / Lãnh Đạo Đơn Vị & Lãnh Đạo Chuyển Quyền Đánh Giá Cho Quản Lý

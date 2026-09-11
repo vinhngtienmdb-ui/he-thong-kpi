@@ -135,7 +135,7 @@ export default function DocumentManagementTab({
     deadline: '',
     create_kpi_task: true,
     period_id: selectedPeriod || (periods[0]?.id || ''),
-    axis_code: 'CHUYEN_MON',
+    axis_code: 'TRUC_1',
     standard_score: 10,
     difficulty_weight: 1.0,
     output_result: 'Báo cáo / Kế hoạch'
@@ -371,7 +371,7 @@ export default function DocumentManagementTab({
       deadline: toInputDateFormat(doc.deadline) || new Date().toISOString().split('T')[0],
       create_kpi_task: true,
       period_id: selectedPeriod || (periods[0]?.id || ''),
-      axis_code: 'CHUYEN_MON',
+      axis_code: 'TRUC_1',
       standard_score: 10,
       difficulty_weight: doc.urgency === 'Khẩn' || doc.urgency === 'Hỏa tốc' ? 1.1 : 1.0,
       output_result: 'Báo cáo / Kế hoạch triển khai'

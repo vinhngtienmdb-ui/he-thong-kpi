@@ -706,7 +706,7 @@ export default function DashboardTab({
                         </div>
                         <div className="flex justify-between text-[11px] text-slate-400 mt-1.5 font-normal">
                           <span>Điểm quy đổi: <span className="font-medium text-slate-600">{ax.sum_converted_score || 0}</span></span>
-                          <span>Điểm chuẩn: <span className="font-medium text-slate-600">{ax.sum_standard_score || 0}</span></span>
+                          <span>Điểm được giao: <span className="font-medium text-slate-600">{ax.max_score || 0}</span></span>
                         </div>
                       </div>
                     </div>
@@ -723,8 +723,8 @@ export default function DashboardTab({
                       <th className="px-3.5 py-3 text-center w-24">Điểm chuẩn</th>
                       <th className="px-3.5 py-3 text-center w-24">Điểm quy đổi</th>
                       <th className="px-3.5 py-3 text-center w-24">Tỷ lệ KPI</th>
-                      <th className="px-3.5 py-3 text-center w-24">Điểm tối đa</th>
-                      <th className="px-3.5 py-3 text-center w-28">Điểm đạt được</th>
+                      <th className="px-3.5 py-3 text-center w-24" title="Tổng điểm các công việc được giao thuộc trục này (không giới hạn cứng)">Điểm tối đa</th>
+                      <th className="px-3.5 py-3 text-center w-28" title="Tổng điểm quy đổi hoàn thành của trục">Điểm đạt được</th>
                       <th className="px-3.5 py-3 text-center w-20">Số việc</th>
                     </tr>
                   </thead>
@@ -772,14 +772,33 @@ export default function DashboardTab({
                   </tbody>
                   <tfoot className="bg-slate-50 font-semibold border-t border-slate-300 text-slate-900 text-xs">
                     <tr>
-                      <td colSpan={5} className="px-4 py-3 text-right uppercase tracking-wider text-slate-600">
+                      <td colSpan={2} className="px-4 py-3 text-right uppercase tracking-wider text-slate-600">
                         Tổng cộng Phần II (6 Trục Trọng tâm):
+                      </td>
+                      <td className="px-3.5 py-3 text-center text-slate-700 font-semibold">
+                        {axesSummary.reduce((acc, a) => acc + (a.sum_standard_score || 0), 0)}
+                      </td>
+                      <td className="px-3.5 py-3 text-center text-slate-700 font-semibold">
+                        {Number(axesSummary.reduce((acc, a) => acc + (a.sum_converted_score || 0), 0).toFixed(2))}
+                      </td>
+                      <td className="px-3.5 py-3 text-center">
+                        {(() => {
+                          const totalPlan = axesSummary.reduce((acc, a) => acc + (a.max_score || 0), 0);
+                          const totalExec = axesSummary.reduce((acc, a) => acc + (a.sum_converted_score || 0), 0);
+                          const ratio = totalPlan > 0 ? Math.min(100, Math.round((totalExec / totalPlan) * 100)) : 0;
+                          return (
+                            <span className="inline-block px-2 py-0.5 rounded text-xs font-bold bg-indigo-100 text-indigo-800">
+                              {ratio}%
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-3.5 py-3 text-center text-indigo-700 font-bold text-sm">
                         {axesSummary.reduce((acc, a) => acc + (a.max_score || 0), 0)} đ
                       </td>
-                      <td className="px-3.5 py-3 text-center text-red-700 font-bold text-sm">
-                        {evaluation.part2_score || 0} đ
+                      <td className="px-3.5 py-3 text-center font-bold text-sm">
+                        <div className="text-slate-900">{Number(axesSummary.reduce((acc, a) => acc + (a.axis_score || 0), 0).toFixed(2))} đ</div>
+                        <div className="text-[11px] text-red-600 font-semibold">(KPI: {evaluation.part2_score || 0}/70 đ)</div>
                       </td>
                       <td className="px-3.5 py-3 text-center text-slate-600 font-normal">
                         {axesSummary.reduce((acc, a) => acc + (a.tasks_count || 0), 0)} việc
@@ -1716,6 +1735,23 @@ export default function DashboardTab({
                           </tr>
                         ))}
                       </tbody>
+                      <tfoot className="bg-slate-50 font-semibold border-t border-slate-200 text-xs">
+                        <tr>
+                          <td colSpan={2} className="px-3 py-2 text-right text-slate-600 uppercase">
+                            Tổng cộng Phần II:
+                          </td>
+                          <td className="px-3 py-2 text-center text-indigo-700 font-bold">
+                            {selectedStaffModal.evalDetail.axesSummary.reduce((acc, a) => acc + (a.max_score || 0), 0)} đ
+                          </td>
+                          <td className="px-3 py-2 text-center font-bold">
+                            <div className="text-slate-900">{Number(selectedStaffModal.evalDetail.axesSummary.reduce((acc, a) => acc + (a.axis_score || 0), 0).toFixed(2))} đ</div>
+                            <div className="text-[10px] text-red-600 font-normal">(KPI: {selectedStaffModal.evalDetail.evaluation?.part2_score || 0}/70đ)</div>
+                          </td>
+                          <td className="px-3 py-2 text-center text-slate-600">
+                            {selectedStaffModal.evalDetail.axesSummary.reduce((acc, a) => acc + (a.tasks_count || 0), 0)} việc
+                          </td>
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                 ) : (

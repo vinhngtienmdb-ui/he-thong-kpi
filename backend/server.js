@@ -3920,26 +3920,48 @@ app.get('/api/evaluations', (req, res) => {
     currentStep = 'step_3_leader_eval_tasks';
   }
 
-  // Axes summary for breakdown display
+  // Axes summary for breakdown display: Không giới hạn điểm tối đa đối với mỗi trục công việc
+  // Điểm tối đa của mỗi trục = Tổng điểm các công việc được giao thuộc trục đó.
+  // Điểm tính KPI chung vẫn theo cách tính hiện hữu (Phần A: 30đ, Phần B: 70đ, Thưởng: 7đ, Thang: 100đ).
   const axesSummary = axes.map((ax) => {
-    const axTasks = approvedTasks.filter(t => t.axis_code === ax.code);
-    let sumStd = 0;
-    let sumConv = 0;
-    axTasks.forEach(t => {
-      sumStd += t.standard_score || 0;
-      sumConv += t.converted_score || 0;
+    const assignedInAxis = allUserTasks.filter(t => {
+      const code = (t.axis_code === 'CHUYEN_MON' || !t.axis_code) ? 'TRUC_1' : t.axis_code;
+      return code === ax.code;
     });
-    const kpiRatio = sumStd > 0 ? Math.min(1.0, sumConv / sumStd) : 1.0;
-    const axScore = Number((ax.max_score * kpiRatio).toFixed(2));
+    const approvedInAxis = approvedTasks.filter(t => {
+      const code = (t.axis_code === 'CHUYEN_MON' || !t.axis_code) ? 'TRUC_1' : t.axis_code;
+      return code === ax.code;
+    });
+
+    let sumStd = 0;
+    let axPlanMaxScore = 0;
+    assignedInAxis.forEach(t => {
+      const std = t.standard_score || 0;
+      const diff = t.difficulty_weight || 1.0;
+      sumStd += std;
+      axPlanMaxScore += (std * diff);
+    });
+    axPlanMaxScore = Number(axPlanMaxScore.toFixed(2));
+    sumStd = Number(sumStd.toFixed(2));
+
+    let axExecutedConvScore = 0;
+    approvedInAxis.forEach(t => {
+      axExecutedConvScore += (t.converted_score || 0);
+    });
+    axExecutedConvScore = Number(axExecutedConvScore.toFixed(2));
+
+    const kpiRatio = axPlanMaxScore > 0 ? (axExecutedConvScore / axPlanMaxScore) : 0;
+
     return {
       axis_code: ax.code,
       axis_name: ax.name,
-      max_score: ax.max_score,
+      max_score: axPlanMaxScore, // Điểm tối đa là tổng điểm các công việc được giao thuộc trục
       sum_standard_score: sumStd,
-      sum_converted_score: Number(sumConv.toFixed(2)),
+      sum_converted_score: axExecutedConvScore,
       kpi_pct: Number(kpiRatio.toFixed(4)),
-      axis_score: axScore,
-      tasks_count: axTasks.length
+      axis_score: axExecutedConvScore, // Điểm đạt được của trục là tổng điểm quy đổi hoàn thành
+      tasks_count: assignedInAxis.length,
+      approved_tasks_count: approvedInAxis.length
     };
   });
 

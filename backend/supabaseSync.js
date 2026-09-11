@@ -183,6 +183,7 @@ async function pushToSupabase() {
         ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS delegated_at TEXT;
         ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS delegation_note TEXT;
         ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS submitted_for_eval_at TEXT;
+        UPDATE assigned_tasks SET axis_code = 'TRUC_1' WHERE axis_code = 'CHUYEN_MON' OR axis_code IS NULL OR axis_code = '';
 
         CREATE TABLE IF NOT EXISTS notifications (
           id TEXT PRIMARY KEY,

@@ -452,6 +452,11 @@ function initDatabase() {
     db.prepare("UPDATE departments SET location_name = 'TP. Hồ Chí Minh' WHERE location_name IS NULL OR location_name = ''").run();
   } catch (e) {}
 
+  // Chuẩn hóa axis_code cho các công việc từ điều phối về TRUC_1
+  try {
+    db.prepare("UPDATE assigned_tasks SET axis_code = 'TRUC_1' WHERE axis_code = 'CHUYEN_MON' OR axis_code IS NULL OR axis_code = ''").run();
+  } catch (e) {}
+
   // Ensure common_criteria does not have a global UNIQUE constraint on code
   try {
     const critTableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='common_criteria'").get();
