@@ -1160,7 +1160,7 @@ export default function Header({
 
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                   <span className="text-slate-400 font-semibold block text-[11px] uppercase">Chức danh Đảng</span>
-                  <span className="font-semibold text-slate-900">{currentUser?.party_title || 'Đảng viên'}</span>
+                  <span className="font-semibold text-slate-900">{currentUser?.party_title || (currentUser?.is_party_member ? 'Đảng viên' : 'Quần chúng')}</span>
                 </div>
 
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">

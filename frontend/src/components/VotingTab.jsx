@@ -527,7 +527,7 @@ export default function VotingTab({ selectedPeriod, currentUser, users = [], set
 
                       <td className="px-4 py-3.5">
                         <div className="font-bold text-slate-900 text-sm">{u.full_name}</div>
-                        <div className="text-xs text-slate-500 mt-0.5">{u.party_title || 'Đảng viên'}</div>
+                        {u.party_title ? <div className="text-xs text-red-700 font-medium mt-0.5">🚩 {u.party_title}</div> : null}
                       </td>
 
                       <td className="px-4 py-3.5 text-slate-600">

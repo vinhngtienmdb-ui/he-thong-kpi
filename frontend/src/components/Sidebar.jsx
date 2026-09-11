@@ -22,6 +22,7 @@ import {
   ClipboardCheck,
   BookUser
 } from 'lucide-react';
+import { getUserPermissions } from '../permissions';
 
 export default function Sidebar({ 
   currentTab, 
@@ -47,23 +48,25 @@ export default function Sidebar({
     if (setMobileOpen) setMobileOpen(false);
   };
 
+  const userPerms = getUserPermissions(currentUser);
+
   const evalModules = [
-    { id: 'standard', label: 'Danh mục công việc chuẩn', icon: FileSpreadsheet },
-    { id: 'documents', label: 'Quản lý & Phân bổ văn bản', icon: Files },
-    { id: 'assignment', label: 'B1. Giao & Tiếp nhận việc', icon: UserCheck },
-    { id: 'execution', label: 'B2. Nộp sản phẩm công việc', icon: CheckSquare },
-    { id: 'self_eval', label: 'B3. Tự đánh giá cuối kỳ', icon: Award },
-    { id: 'grading', label: 'B4. Đánh giá, nhận xét (CBQL)', icon: ShieldCheck },
-    { id: 'advisory', label: 'B5. Tổng hợp tham mưu', icon: ClipboardCheck },
-    { id: 'voting', label: 'B6. Biểu quyết xếp loại', icon: Vote },
-    { id: 'charts', label: 'Biểu đồ thống kê', icon: BarChart3 },
-    { id: 'reports', label: 'Xuất báo cáo & biểu mẫu', icon: FileText }
-  ];
+    { id: 'standard', label: 'Danh mục công việc chuẩn', icon: FileSpreadsheet, show: true },
+    { id: 'documents', label: 'Quản lý & Phân bổ văn bản', icon: Files, show: true },
+    { id: 'assignment', label: 'B1. Giao & Tiếp nhận việc', icon: UserCheck, show: true },
+    { id: 'execution', label: 'B2. Nộp sản phẩm công việc', icon: CheckSquare, show: true },
+    { id: 'self_eval', label: 'B3. Tự đánh giá cuối kỳ', icon: Award, show: true },
+    { id: 'grading', label: 'B4. Đánh giá, nhận xét (CBQL)', icon: ShieldCheck, show: userPerms.canGradeTasks },
+    { id: 'advisory', label: 'B5. Tổng hợp tham mưu', icon: ClipboardCheck, show: userPerms.canConcludeEvaluation },
+    { id: 'voting', label: 'B6. Biểu quyết xếp loại', icon: Vote, show: userPerms.canConcludeEvaluation },
+    { id: 'charts', label: 'Biểu đồ thống kê', icon: BarChart3, show: true },
+    { id: 'reports', label: 'Xuất báo cáo & biểu mẫu', icon: FileText, show: true }
+  ].filter(m => m.show);
 
   const adminModules = [
-    { id: 'users_mgmt', label: 'Quản lý người dùng', icon: Users },
-    { id: 'system_config', label: 'Cấu hình', icon: Settings }
-  ];
+    { id: 'users_mgmt', label: 'Quản lý người dùng', icon: Users, show: userPerms.canManageUsers },
+    { id: 'system_config', label: 'Cấu hình', icon: Settings, show: userPerms.canManageSystem }
+  ].filter(m => m.show);
 
   const filteredEvalModules = evalModules.filter(m => 
     !searchTerm.trim() || m.label.toLowerCase().includes(searchTerm.toLowerCase())
@@ -246,17 +249,15 @@ export default function Sidebar({
             )}
           </div>
 
-          {/* 8. QUẢN TRỊ - Hiển thị cho Quản trị viên hệ thống & Quản trị đơn vị */}
-          {(currentUser?.role === 'admin' || currentUser?.role_code === 'admin_donvi') && (
+          {/* 8. QUẢN TRỊ - Hiển thị theo quyền hạn phân bổ */}
+          {(userPerms.canManageUsers || userPerms.canManageSystem) && (
             <div className="pt-2.5 border-t border-red-400/30 mt-2">
               {!isCollapsed && (
                 <div className="px-3.5 text-xs font-semibold tracking-wider text-amber-300 uppercase mb-1">
-                  {currentUser?.role_code === 'admin_donvi' ? 'QUẢN TRỊ ĐƠN VỊ' : 'QUẢN TRỊ HỆ THỐNG'}
+                  {userPerms.canManageSystem ? 'QUẢN TRỊ HỆ THỐNG' : 'QUẢN TRỊ ĐƠN VỊ'}
                 </div>
               )}
-              {adminModules
-                .filter(item => currentUser?.role_code !== 'admin_donvi' || item.id === 'users_mgmt')
-                .map((item) => {
+              {adminModules.map((item) => {
                 const Icon = item.icon;
                 const isActive = currentTab === item.id;
                 return (

@@ -851,7 +851,7 @@ app.get('/api/users', (req, res) => {
            COALESCE(u.is_party_member, 0) as is_party_member,
            COALESCE(u.employee_type, 'vien_chuc') as employee_type,
            d.name as dept_name,
-           r.name as role_name, r.code as role_code, r.data_scope,
+           r.name as role_name, r.code as role_code, r.data_scope, r.permissions as permissions,
            mgr.full_name as manager_name,
            fe.full_name as final_evaluator_name
     FROM users u

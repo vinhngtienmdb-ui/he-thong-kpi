@@ -494,6 +494,17 @@ function initDatabase() {
     try { db.exec(m); } catch (e) {}
   }
 
+  // Đảm bảo không gán Đảng viên hay Đoàn viên cho tất cả user hiện tại theo yêu cầu
+  try {
+    db.prepare(`
+      UPDATE users 
+      SET is_party_member = 0, 
+          party_title = '', 
+          union_title = ''
+      WHERE is_party_member = 1 OR (party_title IS NOT NULL AND party_title != '') OR (union_title IS NOT NULL AND union_title != '')
+    `).run();
+  } catch (e) {}
+
   // Backfill management_role for users if default
   try {
     db.prepare(`
@@ -814,8 +825,8 @@ function ensureAdminUser() {
     const adminUser = db.prepare("SELECT id FROM users WHERE username = 'admin'").get();
     if (!adminUser) {
       db.prepare(`
-        INSERT INTO users (id, username, password, full_name, role, role_id, target_role, party_title, gov_title, dept_id, birth_date, gender, phone, email, is_active)
-        VALUES ('usr-admin', 'admin', 'Hoangyen@123456', 'Quản trị viên Hệ thống', 'admin', 'role-admin', 'cbql', 'Cấp ủy viên', 'Quản trị viên', ?, '1980-01-01', 'Nam', '0909999888', 'admin@hoangyen.edu.vn', 1)
+        INSERT INTO users (id, username, password, full_name, role, role_id, target_role, party_title, gov_title, dept_id, birth_date, gender, phone, email, is_active, is_party_member, union_title)
+        VALUES ('usr-admin', 'admin', 'Hoangyen@123456', 'Quản trị viên Hệ thống', 'admin', 'role-admin', 'cbql', '', 'Quản trị viên', ?, '1980-01-01', 'Nam', '0909999888', 'admin@hoangyen.edu.vn', 1, 0, '')
       `).run(defaultDept.id);
     } else {
       // Tự động sửa lỗi font nếu có ký tự hỏi chấm '?' do lỗi encoding trước đây
@@ -823,7 +834,9 @@ function ensureAdminUser() {
         UPDATE users 
         SET full_name = 'Quản trị viên Hệ thống',
             gov_title = 'Quản trị viên',
-            party_title = 'Cấp ủy viên'
+            party_title = '',
+            union_title = '',
+            is_party_member = 0
         WHERE username = 'admin' AND (full_name LIKE '%?%' OR gov_title LIKE '%?%')
       `).run();
     }

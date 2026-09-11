@@ -18,6 +18,7 @@ import DirectoryTab from './components/DirectoryTab';
 import LoginScreen from './components/LoginScreen';
 import { api, setViewerId } from './api';
 import { compareUsersByPositionAndName } from './userSorting';
+import { getUserPermissions } from './permissions';
 import { Calendar, CheckCircle2, LayoutDashboard, Files, UserCheck, Award, Menu, Layers } from 'lucide-react';
 
 const VALID_TABS = [
@@ -183,16 +184,21 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  // Bảo vệ: Cán bộ không có quyền quản trị không ở lại các tab quản trị
+  // Bảo vệ: Chặn truy cập tab không thuộc phân quyền người dùng
   useEffect(() => {
     if (currentUser) {
-      const canManageUsers = currentUser.role === 'admin' || currentUser.role_code === 'admin_donvi';
-      const isFullAdmin = currentUser.role === 'admin' && currentUser.role_code !== 'admin_donvi';
+      const perms = getUserPermissions(currentUser);
 
-      if (!canManageUsers && currentTab === 'users_mgmt') {
+      if (!perms.canGradeTasks && currentTab === 'grading') {
         setCurrentTab('dashboard');
       }
-      if (!isFullAdmin && currentTab === 'system_config') {
+      if (!perms.canConcludeEvaluation && (currentTab === 'advisory' || currentTab === 'voting')) {
+        setCurrentTab('dashboard');
+      }
+      if (!perms.canManageUsers && currentTab === 'users_mgmt') {
+        setCurrentTab('dashboard');
+      }
+      if (!perms.canManageSystem && currentTab === 'system_config') {
         setCurrentTab('dashboard');
       }
     }
