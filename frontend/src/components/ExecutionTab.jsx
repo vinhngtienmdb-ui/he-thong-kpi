@@ -540,6 +540,25 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes = [] })
                         <span>Hoàn thành: <b>{formatDate(task.actual_finish_date)}</b></span>
                       </span>
                     )}
+
+                    {/* Thông tin người nhận đánh giá / thẩm định */}
+                    <span className="flex items-center space-x-1 text-slate-600">
+                      <span>Đánh giá:</span>
+                      <b className="text-slate-800">{task.evaluator_name || task.grader_name || 'Lãnh đạo đơn vị'}</b>
+                      {task.evaluator_type === 'delegated_manager' ? (
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 border border-purple-200" title={`Lãnh đạo đơn vị (${task.delegated_by_name || 'LĐ'}) đã chuyển quyền đánh giá cho ${task.evaluator_name}`}>
+                          🔄 LĐ ủy quyền
+                        </span>
+                      ) : task.origin === 'assigned' ? (
+                        <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                          Người giao việc
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-medium px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                          Lãnh đạo đơn vị
+                        </span>
+                      )}
+                    </span>
                   </div>
 
                   {/* Warning banner if task was returned by manager */}
@@ -629,11 +648,11 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes = [] })
                       <div className="flex flex-col sm:flex-row lg:flex-col items-end gap-2">
                         <button
                           onClick={() => openEvidenceModal(task)}
-                          className="flex items-center space-x-1.5 text-xs font-bold px-4 py-2 rounded-lg bg-rose-700 hover:bg-rose-800 text-white shadow-xs transition-colors"
-                          title="Nộp lại minh chứng theo yêu cầu của Lãnh đạo"
+                          className="flex items-center space-x-1.5 text-xs font-bold px-4 py-2 rounded-lg bg-rose-700 hover:bg-rose-800 text-white shadow-xs transition-colors cursor-pointer"
+                          title="Hoàn thiện minh chứng và gửi lại đánh giá"
                         >
                           <RotateCcw className="w-3.5 h-3.5" />
-                          <span>Nộp lại minh chứng</span>
+                          <span>Nộp lại & Gửi đánh giá</span>
                         </button>
                         {isTaskDueOrOverdue(task) && (
                           task.extension_status === 'pending' ? (
@@ -655,11 +674,14 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes = [] })
                         )}
                       </div>
                     ) : isSubmitted ? (
-                      <div className="flex flex-col sm:flex-row lg:flex-col items-end gap-2">
-                        <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-500 border border-slate-200 text-xs font-semibold">
-                          <Lock className="w-3 h-3 text-slate-400" />
-                          <span>Đã nộp (Khóa)</span>
+                      <div className="flex flex-col sm:flex-row lg:flex-col items-end gap-1.5">
+                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold">
+                          <Send className="w-3 h-3 text-indigo-600" />
+                          <span>Đã gửi đánh giá</span>
                         </div>
+                        <span className="text-[11px] text-slate-500 text-right">
+                          Chờ <b>{task.evaluator_name || task.grader_name || 'Lãnh đạo'}</b> chấm
+                        </span>
                         {task.extension_status === 'pending' && (
                           <span className="text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-300 inline-flex items-center gap-1">
                             <Clock className="w-3 h-3" />
@@ -697,7 +719,7 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes = [] })
                           className="flex items-center space-x-1.5 text-xs font-semibold px-4 py-2 rounded-lg bg-red-700 hover:bg-red-800 text-white shadow-xs transition-colors cursor-pointer"
                         >
                           <Upload className="w-3.5 h-3.5" />
-                          <span>Nộp kết quả & Minh chứng</span>
+                          <span>Nộp SP & Gửi đánh giá</span>
                         </button>
                         {isTaskDueOrOverdue(task) && (
                           task.extension_status === 'pending' ? (
@@ -737,7 +759,7 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes = [] })
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <div>
                 <h3 className="text-base font-bold text-slate-900">
-                  Cập nhật Kết quả & Minh chứng Hoàn thành
+                  Nộp sản phẩm & Gửi đánh giá công việc
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   {activeTask.task_name}
@@ -994,18 +1016,22 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes = [] })
                 </div>
               </div>
 
-              {/* Notice: Người chấm điểm hoàn thành */}
-              <div className="p-3 bg-indigo-50/80 border border-indigo-200 rounded-xl text-xs text-indigo-950 space-y-1">
+              {/* Notice: Người thẩm định & chấm điểm hoàn thành */}
+              <div className="p-3 bg-indigo-50/90 border border-indigo-200 rounded-xl text-xs text-indigo-950 space-y-1.5">
                 <div className="font-bold flex items-center gap-1.5 text-indigo-900">
-                  <Info className="w-4 h-4 text-indigo-600 shrink-0" />
-                  <span>Người thẩm định & chấm điểm hoàn thành nhiệm vụ này:</span>
+                  <Send className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span>Người nhận thẩm định & chấm điểm nhiệm vụ:</span>
                 </div>
-                <p className="leading-relaxed text-[11px] text-indigo-900">
-                  {activeTask.origin === 'assigned' ? (
-                    <>Nhiệm vụ do <strong>{activeTask.assigner_name || 'Lãnh đạo'}</strong> giao việc.</>
-                  ) : (
-                    <>Nhiệm vụ do cán bộ <strong>tự đăng ký</strong>. Mặc định <strong>Lãnh đạo đơn vị</strong> ({activeTask.grader_name || 'Trưởng phòng/Ban hoặc Lãnh đạo phụ trách'}) sẽ thẩm định và chấm điểm hoàn thành.</>
-                  )}
+                <div className="text-indigo-900 flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-sm text-indigo-950">{activeTask.evaluator_name || activeTask.grader_name || 'Lãnh đạo đơn vị'}</span>
+                  <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+                    {activeTask.evaluator_type === 'delegated_manager'
+                      ? 'Quản lý được Lãnh đạo ủy quyền'
+                      : (activeTask.origin === 'assigned' ? 'Người giao việc' : 'Lãnh đạo đơn vị')}
+                  </span>
+                </div>
+                <p className="leading-relaxed text-[11px] text-indigo-800">
+                  Sau khi nộp, hệ thống sẽ tự động cập nhật kết quả và chuyển thông báo đến người đánh giá để thẩm định và chấm điểm hoàn thành.
                 </p>
               </div>
 
@@ -1013,17 +1039,17 @@ export default function ExecutionTab({ selectedPeriod, currentUser, axes = [] })
                 <button
                   type="button"
                   onClick={() => setActiveTask(null)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-md"
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-md cursor-pointer"
                 >
                   Đóng
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2 text-xs font-semibold bg-red-700 hover:bg-red-800 text-white rounded-md shadow-xs flex items-center space-x-1.5"
+                  className="px-5 py-2 text-xs font-semibold bg-red-700 hover:bg-red-800 text-white rounded-md shadow-xs flex items-center space-x-1.5 cursor-pointer"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>{submitting ? 'Đang lưu...' : 'Nộp kết quả'}</span>
+                  <span>{submitting ? 'Đang gửi...' : '📤 Nộp sản phẩm & Gửi đánh giá'}</span>
                 </button>
               </div>
 

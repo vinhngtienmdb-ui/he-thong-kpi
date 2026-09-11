@@ -191,9 +191,15 @@ CREATE TABLE IF NOT EXISTS assigned_tasks (
     extension_status TEXT,
     extension_requested_at TEXT,
     extension_reviewed_by TEXT REFERENCES users(id) ON DELETE SET NULL,
-    extension_reviewed_at TEXT,
     extension_reject_reason TEXT,
-    extension_count INTEGER DEFAULT 0
+    extension_count INTEGER DEFAULT 0,
+    detailed_result_note TEXT,
+    evaluator_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    evaluator_type TEXT DEFAULT 'assigner',
+    delegated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+    delegated_at TEXT,
+    delegation_note TEXT,
+    submitted_for_eval_at TEXT
 );
 
 -- 10. Evaluations (Bang tong hop danh gia KPI ca nhan)

@@ -1239,12 +1239,47 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 4.5 */}
+              {/* Version 4.6 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.5</span>
-                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Chuẩn hóa Bảng Giám Sát & Reset Đánh Giá)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.6</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Gửi Đánh Giá Từng Việc & Ủy Quyền Đánh Giá)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Hoàn Thành Việc Nào Gửi Đánh Giá Việc Đó, Tự Động Chuyển Tuyến Người Giao Việc / Lãnh Đạo Đơn Vị & Lãnh Đạo Chuyển Quyền Đánh Giá Cho Quản Lý
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Nộp Sản Phẩm & Gửi Đánh Giá Theo Từng Công Việc (B2 - Thực hiện công việc):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Cán bộ hoàn thành nhiệm vụ nào có thể tải minh chứng (file hoặc link) và gửi đánh giá độc lập ngay cho nhiệm vụ đó mà không cần đợi nộp toàn bộ bảng KPI cuối kỳ.</li>
+                      <li>Hệ thống ghi nhận thời gian gửi đánh giá (`submitted_for_eval_at`) và hiển thị huy hiệu trạng thái rõ ràng: <em>"📤 Đã gửi đánh giá - Chờ [Tên người đánh giá] chấm"</em>.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Tự Động Phân Tuyến Người Đánh Giá (Auto-routing):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li><strong>Việc được giao:</strong> Tự động gửi thẳng đến đúng <strong>Người giao việc</strong> (Cán bộ Quản lý hoặc Lãnh đạo đã giao việc).</li>
+                      <li><strong>Việc tự đăng ký:</strong> Tự động gửi đến <strong>Lãnh đạo đơn vị</strong> (Hiệu trưởng / Giám đốc đơn vị) để thẩm định kết quả.</li>
+                      <li>Hệ thống tự động phát sinh thông báo tức thì đến người được phân công chấm điểm.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Lãnh Đạo Đơn Vị Chuyển Quyền (Ủy Quyền) Đánh Giá Cho Quản Lý (B4 - Đánh giá công việc):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Lãnh đạo đơn vị có quyền chuyển quyền thẩm định & chấm điểm từng công việc hoặc chuyển hàng loạt toàn bộ công việc của nhân viên cho Quản lý cấp dưới (Phó Hiệu trưởng, Tổ trưởng).</li>
+                      <li>Cho phép nhập lời nhắn/chỉ đạo ủy quyền (`delegation_note`); Quản lý được ủy quyền sẽ nhận thông báo hệ thống và xuất hiện nhiệm vụ trong danh sách chấm điểm với đầy đủ thẩm quyền cho điểm.</li>
+                      <li>Lãnh đạo đơn vị có thể <strong>thu hồi quyền đánh giá</strong> về lại cho Lãnh đạo bất kỳ lúc nào nếu cần thiết.</li>
+                      <li>Đồng bộ hóa tức thì hai chiều giữa SQLite cục bộ và Supabase Cloud PostgreSQL.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 4.5 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-300 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 4.5</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Chuẩn Hóa Điểm KPI Trung Bình Đơn Vị & Reset Toàn Bộ Đánh Giá Về Trạng Thái Chưa Đánh Giá (Bảng Giám Sát & Báo Cáo Mẫu 02)

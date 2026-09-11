@@ -177,6 +177,12 @@ async function pushToSupabase() {
         ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_reject_reason TEXT;
         ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_count INTEGER DEFAULT 0;
         ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS detailed_result_note TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS evaluator_id TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS evaluator_type TEXT DEFAULT 'assigner';
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS delegated_by TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS delegated_at TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS delegation_note TEXT;
+        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS submitted_for_eval_at TEXT;
 
         CREATE TABLE IF NOT EXISTS notifications (
           id TEXT PRIMARY KEY,
@@ -342,16 +348,20 @@ async function pushToSupabase() {
        'is_bonus_proposed', 'bonus_score', 'bonus_reason', 'return_reason',
        'is_returned', 'document_id', 'original_deadline', 'requested_deadline',
        'extension_reason', 'extension_status', 'extension_requested_at',
-       'extension_reviewed_by', 'extension_reviewed_at', 'extension_reject_reason', 'extension_count'],
+       'extension_reviewed_by', 'extension_reviewed_at', 'extension_reject_reason', 'extension_count',
+       'evaluator_id', 'evaluator_type', 'delegated_by', 'delegated_at', 'delegation_note', 'submitted_for_eval_at'],
       ['id'],
       ['period_id', 'task_name', 'deadline', 'status', 'execution_score', 'converted_score',
        'evidence_file_url', 'actual_finish_date', 'evidence_text', 'detailed_result_note', 'original_deadline',
        'requested_deadline', 'extension_reason', 'extension_status', 'extension_requested_at',
-       'extension_reviewed_by', 'extension_reviewed_at', 'extension_reject_reason', 'extension_count'],
+       'extension_reviewed_by', 'extension_reviewed_at', 'extension_reject_reason', 'extension_count',
+       'evaluator_id', 'evaluator_type', 'delegated_by', 'delegated_at', 'delegation_note', 'submitted_for_eval_at'],
       assignedTasks.map(at => ({
         ...at,
         assigned_by: validUserIds.has(at.assigned_by) ? at.assigned_by : null,
         extension_reviewed_by: validUserIds.has(at.extension_reviewed_by) ? at.extension_reviewed_by : null,
+        evaluator_id: validUserIds.has(at.evaluator_id) ? at.evaluator_id : null,
+        delegated_by: validUserIds.has(at.delegated_by) ? at.delegated_by : null,
         is_bonus_proposed: at.is_bonus_proposed ?? 0,
         bonus_score: at.bonus_score ?? 0,
         is_returned: at.is_returned ?? 0,
@@ -700,8 +710,9 @@ async function pullFromSupabase() {
         is_bonus_proposed, bonus_score, bonus_reason, return_reason,
         is_returned, document_id, original_deadline, requested_deadline,
         extension_reason, extension_status, extension_requested_at,
-        extension_reviewed_by, extension_reviewed_at, extension_reject_reason, extension_count
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        extension_reviewed_by, extension_reviewed_at, extension_reject_reason, extension_count,
+        evaluator_id, evaluator_type, delegated_by, delegated_at, delegation_note, submitted_for_eval_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
       for (const t of supAssigned.rows) {
@@ -718,7 +729,9 @@ async function pullFromSupabase() {
           toSqliteVal(t.bonus_reason), toSqliteVal(t.return_reason), t.is_returned ? 1 : 0, toSqliteVal(t.document_id),
           toSqliteVal(t.original_deadline), toSqliteVal(t.requested_deadline), toSqliteVal(t.extension_reason),
           toSqliteVal(t.extension_status), toSqliteVal(t.extension_requested_at), toSqliteVal(t.extension_reviewed_by),
-          toSqliteVal(t.extension_reviewed_at), toSqliteVal(t.extension_reject_reason), toSqliteVal(t.extension_count || 0)
+          toSqliteVal(t.extension_reviewed_at), toSqliteVal(t.extension_reject_reason), toSqliteVal(t.extension_count || 0),
+          toSqliteVal(t.evaluator_id), toSqliteVal(t.evaluator_type || 'assigner'), toSqliteVal(t.delegated_by),
+          toSqliteVal(t.delegated_at), toSqliteVal(t.delegation_note), toSqliteVal(t.submitted_for_eval_at)
         );
       }
     })();

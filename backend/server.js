@@ -1842,8 +1842,66 @@ app.post('/api/standard-tasks/bulk-delete', requireManagerOrAdmin, (req, res) =>
 // -------------------------------------------------------------
 // 3. Assigned Tasks (Giao việc & Tự đăng ký việc)
 // -------------------------------------------------------------
+
+// Helper xác định người đánh giá/chấm điểm nhiệm vụ:
+// - Việc do CBQL giao: Mặc định là Người giao việc (assigned_by)
+// - Việc tự đăng ký / không có người giao: Mặc định là Lãnh đạo đơn vị
+// - Việc đã được Lãnh đạo đơn vị ủy quyền: Gán cho Quản lý được chỉ định
+function resolveTaskEvaluator(task, db) {
+  if (!task) return { evaluator_id: null, evaluator_type: 'assigner' };
+
+  // 1. Nếu đã có người được chỉ định hoặc ủy quyền:
+  if (task.evaluator_id) {
+    return { 
+      evaluator_id: task.evaluator_id, 
+      evaluator_type: task.evaluator_type || (task.delegated_by ? 'delegated_manager' : 'assigner') 
+    };
+  }
+
+  // 2. Nếu là việc do người khác giao (có assigned_by và khác user_id):
+  if (task.assigned_by && task.assigned_by !== task.user_id) {
+    return { evaluator_id: task.assigned_by, evaluator_type: 'assigner' };
+  }
+
+  // 3. Nếu là việc tự đăng ký hoặc không có người giao cụ thể: Tự động gửi đến Lãnh đạo đơn vị
+  const taskUser = db.prepare('SELECT * FROM users WHERE id = ?').get(task.user_id);
+  let leaderId = null;
+
+  if (taskUser?.dept_id) {
+    const dept = db.prepare('SELECT * FROM departments WHERE id = ?').get(taskUser.dept_id);
+    if (dept?.leader_id && dept.leader_id !== task.user_id) {
+      leaderId = dept.leader_id;
+    }
+    if (!leaderId) {
+      const deptLeader = db.prepare(`
+        SELECT id FROM users 
+        WHERE dept_id = ? AND management_role = 'lanh_dao' AND id != ?
+        LIMIT 1
+      `).get(taskUser.dept_id, task.user_id);
+      if (deptLeader) leaderId = deptLeader.id;
+    }
+  }
+
+  if (!leaderId && taskUser?.final_evaluator_id && taskUser.final_evaluator_id !== task.user_id) {
+    leaderId = taskUser.final_evaluator_id;
+  }
+  if (!leaderId && taskUser?.manager_id && taskUser.manager_id !== task.user_id) {
+    leaderId = taskUser.manager_id;
+  }
+  if (!leaderId) {
+    const anyLeader = db.prepare(`
+      SELECT id FROM users 
+      WHERE management_role = 'lanh_dao' AND id != ?
+      LIMIT 1
+    `).get(task.user_id);
+    if (anyLeader) leaderId = anyLeader.id;
+  }
+
+  return { evaluator_id: leaderId, evaluator_type: 'leader' };
+}
+
 app.get('/api/assigned-tasks', (req, res) => {
-  const { period_id, user_id, status, axis_code, origin, assigned_by } = req.query;
+  const { period_id, user_id, status, axis_code, origin, assigned_by, evaluator_id } = req.query;
   const viewerId = getViewerId(req);
   const accessibleUserIds = getAccessibleUserIds(viewerId);
 
@@ -1853,7 +1911,13 @@ app.get('/api/assigned-tasks', (req, res) => {
            mgr.full_name as manager_name,
            fe.full_name as final_evaluator_name,
            ext_rev.full_name as extension_reviewed_by_name,
+           eval_u.full_name as evaluator_name,
+           eval_u.gov_title as evaluator_title,
+           eval_u.role as evaluator_role,
+           eval_u.management_role as evaluator_management_role,
+           del_by.full_name as delegated_by_name,
            CASE 
+             WHEN eval_u.full_name IS NOT NULL THEN eval_u.full_name
              WHEN t.origin = 'assigned' AND assigner.full_name IS NOT NULL THEN assigner.full_name
              WHEN t.origin = 'assigned' THEN 'Người giao việc'
              ELSE COALESCE(fe.full_name, mgr.full_name, 'Lãnh đạo đơn vị')
@@ -1865,18 +1929,20 @@ app.get('/api/assigned-tasks', (req, res) => {
     LEFT JOIN users mgr ON u.manager_id = mgr.id
     LEFT JOIN users fe ON u.final_evaluator_id = fe.id
     LEFT JOIN users ext_rev ON t.extension_reviewed_by = ext_rev.id
+    LEFT JOIN users eval_u ON t.evaluator_id = eval_u.id
+    LEFT JOIN users del_by ON t.delegated_by = del_by.id
     WHERE 1=1
   `;
   const params = [];
 
-  // Data isolation: Lọc theo thẩm quyền của người xem (hoặc các nhiệm vụ do chính người xem giao việc)
+  // Data isolation: Lọc theo thẩm quyền của người xem (hoặc các nhiệm vụ do chính người xem giao việc, hoặc được ủy quyền đánh giá)
   if (accessibleUserIds !== null) {
     if (accessibleUserIds.length === 0) {
       return res.json([]);
     }
     const placeholders = accessibleUserIds.map(() => '?').join(',');
-    query += ` AND (t.user_id IN (${placeholders}) OR t.assigned_by = ?)`;
-    params.push(...accessibleUserIds, viewerId);
+    query += ` AND (t.user_id IN (${placeholders}) OR t.assigned_by = ? OR t.evaluator_id = ?)`;
+    params.push(...accessibleUserIds, viewerId, viewerId);
   }
 
   if (period_id) {
@@ -1894,6 +1960,10 @@ app.get('/api/assigned-tasks', (req, res) => {
   if (assigned_by) {
     query += ' AND t.assigned_by = ?';
     params.push(assigned_by);
+  }
+  if (evaluator_id) {
+    query += ' AND t.evaluator_id = ?';
+    params.push(evaluator_id);
   }
   if (status) {
     query += ' AND t.status = ?';
@@ -2514,24 +2584,314 @@ app.post('/api/assigned-tasks/:id/evidence', upload.single('evidence_file'), asy
 
   const scores = calculateScores(task.standard_score, task.difficulty_weight, progressPct, qualityPct, false);
 
+  const { evaluator_id: defaultEvalId, evaluator_type: defaultEvalType } = resolveTaskEvaluator(task, db);
+  const effectiveEvaluatorId = task.evaluator_id || defaultEvalId;
+  const effectiveEvaluatorType = task.evaluator_type || defaultEvalType;
+
   db.prepare(`
     UPDATE assigned_tasks
     SET actual_finish_date = ?, evidence_text = ?, detailed_result_note = ?, evidence_file_url = ?, evidence_file_name = ?,
         progress_pct = ?, quality_pct = ?, execution_score = ?, converted_score = ?,
         is_bonus_proposed = ?, bonus_reason = ?,
         inherited_from_task_id = ?, inherited_from_user_name = ?,
+        evaluator_id = COALESCE(evaluator_id, ?),
+        evaluator_type = COALESCE(evaluator_type, ?),
+        submitted_for_eval_at = CURRENT_TIMESTAMP,
         status = 'submitted', updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(
     finishDate, evidence_text || '', noteContent || '', fileUrl, fileName,
     progressPct, qualityPct, scores.executionScore, scores.convertedScore,
     proposeBonus, bonus_reason || '',
-    inherited_from_task_id || null, inherited_from_user_name || null, id
+    inherited_from_task_id || null, inherited_from_user_name || null,
+    effectiveEvaluatorId, effectiveEvaluatorType, id
   );
+
+  // Gửi thông báo đến người nhận đánh giá (Người giao việc / Lãnh đạo đơn vị / Quản lý được ủy quyền)
+  if (effectiveEvaluatorId && effectiveEvaluatorId !== task.user_id) {
+    const taskUser = db.prepare('SELECT full_name FROM users WHERE id = ?').get(task.user_id);
+    createNotification({
+      userId: effectiveEvaluatorId,
+      title: 'Nhiệm vụ hoàn thành chờ đánh giá',
+      message: `Cán bộ ${taskUser?.full_name || 'Cán bộ'} đã hoàn thành và gửi đánh giá công việc: "${task.task_name}".`,
+      type: 'task_submitted',
+      taskId: id,
+      tab: 'grading'
+    });
+  }
 
   triggerBackgroundSupabaseSync();
 
-  res.json({ success: true, message: 'Đã nộp minh chứng thành công, chờ CBQL chấm điểm', ...scores, progressPct });
+  const evaluatorUser = effectiveEvaluatorId ? db.prepare('SELECT full_name, gov_title FROM users WHERE id = ?').get(effectiveEvaluatorId) : null;
+  const evaluatorDesc = evaluatorUser 
+    ? `${evaluatorUser.full_name}${evaluatorUser.gov_title ? ` (${evaluatorUser.gov_title})` : ''}`
+    : (effectiveEvaluatorType === 'leader' ? 'Lãnh đạo đơn vị' : 'Người giao việc');
+
+  res.json({ 
+    success: true, 
+    message: `Đã cập nhật kết quả và gửi đánh giá thành công đến ${evaluatorDesc}!`, 
+    ...scores, 
+    progressPct,
+    evaluator_id: effectiveEvaluatorId,
+    evaluator_name: evaluatorUser?.full_name || evaluatorDesc,
+    evaluator_type: effectiveEvaluatorType
+  });
+});
+
+// CBNV Xác nhận hoàn thành và Gửi đánh giá cho từng nhiệm vụ (Per-task evaluation submit)
+app.post('/api/assigned-tasks/:id/submit-for-eval', (req, res) => {
+  try {
+    const { id } = req.params;
+    const viewerId = getViewerId(req);
+    const task = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
+    if (!task) return res.status(404).json({ success: false, message: 'Không tìm thấy công việc' });
+
+    if (viewerId && task.user_id !== viewerId) {
+      const viewer = db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId);
+      if (viewer?.role !== 'admin') {
+        return res.status(403).json({ success: false, message: 'Bạn không có quyền gửi đánh giá công việc của cán bộ khác' });
+      }
+    }
+
+    const { evaluator_id: defaultEvalId, evaluator_type: defaultEvalType } = resolveTaskEvaluator(task, db);
+    const effectiveEvaluatorId = task.evaluator_id || defaultEvalId;
+    const effectiveEvaluatorType = task.evaluator_type || defaultEvalType;
+
+    const finishDate = task.actual_finish_date || new Date().toISOString().split('T')[0];
+    const progressPct = calculateProgressPct(task.deadline, finishDate);
+    const qualityPct = task.quality_pct !== undefined && task.quality_pct !== null ? task.quality_pct : 1.0;
+    const scores = calculateScores(task.standard_score, task.difficulty_weight, progressPct, qualityPct, false);
+
+    db.prepare(`
+      UPDATE assigned_tasks
+      SET status = 'submitted',
+          actual_finish_date = COALESCE(actual_finish_date, ?),
+          progress_pct = ?,
+          execution_score = ?,
+          converted_score = ?,
+          evaluator_id = COALESCE(evaluator_id, ?),
+          evaluator_type = COALESCE(evaluator_type, ?),
+          submitted_for_eval_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(finishDate, progressPct, scores.executionScore, scores.convertedScore, effectiveEvaluatorId, effectiveEvaluatorType, id);
+
+    if (effectiveEvaluatorId && effectiveEvaluatorId !== task.user_id) {
+      const taskUser = db.prepare('SELECT full_name FROM users WHERE id = ?').get(task.user_id);
+      createNotification({
+        userId: effectiveEvaluatorId,
+        title: 'Nhiệm vụ hoàn thành chờ đánh giá',
+        message: `Cán bộ ${taskUser?.full_name || 'Cán bộ'} đã hoàn thành và gửi đánh giá công việc: "${task.task_name}".`,
+        type: 'task_submitted',
+        taskId: id,
+        tab: 'grading'
+      });
+    }
+
+    triggerBackgroundSupabaseSync();
+
+    const evaluatorUser = effectiveEvaluatorId ? db.prepare('SELECT full_name, gov_title FROM users WHERE id = ?').get(effectiveEvaluatorId) : null;
+    const evaluatorDesc = evaluatorUser 
+      ? `${evaluatorUser.full_name}${evaluatorUser.gov_title ? ` (${evaluatorUser.gov_title})` : ''}`
+      : (effectiveEvaluatorType === 'leader' ? 'Lãnh đạo đơn vị' : 'Người giao việc');
+
+    res.json({
+      success: true,
+      message: `Đã gửi đánh giá công việc thành công! Hệ thống đã chuyển đến: ${evaluatorDesc}`,
+      evaluator_id: effectiveEvaluatorId,
+      evaluator_name: evaluatorUser?.full_name || evaluatorDesc,
+      evaluator_type: effectiveEvaluatorType
+    });
+  } catch (err) {
+    console.error('[Submit For Eval] Error:', err);
+    res.status(500).json({ success: false, message: 'Lỗi gửi đánh giá: ' + err.message });
+  }
+});
+
+// Lãnh đạo đơn vị Chuyển quyền đánh giá công việc cho Quản lý (Delegation of Evaluation Authority)
+app.post('/api/assigned-tasks/:id/delegate-evaluator', requireManagerOrAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { target_manager_id, delegation_note } = req.body;
+    const viewerId = getViewerId(req);
+    const viewer = viewerId ? db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId) : null;
+
+    if (!target_manager_id) {
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn Cán bộ Quản lý nhận chuyển quyền đánh giá' });
+    }
+
+    const task = db.prepare(`
+      SELECT t.*, u.full_name as user_name, u.dept_id
+      FROM assigned_tasks t
+      JOIN users u ON t.user_id = u.id
+      WHERE t.id = ?
+    `).get(id);
+    if (!task) return res.status(404).json({ success: false, message: 'Không tìm thấy công việc' });
+
+    // Kiểm tra thẩm quyền của người chuyển quyền: Phải là Lãnh đạo đơn vị, Admin, hoặc Trưởng phòng ban
+    const dept = task.dept_id ? db.prepare('SELECT * FROM departments WHERE id = ?').get(task.dept_id) : null;
+    const isDeptLeader = dept?.leader_id && dept.leader_id === viewerId;
+    const isLeaderRole = viewer?.management_role === 'lanh_dao' || viewer?.role === 'admin';
+    const isCurrentEvaluator = task.evaluator_id === viewerId;
+
+    if (!isLeaderRole && !isDeptLeader && !isCurrentEvaluator) {
+      return res.status(403).json({
+        success: false,
+        message: 'Chỉ Lãnh đạo đơn vị hoặc người được phân công đánh giá mới có quyền chuyển quyền đánh giá công việc này'
+      });
+    }
+
+    // Kiểm tra người nhận chuyển quyền (target_manager_id): Phải tồn tại và không phải chính người thực hiện
+    const targetManager = db.prepare('SELECT * FROM users WHERE id = ?').get(target_manager_id);
+    if (!targetManager) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy thông tin Cán bộ Quản lý được chỉ định' });
+    }
+
+    if (targetManager.id === task.user_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Không thể chuyển quyền đánh giá công việc cho chính cán bộ thực hiện nhiệm vụ!'
+      });
+    }
+
+    // Cập nhật CSDL
+    db.prepare(`
+      UPDATE assigned_tasks
+      SET evaluator_id = ?,
+          evaluator_type = 'delegated_manager',
+          delegated_by = ?,
+          delegated_at = CURRENT_TIMESTAMP,
+          delegation_note = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(targetManager.id, viewerId, delegation_note || '', id);
+
+    // Gửi thông báo đến Quản lý được phân công
+    createNotification({
+      userId: targetManager.id,
+      title: 'Được chuyển quyền đánh giá công việc',
+      message: `Lãnh đạo đơn vị (${viewer?.full_name || 'Lãnh đạo'}) đã chuyển quyền thẩm định & đánh giá công việc "${task.task_name}" của cán bộ ${task.user_name} cho bạn.${delegation_note ? ` Ghi chú: ${delegation_note}` : ''}`,
+      type: 'eval_delegated',
+      taskId: id,
+      tab: 'grading'
+    });
+
+    triggerBackgroundSupabaseSync();
+
+    res.json({
+      success: true,
+      message: `Đã chuyển quyền đánh giá công việc "${task.task_name}" cho Cán bộ Quản lý ${targetManager.full_name} thành công!`,
+      evaluator_id: targetManager.id,
+      evaluator_name: targetManager.full_name,
+      evaluator_type: 'delegated_manager',
+      delegated_by_name: viewer?.full_name || 'Lãnh đạo đơn vị'
+    });
+  } catch (err) {
+    console.error('[Delegate Evaluator] Error:', err);
+    res.status(500).json({ success: false, message: 'Lỗi chuyển quyền đánh giá: ' + err.message });
+  }
+});
+
+// Lãnh đạo đơn vị Chuyển quyền đánh giá hàng loạt (Bulk Delegation)
+app.post('/api/assigned-tasks/bulk-delegate-evaluator', requireManagerOrAdmin, (req, res) => {
+  try {
+    const { task_ids, target_manager_id, delegation_note } = req.body;
+    const viewerId = getViewerId(req);
+    const viewer = viewerId ? db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId) : null;
+
+    if (!Array.isArray(task_ids) || task_ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn ít nhất một nhiệm vụ để chuyển quyền' });
+    }
+    if (!target_manager_id) {
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn Cán bộ Quản lý nhận chuyển quyền' });
+    }
+
+    const targetManager = db.prepare('SELECT * FROM users WHERE id = ?').get(target_manager_id);
+    if (!targetManager) return res.status(404).json({ success: false, message: 'Không tìm thấy Quản lý được chỉ định' });
+
+    const isLeaderRole = viewer?.management_role === 'lanh_dao' || viewer?.role === 'admin';
+    if (!isLeaderRole) {
+      return res.status(403).json({ success: false, message: 'Chỉ Lãnh đạo đơn vị hoặc Quản trị viên mới có quyền chuyển quyền đánh giá hàng loạt' });
+    }
+
+    let updatedCount = 0;
+    const updateStmt = db.prepare(`
+      UPDATE assigned_tasks
+      SET evaluator_id = ?,
+          evaluator_type = 'delegated_manager',
+          delegated_by = ?,
+          delegated_at = CURRENT_TIMESTAMP,
+          delegation_note = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id != ?
+    `);
+
+    db.transaction(() => {
+      for (const taskId of task_ids) {
+        const result = updateStmt.run(targetManager.id, viewerId, delegation_note || '', taskId, targetManager.id);
+        updatedCount += result.changes;
+      }
+    })();
+
+    createNotification({
+      userId: targetManager.id,
+      title: 'Được chuyển quyền đánh giá nhiệm vụ',
+      message: `Lãnh đạo đơn vị (${viewer?.full_name || 'Lãnh đạo'}) đã chuyển quyền đánh giá ${updatedCount} nhiệm vụ cho bạn.`,
+      type: 'eval_delegated',
+      tab: 'grading'
+    });
+
+    triggerBackgroundSupabaseSync();
+
+    res.json({
+      success: true,
+      message: `Đã chuyển quyền đánh giá thành công ${updatedCount} nhiệm vụ cho Cán bộ Quản lý ${targetManager.full_name}!`,
+      updatedCount
+    });
+  } catch (err) {
+    console.error('[Bulk Delegate Evaluator] Error:', err);
+    res.status(500).json({ success: false, message: 'Lỗi chuyển quyền hàng loạt: ' + err.message });
+  }
+});
+
+// Lãnh đạo đơn vị Thu hồi quyền đánh giá công việc (Revoke Delegation)
+app.post('/api/assigned-tasks/:id/revoke-delegation', requireManagerOrAdmin, (req, res) => {
+  try {
+    const { id } = req.params;
+    const viewerId = getViewerId(req);
+    const viewer = viewerId ? db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId) : null;
+
+    const task = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
+    if (!task) return res.status(404).json({ success: false, message: 'Không tìm thấy công việc' });
+
+    const isLeaderRole = viewer?.management_role === 'lanh_dao' || viewer?.role === 'admin';
+    const isDelegator = task.delegated_by === viewerId;
+
+    if (!isLeaderRole && !isDelegator) {
+      return res.status(403).json({ success: false, message: 'Bạn không có quyền thu hồi quyền đánh giá nhiệm vụ này' });
+    }
+
+    db.prepare(`
+      UPDATE assigned_tasks
+      SET evaluator_id = ?,
+          evaluator_type = 'leader',
+          delegated_by = NULL,
+          delegated_at = NULL,
+          delegation_note = NULL,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(viewerId, id);
+
+    triggerBackgroundSupabaseSync();
+
+    res.json({
+      success: true,
+      message: `Đã thu hồi quyền đánh giá nhiệm vụ "${task.task_name}" về cho Lãnh đạo đơn vị thành công!`
+    });
+  } catch (err) {
+    console.error('[Revoke Delegation] Error:', err);
+    res.status(500).json({ success: false, message: 'Lỗi thu hồi quyền: ' + err.message });
+  }
 });
 
 // CBQL Chấm điểm công việc (Grade / Approve Result)
@@ -2565,19 +2925,22 @@ app.put('/api/assigned-tasks/:id/grade', requireManagerOrAdmin, (req, res) => {
     });
   }
 
-  // Guard: Kiểm tra thẩm quyền chấm điểm cán bộ (Việc ai giao thì người đó chấm điểm; nếu tự đăng ký mặc định là Lãnh đạo đơn vị)
+  // Guard: Kiểm tra thẩm quyền chấm điểm cán bộ (Việc ai giao thì người đó chấm; người được Lãnh đạo ủy quyền; hoặc Lãnh đạo đơn vị)
   const accessibleUserIds = getAccessibleUserIds(viewerId);
+  const viewer = viewerId ? db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId) : null;
   const isTaskAssigner = task.assigned_by && task.assigned_by === viewerId;
-  if (!isTaskAssigner && accessibleUserIds !== null && !accessibleUserIds.includes(task.user_id)) {
+  const isTaskEvaluator = task.evaluator_id && task.evaluator_id === viewerId;
+  const isLeader = viewer?.management_role === 'lanh_dao' || viewer?.role === 'admin';
+
+  if (!isTaskAssigner && !isTaskEvaluator && !isLeader && accessibleUserIds !== null && !accessibleUserIds.includes(task.user_id)) {
     return res.status(403).json({ 
       success: false, 
-      message: 'Bạn không có thẩm quyền chấm điểm/thẩm định công việc của cán bộ ngoài phạm vi quản lý' 
+      message: 'Bạn không có thẩm quyền chấm điểm/thẩm định công việc này' 
     });
   }
 
   // Guard: Kiểm tra kỳ đánh giá có bị chốt hoặc quá hạn khóa chấm điểm không
   const period = db.prepare('SELECT * FROM periods WHERE id = ?').get(task.period_id);
-  const viewer = viewerId ? db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId) : null;
   const isAdmin = viewer?.role === 'admin';
 
   if (period?.is_locked === 1 && !isAdmin) {

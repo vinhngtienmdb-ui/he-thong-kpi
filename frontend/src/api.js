@@ -276,6 +276,30 @@ export const api = {
       return data;
     });
   },
+  submitTaskForEval: (id) => {
+    return fetchApi(`/assigned-tasks/${id}/submit-for-eval`, {
+      method: 'POST',
+    });
+  },
+  delegateTaskEvaluator: (id, data) => {
+    return fetchApi(`/assigned-tasks/${id}/delegate-evaluator`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  bulkDelegateTaskEvaluators: (data) => {
+    return fetchApi('/assigned-tasks/bulk-delegate-evaluator', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  revokeTaskDelegation: (id) => {
+    return fetchApi(`/assigned-tasks/${id}/revoke-delegation`, {
+      method: 'POST',
+    });
+  },
   getSubordinateEvidences: (id) => {
     return fetchApi(`/assigned-tasks/${id}/subordinate-evidences`);
   },

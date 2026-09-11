@@ -418,7 +418,13 @@ function initDatabase() {
     "ALTER TABLE assigned_tasks ADD COLUMN extension_reviewed_at TEXT;",
     "ALTER TABLE assigned_tasks ADD COLUMN extension_reject_reason TEXT;",
     "ALTER TABLE assigned_tasks ADD COLUMN extension_count INTEGER DEFAULT 0;",
-    "ALTER TABLE assigned_tasks ADD COLUMN detailed_result_note TEXT;"
+    "ALTER TABLE assigned_tasks ADD COLUMN detailed_result_note TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN evaluator_id TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN evaluator_type TEXT DEFAULT 'assigner';",
+    "ALTER TABLE assigned_tasks ADD COLUMN delegated_by TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN delegated_at TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN delegation_note TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN submitted_for_eval_at TEXT;"
   ];
 
   for (const m of migrations) {

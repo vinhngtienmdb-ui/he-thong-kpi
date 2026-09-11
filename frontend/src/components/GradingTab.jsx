@@ -16,7 +16,10 @@ import {
   AlertTriangle,
   X,
   Info,
-  ShieldAlert
+  ShieldAlert,
+  Share2,
+  Send,
+  Users
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate } from '../constants';
@@ -80,6 +83,13 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
   const [returnTaskReason, setReturnTaskReason] = useState('');
   const [submittingReturnTask, setSubmittingReturnTask] = useState(false);
 
+  // Delegation State (Lãnh đạo đơn vị chuyển quyền đánh giá cho Quản lý)
+  const [delegatingTask, setDelegatingTask] = useState(null);
+  const [isBulkDelegating, setIsBulkDelegating] = useState(false);
+  const [targetManagerId, setTargetManagerId] = useState('');
+  const [delegationNote, setDelegationNote] = useState('');
+  const [submittingDelegation, setSubmittingDelegation] = useState(false);
+
   const currentPeriodObj = periods.find(p => p.id === selectedPeriod);
   const isPeriodLocked = currentPeriodObj?.is_locked === 1;
   const gradingLockDate = currentPeriodObj?.grading_lock_date;
@@ -89,6 +99,23 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
 
   const selectedUserObj = users.find(u => u.id === selectedUser);
   const isSelf = Boolean(currentUser && selectedUser === currentUser.id);
+
+  const isUnitLeader = Boolean(
+    currentUser && (
+      currentUser.role === 'admin' ||
+      currentUser.management_role === 'lanh_dao'
+    )
+  );
+
+  const availableManagers = users.filter(u => 
+    u.id !== selectedUser && 
+    u.id !== currentUser?.id &&
+    u.role !== 'admin' &&
+    u.target_role !== 'exempt' &&
+    !['admin', 'quantri', 'quantrihethong', 'admin_donvi', 'vanthu'].includes(String(u.username || '').toLowerCase()) &&
+    (u.management_role === 'quan_ly' || u.management_role === 'to_truong' || u.role === 'cbql') &&
+    (!selectedUserObj?.dept_id || u.dept_id === selectedUserObj.dept_id || currentUser?.role === 'admin')
+  );
 
   // Quan hệ quản lý đối với cán bộ được chọn:
   const isDirectManager = Boolean(currentUser && selectedUserObj?.manager_id === currentUser.id);
@@ -148,6 +175,64 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
       console.error('Error loading eval data:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  function openDelegateModal(task = null, bulk = false) {
+    setDelegatingTask(task);
+    setIsBulkDelegating(bulk);
+    setDelegationNote('');
+    if (availableManagers.length > 0) {
+      setTargetManagerId(availableManagers[0].id);
+    } else {
+      setTargetManagerId('');
+    }
+  }
+
+  async function handleConfirmDelegation(e) {
+    e.preventDefault();
+    if (!targetManagerId) {
+      alert('Vui lòng chọn Cán bộ Quản lý nhận chuyển quyền đánh giá');
+      return;
+    }
+
+    try {
+      setSubmittingDelegation(true);
+      if (isBulkDelegating) {
+        const taskIds = userTasks.map(t => t.id);
+        const res = await api.bulkDelegateTaskEvaluators({
+          task_ids: taskIds,
+          target_manager_id: targetManagerId,
+          delegation_note: delegationNote.trim()
+        });
+        alert(res.message || 'Đã chuyển quyền đánh giá thành công!');
+      } else if (delegatingTask) {
+        const res = await api.delegateTaskEvaluator(delegatingTask.id, {
+          target_manager_id: targetManagerId,
+          delegation_note: delegationNote.trim()
+        });
+        alert(res.message || 'Đã chuyển quyền đánh giá công việc thành công!');
+      }
+      setDelegatingTask(null);
+      setIsBulkDelegating(false);
+      loadEvaluationData();
+    } catch (err) {
+      alert(err.message || 'Lỗi khi chuyển quyền đánh giá');
+    } finally {
+      setSubmittingDelegation(false);
+    }
+  }
+
+  async function handleRevokeDelegation(task) {
+    if (!task) return;
+    if (!window.confirm(`Xác nhận thu hồi quyền đánh giá nhiệm vụ "${task.task_name}" về lại cho Lãnh đạo đơn vị?`)) return;
+
+    try {
+      const res = await api.revokeTaskDelegation(task.id);
+      alert(res.message || 'Đã thu hồi quyền đánh giá về cho Lãnh đạo đơn vị thành công!');
+      loadEvaluationData();
+    } catch (err) {
+      alert(err.message || 'Lỗi khi thu hồi quyền đánh giá');
     }
   }
 
@@ -630,11 +715,26 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
             <p className="text-xs text-slate-500 mt-0.5">
               Hệ thống áp dụng công thức Chuẩn theo Phụ lục 5 Hướng dẫn 06-HD/BTCTU: <code>Điểm thực hiện = Điểm chuẩn × (30% Tiến độ + 70% Chất lượng) | Điểm quy đổi = Điểm thực hiện × Hệ số độ khó (100%, 110%, 120%)</code>
             </p>
-            <div className="mt-2.5 p-2.5 bg-blue-50/80 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-start gap-2">
-              <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-              <div>
-                <strong>Lưu ý:</strong> Đối với nhiệm vụ cán bộ tự đăng ký, thẩm quyền thẩm định và chấm điểm là <strong>Lãnh đạo đơn vị</strong>.
+            <div className="mt-2.5 p-3 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div className="flex items-start gap-2">
+                <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                <div>
+                  <div><strong>Phân định thẩm quyền đánh giá:</strong> Việc ai giao thì người đó chấm. Việc tự đăng ký do <strong>Lãnh đạo đơn vị</strong> thẩm định.</div>
+                  <div className="text-blue-700 text-[11px] mt-0.5">Lãnh đạo đơn vị có quyền chuyển quyền (ủy quyền) thẩm định, chấm điểm cho Cán bộ Quản lý (CBQL/Tổ trưởng).</div>
+                </div>
               </div>
+
+              {isUnitLeader && userTasks.length > 0 && availableManagers.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => openDelegateModal(null, true)}
+                  className="shrink-0 px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white rounded-lg font-bold text-xs shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer self-start sm:self-auto"
+                  title="Ủy quyền toàn bộ nhiệm vụ của cán bộ này cho một Cán bộ Quản lý"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Chuyển quyền tất cả cho Quản lý</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -727,31 +827,79 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                     </div>
                   </div>
 
+                  {/* Evaluator information & delegation badge */}
+                  <div className="flex items-center gap-1.5 flex-wrap text-[11px] pt-1">
+                    {t.evaluator_type === 'delegated_manager' ? (
+                      <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200 font-semibold flex items-center gap-1">
+                        <Share2 className="w-3 h-3 text-purple-600" />
+                        <span>Ủy quyền: <b>{t.evaluator_name || 'Quản lý'}</b></span>
+                        {t.delegated_by_name && <span className="text-purple-600 font-normal">({t.delegated_by_name})</span>}
+                      </span>
+                    ) : t.origin === 'assigned' ? (
+                      <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 font-medium">
+                        Người giao: <b>{t.assigner_name || 'Quản lý'}</b>
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 font-medium">
+                        Đánh giá: <b>Lãnh đạo đơn vị</b>
+                      </span>
+                    )}
+
+                    {currentUser && t.evaluator_id === currentUser.id && (
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold">
+                        ⭐ Bạn được phân công chấm điểm
+                      </span>
+                    )}
+                  </div>
+
                   {/* Action buttons */}
-                  {canGrade && (
-                    <div className="flex items-center gap-2 pt-1">
-                      <button
-                        onClick={() => openGradeModal(t)}
-                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold shadow-2xs text-center cursor-pointer text-white ${
-                          t.evaluation_feedback 
-                            ? 'bg-purple-700 hover:bg-purple-800 ring-2 ring-purple-300' 
-                            : 'bg-indigo-600 hover:bg-indigo-700'
-                        }`}
-                      >
-                        {t.evaluation_feedback ? 'Sửa đánh giá' : (isApproved ? 'Chấm lại' : 'Chấm điểm')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReturningTask(t);
-                          setReturnTaskReason('');
-                        }}
-                        className="py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-bold shadow-2xs cursor-pointer"
-                      >
-                        ↩️ Trả về
-                      </button>
-                    </div>
-                  )}
+                  <div className="space-y-1.5 pt-1">
+                    {canGrade && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openGradeModal(t)}
+                          className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold shadow-2xs text-center cursor-pointer text-white ${
+                            t.evaluation_feedback 
+                              ? 'bg-purple-700 hover:bg-purple-800 ring-2 ring-purple-300' 
+                              : 'bg-indigo-600 hover:bg-indigo-700'
+                          }`}
+                        >
+                          {t.evaluation_feedback ? 'Sửa đánh giá' : (isApproved ? 'Chấm lại' : 'Chấm điểm')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReturningTask(t);
+                            setReturnTaskReason('');
+                          }}
+                          className="py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-bold shadow-2xs cursor-pointer"
+                        >
+                          ↩️ Trả về
+                        </button>
+                      </div>
+                    )}
+                    {isUnitLeader && availableManagers.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openDelegateModal(t, false)}
+                          className="flex-1 py-1.5 px-2.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <Share2 className="w-3 h-3" />
+                          <span>{t.evaluator_type === 'delegated_manager' ? 'Đổi Quản lý' : 'Chuyển quyền'}</span>
+                        </button>
+                        {t.evaluator_type === 'delegated_manager' && (
+                          <button
+                            type="button"
+                            onClick={() => handleRevokeDelegation(t)}
+                            className="py-1.5 px-2 bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg text-xs font-medium cursor-pointer"
+                          >
+                            Thu hồi về LĐ
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })
@@ -825,6 +973,31 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                           </div>
                         </div>
                       )}
+
+                      {/* Evaluator information & delegation badge */}
+                      <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[11px]">
+                        {t.evaluator_type === 'delegated_manager' ? (
+                          <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-800 border border-purple-200 font-semibold flex items-center gap-1" title={t.delegation_note ? `Ghi chú: ${t.delegation_note}` : ''}>
+                            <Share2 className="w-3 h-3 text-purple-600" />
+                            <span>Ủy quyền: <b>{t.evaluator_name || 'Quản lý'}</b></span>
+                            {t.delegated_by_name && <span className="text-purple-600 font-normal"> (bởi {t.delegated_by_name})</span>}
+                          </span>
+                        ) : t.origin === 'assigned' ? (
+                          <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 border border-blue-200 font-medium">
+                            Người giao: <b>{t.assigner_name || 'Quản lý'}</b>
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 font-medium">
+                            Đánh giá: <b>Lãnh đạo đơn vị</b>
+                          </span>
+                        )}
+
+                        {currentUser && t.evaluator_id === currentUser.id && (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold">
+                            ⭐ Bạn được phân công chấm điểm
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3.5 text-center font-normal text-slate-800">{t.standard_score}</td>
                     <td className="px-4 py-3.5 text-center">{t.difficulty_weight}</td>
@@ -866,6 +1039,27 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                             >
                               ↩️ Trả về
                             </button>
+                            {isUnitLeader && availableManagers.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => openDelegateModal(t, false)}
+                                title="Chuyển quyền đánh giá nhiệm vụ này cho Quản lý / Tổ trưởng trong đơn vị"
+                                className="bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-semibold px-2 py-1 rounded-lg text-xs transition-colors cursor-pointer w-full text-center flex items-center justify-center gap-1"
+                              >
+                                <Share2 className="w-3 h-3" />
+                                <span>{t.evaluator_type === 'delegated_manager' ? 'Đổi Quản lý' : 'Chuyển quyền'}</span>
+                              </button>
+                            )}
+                            {isUnitLeader && t.evaluator_type === 'delegated_manager' && (
+                              <button
+                                type="button"
+                                onClick={() => handleRevokeDelegation(t)}
+                                title="Thu hồi quyền đánh giá về cho Lãnh đạo đơn vị"
+                                className="bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 font-medium px-1.5 py-0.5 rounded text-[10px] transition-colors cursor-pointer w-full text-center"
+                              >
+                                Thu hồi về LĐ
+                              </button>
+                            )}
                           </>
                         ) : (
                           <div className="space-y-1">
@@ -1416,6 +1610,122 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                 >
                   {submittingReturnTask ? 'Đang xử lý...' : 'Xác nhận Trả về'}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELEGATE EVALUATOR MODAL (Lãnh đạo đơn vị chuyển quyền đánh giá cho Quản lý) */}
+      {(delegatingTask || isBulkDelegating) && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-[95%] sm:w-full max-h-[92vh] overflow-y-auto p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 my-auto animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
+                <Share2 className="w-5 h-5 text-purple-600" />
+                <span>{isBulkDelegating ? 'Chuyển Quyền Đánh Giá Toàn Bộ Công Việc' : 'Chuyển Quyền Đánh Giá Công Việc'}</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setDelegatingTask(null);
+                  setIsBulkDelegating(false);
+                }}
+                className="text-slate-400 hover:text-slate-600 font-bold p-1 rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-purple-50/80 border border-purple-200 rounded-xl text-xs space-y-1.5">
+              <div className="font-bold text-purple-900">
+                {isBulkDelegating 
+                  ? `Chuyển quyền thẩm định ${userTasks.length} nhiệm vụ của cán bộ: ${selectedUserObj?.full_name}`
+                  : `Nhiệm vụ: "${delegatingTask?.task_name}"`}
+              </div>
+              {!isBulkDelegating && delegatingTask && (
+                <div className="text-purple-800 text-[11px]">
+                  Cán bộ thực hiện: <b>{selectedUserObj?.full_name}</b> • Người đánh giá hiện tại: <b>{delegatingTask.evaluator_name || delegatingTask.grader_name || 'Lãnh đạo đơn vị'}</b>
+                </div>
+              )}
+              <div className="text-slate-600 text-[11px]">
+                Quyền đánh giá sẽ được chuyển cho Cán bộ Quản lý (CBQL/Tổ trưởng) được chỉ định. Quản lý sẽ nhận thông báo và có toàn quyền thẩm định, chấm điểm nhiệm vụ.
+              </div>
+            </div>
+
+            <form onSubmit={handleConfirmDelegation} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                  Chọn Cán bộ Quản lý nhận chuyển quyền đánh giá *
+                </label>
+                {availableManagers.length === 0 ? (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                    Không tìm thấy Cán bộ Quản lý (CBQL/Tổ trưởng) nào khác trong đơn vị để chuyển quyền.
+                  </div>
+                ) : (
+                  <select
+                    value={targetManagerId}
+                    onChange={(e) => setTargetManagerId(e.target.value)}
+                    required
+                    className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                  >
+                    {availableManagers.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.full_name} ({m.gov_title || (m.management_role === 'quan_ly' ? 'Cán bộ Quản lý' : 'Tổ trưởng')})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                  Ghi chú / Chỉ đạo phân công (tùy chọn)
+                </label>
+                <textarea
+                  value={delegationNote}
+                  onChange={(e) => setDelegationNote(e.target.value)}
+                  placeholder="Nhập lý do phân công hoặc yêu cầu thẩm định cụ thể cho Quản lý..."
+                  rows={3}
+                  className="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                {!isBulkDelegating && delegatingTask?.evaluator_type === 'delegated_manager' ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const t = delegatingTask;
+                      setDelegatingTask(null);
+                      handleRevokeDelegation(t);
+                    }}
+                    className="px-3 py-2 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl cursor-pointer"
+                  >
+                    Thu hồi về Lãnh đạo
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDelegatingTask(null);
+                      setIsBulkDelegating(false);
+                    }}
+                    className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingDelegation || availableManagers.length === 0}
+                    className="px-5 py-2 text-xs font-bold bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>{submittingDelegation ? 'Đang chuyển...' : 'Xác nhận chuyển quyền'}</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>
