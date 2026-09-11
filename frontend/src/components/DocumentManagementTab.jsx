@@ -150,6 +150,10 @@ export default function DocumentManagementTab({
   const [completingDispatch, setCompletingDispatch] = useState(null);
   const [completionNote, setCompletionNote] = useState('');
 
+  // Complete Document Modal state
+  const [completingDoc, setCompletingDoc] = useState(null);
+  const [completingDocNote, setCompletingDocNote] = useState('');
+
   // Submitting loaders
   const [submitting, setSubmitting] = useState(false);
 
@@ -254,7 +258,8 @@ export default function DocumentManagementTab({
       urgency: 'Thường',
       security_level: 'Thường',
       summary: '',
-      deadline: ''
+      deadline: '',
+      status: 'pending_dispatch'
     });
     setDocFile(null);
     setIsDocModalOpen(true);
@@ -274,7 +279,8 @@ export default function DocumentManagementTab({
       urgency: doc.urgency || 'Thường',
       security_level: doc.security_level || 'Thường',
       summary: doc.summary || '',
-      deadline: toInputDateFormat(doc.deadline) || ''
+      deadline: toInputDateFormat(doc.deadline) || '',
+      status: doc.status || 'pending_dispatch'
     });
     setDocFile(null);
     setIsDocModalOpen(true);
@@ -440,7 +446,53 @@ export default function DocumentManagementTab({
     }
   };
 
-  // Status badge helper
+  // Open Complete Document Modal
+  const handleOpenCompleteDoc = (doc) => {
+    setCompletingDoc(doc);
+    setCompletingDocNote('');
+  };
+
+  // Submit Complete Document
+  const handleSubmitCompleteDoc = async (e) => {
+    e.preventDefault();
+    if (!completingDoc) return;
+    try {
+      setSubmitting(true);
+      await api.completeDocument(completingDoc.id, {
+        completion_note: completingDocNote
+      });
+      alert('Đã cập nhật trạng thái văn bản thành Hoàn thành!');
+      const docId = completingDoc.id;
+      setCompletingDoc(null);
+      if (detailModalDoc && detailModalDoc.id === docId) {
+        handleOpenDetail(docId);
+      }
+      loadData();
+    } catch (err) {
+      alert('Lỗi: ' + (err.message || err.error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Reopen Document (chuyển lại Đang xử lý)
+  const handleReopenDoc = async (doc) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn mở lại văn bản số "${doc.doc_number}" và chuyển trạng thái sang "Đang xử lý"?`)) return;
+    try {
+      setSubmitting(true);
+      await api.updateDocumentStatus(doc.id, 'in_progress', 'Mở lại xử lý tiếp');
+      alert('Đã chuyển trạng thái văn bản sang Đang xử lý!');
+      if (detailModalDoc && detailModalDoc.id === doc.id) {
+        handleOpenDetail(doc.id);
+      }
+      loadData();
+    } catch (err) {
+      alert('Lỗi: ' + (err.message || err.error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Status badge helper
   const renderStatusBadge = (status, isOverdue) => {
     if (isOverdue) {
@@ -907,6 +959,29 @@ export default function DocumentManagementTab({
                             </button>
                           )}
 
+                          {/* Hoàn thành văn bản sau khi xử lý xong */}
+                          {doc.status !== 'completed' ? (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCompleteDoc(doc)}
+                              className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] rounded-lg shadow-2xs transition flex items-center gap-1 cursor-pointer"
+                              title="Xác nhận hoàn thành xử lý văn bản"
+                            >
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Hoàn thành</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleReopenDoc(doc)}
+                              className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[10px] rounded-lg border border-slate-200 transition flex items-center gap-1 cursor-pointer"
+                              title="Mở lại văn bản (chuyển sang Đang xử lý)"
+                            >
+                              <RefreshCw className="w-2.5 h-2.5 text-slate-500" />
+                              <span>Mở lại</span>
+                            </button>
+                          )}
+
                           {/* Chi tiết button */}
                           <button
                             type="button"
@@ -1046,6 +1121,29 @@ export default function DocumentManagementTab({
                     >
                       <Send className="w-3.5 h-3.5" />
                       <span>{doc.status === 'submitted_to_leader' ? 'Chỉ đạo' : 'Phân công'}</span>
+                    </button>
+                  )}
+
+                  {/* Nút Hoàn thành mobile */}
+                  {doc.status !== 'completed' ? (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCompleteDoc(doc)}
+                      className="flex-1 min-w-[85px] py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-lg shadow-xs transition flex items-center justify-center gap-1 cursor-pointer"
+                      title="Xác nhận hoàn thành xử lý văn bản"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Hoàn thành</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleReopenDoc(doc)}
+                      className="flex-1 min-w-[85px] py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-lg border border-slate-200 transition flex items-center justify-center gap-1 cursor-pointer"
+                      title="Mở lại văn bản"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Mở lại</span>
                     </button>
                   )}
 
@@ -1226,7 +1324,21 @@ export default function DocumentManagementTab({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Trạng thái văn bản</label>
+                  <select
+                    value={docFormData.status || 'pending_dispatch'}
+                    onChange={(e) => setDocFormData({ ...docFormData, status: e.target.value })}
+                    className="w-full text-xs p-2.5 border border-slate-300 rounded-lg font-bold text-slate-800 bg-white"
+                  >
+                    <option value="pending_dispatch">Chờ phân bổ</option>
+                    <option value="submitted_to_leader">Đã trình Lãnh đạo</option>
+                    <option value="in_progress">Đang xử lý</option>
+                    <option value="completed">✓ Hoàn thành</option>
+                  </select>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Hạn xử lý (nếu có)</label>
                   <input
@@ -1246,8 +1358,8 @@ export default function DocumentManagementTab({
                     className="block w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
                   />
                   {editingDoc?.file_name && !docFile && (
-                    <p className="text-[11px] text-slate-500 mt-1">
-                      File hiện tại: <strong>{editingDoc.file_name}</strong>
+                    <p className="text-[11px] text-slate-500 mt-1 truncate">
+                      File: <strong>{editingDoc.file_name}</strong>
                     </p>
                   )}
                 </div>
@@ -2050,7 +2162,29 @@ export default function DocumentManagementTab({
               </div>
             </div>
 
-            <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                {detailModalDoc.status !== 'completed' ? (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenCompleteDoc(detailModalDoc)}
+                    className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-xs transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Xác nhận Hoàn thành văn bản</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleReopenDoc(detailModalDoc)}
+                    className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg text-xs transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Mở lại văn bản (Đang xử lý)</span>
+                  </button>
+                )}
+              </div>
+
               <button
                 type="button"
                 onClick={() => setDetailModalDoc(null)}
@@ -2113,6 +2247,71 @@ export default function DocumentManagementTab({
                 >
                   <Check className="w-4 h-4" />
                   <span>Xác nhận hoàn thành</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* 8.1. MODAL: XÁC NHẬN HOÀN THÀNH VĂN BẢN (CompleteDocModal)           */}
+      {/* ===================================================================== */}
+      {completingDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl w-[95%] sm:max-w-md shadow-2xl border border-slate-200 p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2 text-emerald-800 font-bold text-base">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <span>Hoàn Tất Xử Lý Văn Bản</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCompletingDoc(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
+              <div className="font-bold text-slate-800">
+                Số hiệu: <span className="text-red-700">{completingDoc.doc_number}</span>
+              </div>
+              <p className="text-slate-600 line-clamp-2 italic">
+                {completingDoc.summary}
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmitCompleteDoc} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Ghi chú kết quả xử lý / Nội dung thực hiện (tùy chọn)
+                </label>
+                <textarea
+                  rows={3}
+                  value={completingDocNote}
+                  onChange={(e) => setCompletingDocNote(e.target.value)}
+                  placeholder="Ví dụ: Đã hoàn tất xử lý theo chỉ đạo / Đã ban hành văn bản phúc đáp số... / Đã giải quyết dứt điểm nội dung."
+                  className="w-full text-xs p-2.5 border border-slate-300 rounded-lg font-medium focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCompletingDoc(null)}
+                  className="px-3.5 py-2 text-slate-600 font-bold hover:bg-slate-100 rounded-lg cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>Xác nhận Hoàn thành</span>
                 </button>
               </div>
             </form>

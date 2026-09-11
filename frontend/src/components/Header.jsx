@@ -1291,6 +1291,12 @@ export default function Header({
                       <li>Chỉ người dùng có quyền Văn thư mới hiển thị tính năng "Trình LĐ" tại phân hệ Quản lý & Phân bổ văn bản; bảo vệ API <code>POST /api/documents/:id/submit-to-leader</code> chống truy cập trái phép.</li>
                     </ul>
                   </li>
+                  <li><strong>Cho phép chọn trạng thái Hoàn thành sau khi xử lý xong văn bản:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Bổ sung nút bấm <strong>"Hoàn thành"</strong> trực tiếp trên từng dòng danh sách văn bản, thẻ di động và trong Modal Xem chi tiết văn bản; hỗ trợ nhập ghi chú kết quả xử lý và tự động hoàn tất các lượt phân bổ liên quan.</li>
+                      <li>Tích hợp trường chọn Trạng thái văn bản (Chờ phân bổ, Đã trình Lãnh đạo, Đang xử lý, Hoàn thành) ngay trong Modal Thêm / Chỉnh sửa văn bản; cho phép mở lại văn bản khi có nhu cầu xử lý tiếp.</li>
+                    </ul>
+                  </li>
                 </ul>
               </div>
 

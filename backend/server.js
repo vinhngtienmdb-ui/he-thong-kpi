@@ -6264,6 +6264,102 @@ app.post('/api/documents/:id/submit-to-leader', (req, res) => {
   }
 });
 
+// 6.2. Hoàn thành xử lý văn bản
+app.post('/api/documents/:id/complete', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { completion_note } = req.body || {};
+
+    const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
+    if (!doc) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy văn bản!' });
+    }
+
+    db.prepare(`
+      UPDATE documents 
+      SET status = 'completed',
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(id);
+
+    // Cập nhật tất cả các lượt phân bổ của văn bản này sang hoàn thành
+    db.prepare(`
+      UPDATE document_dispatches 
+      SET status = 'completed',
+          completed_at = CURRENT_TIMESTAMP,
+          completion_note = COALESCE(completion_note, ?)
+      WHERE document_id = ? AND status != 'completed'
+    `).run(completion_note || 'Đã hoàn thành xử lý văn bản.', id);
+
+    triggerBackgroundSupabaseSync(300);
+
+    const updatedDoc = db.prepare(`
+      SELECT d.*, 
+             u.full_name as creator_name,
+             leader.full_name as leader_name
+      FROM documents d
+      LEFT JOIN users u ON d.created_by = u.id
+      LEFT JOIN users leader ON d.leader_id = leader.id
+      WHERE d.id = ?
+    `).get(id);
+
+    res.json({
+      success: true,
+      message: 'Đã cập nhật trạng thái văn bản thành Hoàn thành!',
+      document: updatedDoc
+    });
+  } catch (err) {
+    console.error('Error completing document:', err);
+    res.status(500).json({ success: false, error: 'Lỗi hoàn thành văn bản: ' + err.message });
+  }
+});
+
+// 6.3. Cập nhật trạng thái văn bản
+app.put('/api/documents/:id/status', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, completion_note } = req.body || {};
+
+    if (!status) {
+      return res.status(400).json({ success: false, error: 'Vui lòng cung cấp trạng thái hợp lệ!' });
+    }
+
+    const doc = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
+    if (!doc) {
+      return res.status(404).json({ success: false, error: 'Không tìm thấy văn bản!' });
+    }
+
+    db.prepare(`
+      UPDATE documents 
+      SET status = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(status, id);
+
+    if (status === 'completed') {
+      db.prepare(`
+        UPDATE document_dispatches 
+        SET status = 'completed',
+            completed_at = CURRENT_TIMESTAMP,
+            completion_note = COALESCE(completion_note, ?)
+        WHERE document_id = ? AND status != 'completed'
+      `).run(completion_note || 'Đã hoàn thành xử lý văn bản.', id);
+    }
+
+    triggerBackgroundSupabaseSync(300);
+
+    const updatedDoc = db.prepare('SELECT * FROM documents WHERE id = ?').get(id);
+    res.json({
+      success: true,
+      message: 'Đã cập nhật trạng thái văn bản thành công!',
+      document: updatedDoc
+    });
+  } catch (err) {
+    console.error('Error updating document status:', err);
+    res.status(500).json({ success: false, error: 'Lỗi cập nhật trạng thái: ' + err.message });
+  }
+});
+
 // 7. Dispatch Document (Phân bổ văn bản: cá nhân / nhóm chức vụ / nhóm tự tạo / đọc tham khảo)
 app.post('/api/documents/:id/dispatch', (req, res) => {
   try {

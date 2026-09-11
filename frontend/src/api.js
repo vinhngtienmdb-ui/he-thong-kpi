@@ -735,6 +735,16 @@ export const api = {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   }),
+  completeDocument: (id, data = {}) => fetchApi(`/documents/${id}/complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
+  updateDocumentStatus: (id, status, completion_note = '') => fetchApi(`/documents/${id}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status, completion_note }),
+  }),
 
   // User Groups (Nhóm người dùng tự tạo)
   getUserGroups: () => fetchApi('/user-groups'),
