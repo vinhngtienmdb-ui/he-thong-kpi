@@ -79,6 +79,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('ALL');
   const [filterParty, setFilterParty] = useState('ALL'); // 'ALL' | 'PARTY' | 'NON_PARTY'
+  const [filterEmployeeType, setFilterEmployeeType] = useState('ALL'); // 'ALL' | 'cong_chuc' | 'vien_chuc' | 'nguoi_lao_dong'
   const [filterManagementRole, setFilterManagementRole] = useState('ALL'); // 'ALL' | 'lanh_dao' | 'quan_ly' | 'to_truong' | 'nhan_vien'
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [filterSecondary, setFilterSecondary] = useState('ALL'); // 'ALL' | 'HAS_SECONDARY' | 'PRIMARY_ONLY'
@@ -97,6 +98,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
     management_role: 'nhan_vien',
     role: 'cbnv',
     target_role: 'cbnv',
+    employee_type: 'vien_chuc',
     is_party_member: false,
     party_title: 'Đảng viên',
     gov_title: 'Chuyên viên',
@@ -319,6 +321,12 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
         if (userMgmtRole !== filterManagementRole) return false;
       }
 
+      // 3d. Employee type filter (Công chức / Viên chức / Người lao động)
+      if (filterEmployeeType !== 'ALL') {
+        const empType = u.employee_type || 'vien_chuc';
+        if (empType !== filterEmployeeType) return false;
+      }
+
       // 4. Status filter
       if (filterStatus === 'ACTIVE' && u.is_active === 0) return false;
       if (filterStatus === 'INACTIVE' && u.is_active !== 0) return false;
@@ -334,7 +342,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
 
       return true;
     }).sort(compareUsersByPositionAndName);
-  }, [users, selectedDeptId, includeChildren, searchTerm, filterRole, filterParty, filterManagementRole, filterStatus, filterSecondary, localDepts]);
+  }, [users, selectedDeptId, includeChildren, searchTerm, filterRole, filterParty, filterEmployeeType, filterManagementRole, filterStatus, filterSecondary, localDepts]);
 
   // Handle Role selection in Add/Edit user form
   const handleRoleChange = (selRoleId) => {
@@ -390,6 +398,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       management_role: 'nhan_vien',
       role: 'cbnv',
       target_role: 'cbnv',
+      employee_type: 'vien_chuc',
       is_party_member: false,
       party_title: 'Đảng viên',
       gov_title: 'Chuyên viên',
@@ -454,6 +463,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       management_role: primaryPos.management_role || user.management_role || (user.role === 'cbql' ? 'quan_ly' : 'nhan_vien'),
       role: user.role || 'cbnv',
       target_role: isExempt ? 'admin' : (user.target_role || (user.role === 'cbnv' ? 'cbnv' : 'cbql')),
+      employee_type: user.employee_type || 'vien_chuc',
       is_party_member: user.is_party_member === 1 || Boolean(user.party_title && user.party_title !== 'Quần chúng' && user.party_title !== ''),
       party_title: user.party_title || 'Đảng viên',
       gov_title: primaryPos.position_title || user.gov_title || '',
@@ -564,6 +574,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
 
       const payload = {
         ...formData,
+        employee_type: formData.employee_type || 'vien_chuc',
         dept_id: primaryPos.dept_id,
         gov_title: primaryPos.position_title,
         management_role: primaryPos.management_role,
@@ -1203,6 +1214,18 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                 </select>
 
                 <select
+                  value={filterEmployeeType}
+                  onChange={(e) => setFilterEmployeeType(e.target.value)}
+                  className="border border-emerald-200 bg-emerald-50/40 text-emerald-900 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  title="Lọc theo loại đối tượng: Công chức / Viên chức / Người lao động"
+                >
+                  <option value="ALL">Tất cả loại đối tượng</option>
+                  <option value="cong_chuc">🏛️ Công chức</option>
+                  <option value="vien_chuc">🎓 Viên chức</option>
+                  <option value="nguoi_lao_dong">👷 Người lao động</option>
+                </select>
+
+                <select
                   value={filterManagementRole}
                   onChange={(e) => setFilterManagementRole(e.target.value)}
                   className="border border-purple-200 bg-purple-50/40 text-purple-900 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-purple-500 focus:outline-none"
@@ -1263,8 +1286,8 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                 <thead className="bg-slate-50 text-slate-700 text-xs font-semibold uppercase border-b border-slate-200">
                   <tr>
                     <th className="px-3.5 py-3 w-12 text-center">STT</th>
-                    <th className="px-3.5 py-3 min-w-[200px]">Cán bộ & Tài khoản</th>
-                    <th className="px-3.5 py-3 min-w-[260px]">Đơn vị & Chức vụ (Đa chức vụ)</th>
+                    <th className="px-3.5 py-3 min-w-[210px]">Cán bộ & Tài khoản</th>
+                    <th className="px-3.5 py-3 min-w-[260px]">Đơn vị & Chức vụ / Vị trí việc làm</th>
                     <th className="px-3.5 py-3 min-w-[190px]">Tuyến Quản lý</th>
                     <th className="px-3.5 py-3 min-w-[170px] text-center">Vai trò & Mẫu ĐG</th>
                     <th className="px-3.5 py-3 min-w-[110px] text-center">Trạng thái</th>
@@ -1311,6 +1334,19 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                           <td className="px-3.5 py-3">
                             <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5 flex-wrap">
                               <span>{u.full_name}</span>
+                              {u.employee_type === 'cong_chuc' ? (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
+                                  🏛️ Công chức
+                                </span>
+                              ) : u.employee_type === 'nguoi_lao_dong' ? (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-200 text-[10px] font-bold">
+                                  👷 Người LĐ
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-sky-100 text-sky-800 border border-sky-200 text-[10px] font-bold">
+                                  🎓 Viên chức
+                                </span>
+                              )}
                               {u.is_party_member === 1 && (
                                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-100 text-red-800 border border-red-200 text-[10px] font-bold" title={u.party_title || 'Đảng viên'}>
                                   🚩 {u.party_title ? u.party_title : 'Đảng viên'}
@@ -1540,6 +1576,19 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                         <div>
                           <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5 flex-wrap">
                             <span>{u.full_name}</span>
+                            {u.employee_type === 'cong_chuc' ? (
+                              <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
+                                🏛️ Công chức
+                              </span>
+                            ) : u.employee_type === 'nguoi_lao_dong' ? (
+                              <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-200 text-[10px] font-bold">
+                                👷 Người LĐ
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.2 rounded bg-sky-100 text-sky-800 border border-sky-200 text-[10px] font-bold">
+                                🎓 Viên chức
+                              </span>
+                            )}
                             {u.is_party_member === 1 && (
                               <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-800 border border-red-200 text-[10px] font-bold">
                                 🚩 {u.party_title || 'Đảng viên'}
@@ -1676,15 +1725,49 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                   </div>
                 )}
 
-                {/* SECTION 1: TÀI KHOẢN & PHÂN QUYỀN HỆ THỐNG */}
+                {/* THẺ 1: THÔNG TIN CÁ NHÂN & TÀI KHOẢN ĐỊNH DANH */}
                 <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-xs space-y-4">
                   <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                    <Shield className="w-4.5 h-4.5 text-indigo-600" />
+                    <User className="w-4.5 h-4.5 text-indigo-600" />
                     <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                      1. Tài khoản & Phân quyền Hệ thống
+                      1. Thông tin Cá nhân & Tài khoản Định danh
                     </h4>
                   </div>
 
+                  {/* Họ tên & Loại người dùng */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Họ và tên cán bộ <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={formData.full_name}
+                        onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                        className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-semibold"
+                        placeholder="vd: Nguyễn Tiến Vinh"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Loại người dùng <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={formData.employee_type || 'vien_chuc'}
+                        onChange={(e) => setFormData({ ...formData, employee_type: e.target.value })}
+                        className="w-full px-3 py-2 border border-emerald-300 bg-emerald-50/40 rounded-lg text-xs font-bold text-emerald-950 focus:ring-2 focus:ring-emerald-500"
+                      >
+                        <option value="vien_chuc">🎓 Viên chức (Đơn vị sự nghiệp)</option>
+                        <option value="cong_chuc">🏛️ Công chức (Cơ quan Nhà nước)</option>
+                        <option value="nguoi_lao_dong">👷 Người lao động (Hợp đồng LĐ)</option>
+                      </select>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">Dùng để phân nhóm & tính tỷ lệ Mẫu 02</span>
+                    </div>
+                  </div>
+
+                  {/* Tên đăng nhập & Mật khẩu */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1716,68 +1799,69 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                  {/* Ngày sinh, Giới tính, SĐT, Email */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Vai trò hệ thống & Quyền hạn dữ liệu <span className="text-rose-500">*</span>
+                        Ngày sinh
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.birth_date}
+                        onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
+                        className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Giới tính
                       </label>
                       <select
-                        value={formData.role_id}
-                        onChange={(e) => handleRoleChange(e.target.value)}
-                        className="w-full px-3.5 py-2 border border-indigo-200 bg-indigo-50/20 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-800"
+                        value={formData.gender}
+                        onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                        className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-white"
                       >
-                        {roles.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name} ({r.data_scope === 'all' ? 'Toàn cơ quan' : r.data_scope === 'dept_tree' ? 'Đơn vị & trực thuộc' : r.data_scope === 'subordinates' ? 'Cấp dưới' : 'Cá nhân'})
-                          </option>
-                        ))}
+                        <option value="Nam">Nam</option>
+                        <option value="Nữ">Nữ</option>
                       </select>
                     </div>
 
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Mẫu đánh giá KPI áp dụng
+                        Số điện thoại
                       </label>
-                      {isSelectedRoleExempt ? (
-                        <div className="px-3.5 py-2 border border-purple-200 bg-purple-50 text-purple-800 rounded-lg text-xs font-bold flex items-center gap-1.5 h-[38px]">
-                          <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
-                          <span>⚙️ Miễn đánh giá (Tài khoản chức năng)</span>
-                        </div>
-                      ) : (
-                        <select
-                          value={formData.target_role}
-                          onChange={(e) => setFormData({ ...formData, target_role: e.target.value })}
-                          className="w-full px-3.5 py-2 border border-amber-200 bg-amber-50/50 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-semibold text-amber-900"
-                        >
-                          <option value="cbnv">Mẫu 01-B: CBNV (16 tiêu chí)</option>
-                          <option value="cbql">Mẫu 01-A: Lãnh đạo/QL (17 tiêu chí)</option>
-                        </select>
-                      )}
+                      <input
+                        type="text"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
+                        placeholder="0912345678"
+                      />
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Trạng thái hoạt động tài khoản
-                    </label>
-                    <select
-                      value={formData.is_active}
-                      onChange={(e) => setFormData({ ...formData, is_active: parseInt(e.target.value) })}
-                      className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value={1}>✅ Đang hoạt động bình thường</option>
-                      <option value={0}>⛔ Tạm khóa / Vô hiệu hóa tài khoản</option>
-                    </select>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Email công vụ
+                      </label>
+                      <input
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
+                        placeholder="canbo@hcm.gov.vn"
+                      />
+                    </div>
                   </div>
                 </div>
 
-                {/* SECTION 2: ĐƠN VỊ & CHỨC VỤ (HỖ TRỢ ĐA CHỨC VỤ / KIÊM NHIỆM) */}
+                {/* THẺ 2: VỊ TRÍ CÔNG TÁC & CHỨC VỤ (ĐA CHỨC VỤ / KIÊM NHIỆM) */}
                 <div className="bg-white rounded-xl p-5 border border-indigo-200 shadow-xs space-y-4">
                   <div className="flex items-center justify-between pb-3 border-b border-indigo-100">
                     <div className="flex items-center gap-2">
                       <Briefcase className="w-4.5 h-4.5 text-indigo-600" />
                       <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-                        2. Đơn vị công tác & Chức vụ (Đa chức vụ / Kiêm nhiệm)
+                        2. Chức vụ / Vị trí việc làm & Đơn vị công tác
                       </h4>
                     </div>
                     <button
@@ -1786,15 +1870,15 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition border border-indigo-200 cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>+ Thêm chức vụ</span>
+                      <span>+ Thêm chức vụ kiêm nhiệm</span>
                     </button>
                   </div>
 
                   <p className="text-xs text-slate-500">
-                    Theo tài liệu hướng dẫn iCPV TP.HCM: 1 cán bộ có thể được gán một hoặc nhiều chức vụ ở một hoặc nhiều đơn vị khác nhau. Tích chọn <b>"Là chức vụ mặc định"</b> tại chức vụ chính.
+                    Mỗi cán bộ có thể đảm nhiệm một hoặc nhiều chức vụ / vị trí việc làm. Chọn <b>"Là chức vụ mặc định"</b> tại vị trí công tác chính.
                   </p>
 
-                  {/* List of Position Rows */}
+                  {/* Danh sách các vị trí / chức vụ */}
                   <div className="space-y-3">
                     {formData.positions.map((pos, idx) => (
                       <div 
@@ -1812,7 +1896,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                                 ? 'bg-indigo-600 text-white' 
                                 : 'bg-slate-200 text-slate-700'
                             }`}>
-                              {pos.is_primary === 1 ? '👑 Chức vụ chính (Mặc định)' : `Chức vụ kiêm nhiệm #${idx}`}
+                              {pos.is_primary === 1 ? '👑 Vị trí việc làm chính (Mặc định)' : `Chức vụ kiêm nhiệm #${idx}`}
                             </span>
                           </div>
 
@@ -1851,7 +1935,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                             <select
                               value={pos.dept_id}
                               onChange={(e) => handlePositionChange(idx, 'dept_id', e.target.value)}
-                              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 bg-white"
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 bg-white"
                             >
                               {localDepts.map(d => (
                                 <option key={d.id} value={d.id}>
@@ -1869,9 +1953,14 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                               type="text"
                               required
                               value={pos.position_title}
-                              onChange={(e) => handlePositionChange(idx, 'position_title', e.target.value)}
-                              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-indigo-500"
-                              placeholder="vd: Trưởng phòng, Chuyên viên, Bí thư Chi bộ..."
+                              onChange={(e) => {
+                                handlePositionChange(idx, 'position_title', e.target.value);
+                                if (pos.is_primary === 1) {
+                                  setFormData(prev => ({ ...prev, gov_title: e.target.value }));
+                                }
+                              }}
+                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-indigo-500 bg-white"
+                              placeholder="vd: Hiệu trưởng, Phó Hiệu trưởng, Giáo viên, Chuyên viên..."
                             />
                           </div>
                         </div>
@@ -1882,11 +1971,11 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                               Phân loại chức vụ
                             </label>
                             <select
-                              value={pos.position_type}
+                              value={pos.position_type || 'chinh_quyen'}
                               onChange={(e) => handlePositionChange(idx, 'position_type', e.target.value)}
                               className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-white"
                             >
-                              <option value="chinh_quyen">🏛️ Chính quyền</option>
+                              <option value="chinh_quyen">🏛️ Vị trí việc làm / Chức vụ</option>
                               <option value="dang">🚩 Đảng</option>
                               <option value="doan_the">⭐ Đoàn thể</option>
                               <option value="khac">Khác</option>
@@ -1898,14 +1987,14 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                               Cấp bậc quản lý
                             </label>
                             <select
-                              value={pos.management_role}
+                              value={pos.management_role || 'nhan_vien'}
                               onChange={(e) => handlePositionChange(idx, 'management_role', e.target.value)}
                               className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-white font-medium"
                             >
                               <option value="lanh_dao">👑 Lãnh đạo (Người đứng đầu)</option>
-                              <option value="quan_ly">⭐ Quản lý (Cấp phó)</option>
+                              <option value="quan_ly">⭐ Quản lý (Cấp phó đơn vị)</option>
                               <option value="to_truong">🏷️ Tổ trưởng chuyên môn</option>
-                              <option value="nhan_vien">👤 Cán bộ, Nhân viên</option>
+                              <option value="nhan_vien">👤 Cán bộ, Giáo viên, Nhân viên</option>
                             </select>
                           </div>
 
@@ -1944,7 +2033,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                               value={pos.notes || ''}
                               onChange={(e) => handlePositionChange(idx, 'notes', e.target.value)}
                               className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
-                              placeholder="vd: QĐ 45/QĐ-TU..."
+                              placeholder="vd: QĐ bổ nhiệm, kiêm nhiệm..."
                             />
                           </div>
                         </div>
@@ -1953,196 +2042,135 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                   </div>
                 </div>
 
-                {/* SECTION 3: THÔNG TIN CÁ NHÂN & LIÊN HỆ */}
+                {/* THẺ 3: TỔ CHỨC ĐẢNG & ĐOÀN THỂ */}
                 <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-xs space-y-4">
                   <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                    <User className="w-4.5 h-4.5 text-emerald-600" />
+                    <Shield className="w-4.5 h-4.5 text-red-600" />
                     <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                      3. Thông tin Cá nhân & Liên hệ
+                      3. Tổ chức Đảng & Đoàn thể
                     </h4>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Họ và tên cán bộ <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.full_name}
-                      onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                      className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-semibold"
-                      placeholder="vd: Nguyễn Tiến Vinh"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Ngày sinh
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.birth_date}
-                        onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Giới tính
-                      </label>
-                      <select
-                        value={formData.gender}
-                        onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                      >
-                        <option value="Nam">Nam</option>
-                        <option value="Nữ">Nữ</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Số điện thoại liên hệ
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                        placeholder="vd: 0912345678"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Email công vụ
-                      </label>
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                        placeholder="canbo@hcm.gov.vn"
-                      />
-                    </div>
-                  </div>
-
-                  {/* PHÂN ĐỊNH RÕ 3 TRƯỜNG: CHỨC VỤ CHÍNH QUYỀN - CHỨC VỤ ĐẢNG - CHỨC DANH ĐOÀN THỂ */}
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-4">
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                      <span className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
-                        <Briefcase className="w-4 h-4 text-indigo-600" />
-                        Chức vụ & Tư cách công tác (Chính quyền - Đảng - Đoàn thể)
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
-                      {/* TRƯỜNG 1: CHỨC VỤ CHÍNH QUYỀN */}
-                      <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1.5">
-                        <label className="block text-xs font-bold text-slate-800">
-                          🏛️ Chức vụ Chính quyền <span className="text-rose-500">*</span>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* KHỐI ĐẢNG CỘNG SẢN VIỆT NAM */}
+                    <div className={`p-4 rounded-xl border transition-colors space-y-3 ${
+                      formData.is_party_member ? 'bg-red-50/70 border-red-200' : 'bg-slate-50 border-slate-200'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(formData.is_party_member)}
+                            onChange={(e) => setFormData({ 
+                              ...formData, 
+                              is_party_member: e.target.checked,
+                              party_title: e.target.checked ? (formData.party_title || 'Đảng viên') : ''
+                            })}
+                            className="w-4.5 h-4.5 text-red-600 rounded border-slate-300 focus:ring-red-500 cursor-pointer"
+                          />
+                          <span className="text-xs font-bold text-red-950 flex items-center gap-1">
+                            🚩 Là Đảng viên Đảng Cộng sản Việt Nam
+                          </span>
                         </label>
-                        <input
-                          type="text"
-                          required
-                          value={formData.gov_title}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setFormData(prev => {
-                              const updatedPositions = [...(prev.positions || [])];
-                              if (updatedPositions.length > 0) {
-                                updatedPositions[0] = { ...updatedPositions[0], position_title: val };
-                              }
-                              return { ...prev, gov_title: val, positions: updatedPositions };
-                            });
-                          }}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-indigo-500 bg-white"
-                          placeholder="vd: Hiệu trưởng, Trưởng phòng, Chuyên viên..."
-                        />
-                        <span className="text-[10px] text-slate-400 block">Vị trí chính quyền chính</span>
-                      </div>
-
-                      {/* TRƯỜNG 2: ĐẢNG & CHỨC VỤ ĐẢNG */}
-                      <div className={`p-3 rounded-lg border transition-colors space-y-2 ${
-                        formData.is_party_member ? 'bg-red-50/70 border-red-200' : 'bg-white border-slate-200'
-                      }`}>
-                        <div className="flex items-center justify-between">
-                          <label className="flex items-center gap-2 cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(formData.is_party_member)}
-                              onChange={(e) => setFormData({ 
-                                ...formData, 
-                                is_party_member: e.target.checked,
-                                party_title: e.target.checked ? (formData.party_title || 'Đảng viên') : ''
-                              })}
-                              className="w-4 h-4 text-red-600 rounded border-slate-300 focus:ring-red-500 cursor-pointer"
-                            />
-                            <span className="text-xs font-bold text-red-950 flex items-center gap-1">
-                              🚩 Là Đảng viên
-                            </span>
-                          </label>
-                          {!formData.is_party_member && (
-                            <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-medium">Quần chúng</span>
-                          )}
-                        </div>
-
-                        {formData.is_party_member ? (
-                          <div>
-                            <label className="block text-[11px] font-semibold text-red-900 mb-1">
-                              Chức vụ Đảng:
-                            </label>
-                            <input
-                              type="text"
-                              value={formData.party_title}
-                              onChange={(e) => setFormData({ ...formData, party_title: e.target.value })}
-                              className="w-full px-2.5 py-1.5 border border-red-300 rounded-md text-xs font-medium focus:ring-2 focus:ring-red-500 bg-white"
-                              placeholder="vd: Bí thư Chi bộ, Đảng viên..."
-                            />
-                          </div>
-                        ) : (
-                          <p className="text-[11px] text-slate-400 italic pt-1">
-                            Tích chọn nếu cán bộ là Đảng viên ĐCSVN
-                          </p>
+                        {!formData.is_party_member && (
+                          <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-bold">Quần chúng</span>
                         )}
                       </div>
 
-                      {/* TRƯỜNG 3: CHỨC DANH ĐOÀN THỂ (TÁCH RIÊNG HOÀN TOÀN) */}
-                      <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1.5">
-                        <label className="block text-xs font-bold text-slate-800">
-                          ⭐ Chức danh Đoàn thể (nếu có)
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.union_title || ''}
-                          onChange={(e) => setFormData({ ...formData, union_title: e.target.value })}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 bg-white"
-                          placeholder="vd: Chủ tịch Công đoàn, Bí thư Chi đoàn..."
-                        />
-                        <span className="text-[10px] text-slate-400 block">Công đoàn, Đoàn TN, Ban TTND...</span>
-                      </div>
+                      {formData.is_party_member ? (
+                        <div>
+                          <label className="block text-xs font-semibold text-red-900 mb-1">
+                            Chức vụ Đảng:
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.party_title}
+                            onChange={(e) => setFormData({ ...formData, party_title: e.target.value })}
+                            className="w-full px-3 py-2 border border-red-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-red-500 bg-white"
+                            placeholder="vd: Bí thư Chi bộ, Phó Bí thư, Chi ủy viên, Đảng viên..."
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 italic">
+                          Tích chọn nếu cán bộ là Đảng viên chính thức hoặc dự bị của ĐCSVN
+                        </p>
+                      )}
+                    </div>
+
+                    {/* KHỐI ĐOÀN THỂ (CÔNG ĐOÀN, ĐOÀN THANH NIÊN, BAN TTND) */}
+                    <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
+                      <label className="block text-xs font-bold text-slate-800">
+                        ⭐ Chức danh Đoàn thể (nếu có)
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.union_title || ''}
+                        onChange={(e) => setFormData({ ...formData, union_title: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 bg-white"
+                        placeholder="vd: Chủ tịch Công đoàn, Bí thư Chi đoàn, Trưởng Ban TTND..."
+                      />
+                      <span className="text-[10px] text-slate-400 block">
+                        Các chức danh Công đoàn, Đoàn TNCS HCM, Ban Thanh tra Nhân dân... (để trống nếu không kiêm nhiệm)
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                {/* SECTION 4: TUYẾN QUẢN LÝ & ĐÁNH GIÁ */}
+                {/* THẺ 4: PHÂN QUYỀN HỆ THỐNG & TUYẾN PHÊ DUYỆT ĐÁNH GIÁ */}
                 <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-xs space-y-4">
                   <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
                     <Building2 className="w-4.5 h-4.5 text-blue-600" />
                     <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                      4. Tuyến Quản lý & Phê duyệt Đánh giá
+                      4. Phân quyền Hệ thống & Tuyến Phê duyệt Đánh giá
                     </h4>
                   </div>
 
+                  {/* Vai trò & Mẫu ĐG */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Cán bộ Quản lý trực tiếp
+                        Vai trò hệ thống & Quyền hạn dữ liệu <span className="text-rose-500">*</span>
+                      </label>
+                      <select
+                        value={formData.role_id}
+                        onChange={(e) => handleRoleChange(e.target.value)}
+                        className="w-full px-3.5 py-2 border border-indigo-200 bg-indigo-50/20 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-800"
+                      >
+                        {roles.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name} ({r.data_scope === 'all' ? 'Toàn cơ quan' : r.data_scope === 'dept_tree' ? 'Đơn vị & trực thuộc' : r.data_scope === 'subordinates' ? 'Cấp dưới' : 'Cá nhân'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Mẫu đánh giá KPI áp dụng
+                      </label>
+                      {isSelectedRoleExempt ? (
+                        <div className="px-3.5 py-2 border border-purple-200 bg-purple-50 text-purple-800 rounded-lg text-xs font-bold flex items-center gap-1.5 h-[38px]">
+                          <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
+                          <span>⚙️ Miễn đánh giá (Tài khoản chức năng)</span>
+                        </div>
+                      ) : (
+                        <select
+                          value={formData.target_role}
+                          onChange={(e) => setFormData({ ...formData, target_role: e.target.value })}
+                          className="w-full px-3.5 py-2 border border-amber-200 bg-amber-50/50 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-semibold text-amber-900"
+                        >
+                          <option value="cbnv">Mẫu 01-B: CBNV / Giáo viên / Nhân viên (16 tiêu chí)</option>
+                          <option value="cbql">Mẫu 01-A: Lãnh đạo / Cán bộ quản lý (17 tiêu chí)</option>
+                        </select>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Tuyến duyệt Bước 3 & Bước 5 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Cán bộ Quản lý trực tiếp (Chấm điểm Bước 3)
                       </label>
                       <select
                         value={formData.manager_id}
@@ -2162,7 +2190,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
 
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Người đánh giá cuối cùng (Ký duyệt kết luận)
+                        Người đánh giá cuối cùng (Ký duyệt kết luận Bước 5)
                       </label>
                       <select
                         value={formData.final_evaluator_id}
@@ -2179,6 +2207,21 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                           ))}
                       </select>
                     </div>
+                  </div>
+
+                  {/* Trạng thái hoạt động tài khoản */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Trạng thái hoạt động tài khoản
+                    </label>
+                    <select
+                      value={formData.is_active}
+                      onChange={(e) => setFormData({ ...formData, is_active: parseInt(e.target.value) })}
+                      className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value={1}>✅ Đang hoạt động bình thường</option>
+                      <option value={0}>⛔ Tạm khóa / Vô hiệu hóa tài khoản</option>
+                    </select>
                   </div>
                 </div>
               </div>

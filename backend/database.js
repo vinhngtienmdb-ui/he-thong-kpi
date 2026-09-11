@@ -120,6 +120,7 @@ function initDatabase() {
       gov_title TEXT,
       union_title TEXT,
       dept_id TEXT,
+      employee_type TEXT DEFAULT 'vien_chuc',
       FOREIGN KEY(dept_id) REFERENCES departments(id)
     );
 
@@ -485,7 +486,8 @@ function initDatabase() {
     "ALTER TABLE assigned_tasks ADD COLUMN level_1_score REAL;",
     "ALTER TABLE evaluations ADD COLUMN final_classification TEXT;",
     "ALTER TABLE evaluations ADD COLUMN skip_level_reviewer_id TEXT;",
-    "ALTER TABLE evaluations ADD COLUMN skip_level_status TEXT DEFAULT 'approved';"
+    "ALTER TABLE evaluations ADD COLUMN skip_level_status TEXT DEFAULT 'approved';",
+    "ALTER TABLE users ADD COLUMN employee_type TEXT DEFAULT 'vien_chuc';"
   ];
 
   for (const m of migrations) {

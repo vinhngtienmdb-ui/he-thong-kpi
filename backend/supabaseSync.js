@@ -191,6 +191,7 @@ async function pushToSupabase() {
         ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS level_1_comment TEXT;
         ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS level_1_score NUMERIC;
         ALTER TABLE users ADD COLUMN IF NOT EXISTS is_party_member INTEGER DEFAULT 0;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_type TEXT DEFAULT 'vien_chuc';
         ALTER TABLE departments ADD COLUMN IF NOT EXISTS agency_type TEXT DEFAULT 'su_nghiep';
         ALTER TABLE departments ADD COLUMN IF NOT EXISTS manager_title TEXT DEFAULT 'TRƯỞNG ĐƠN VỊ';
         ALTER TABLE departments ADD COLUMN IF NOT EXISTS leader_title TEXT DEFAULT 'THỦ TRƯỞNG ĐƠN VỊ';
@@ -289,12 +290,12 @@ async function pushToSupabase() {
       client, 'users',
       ['id', 'username', 'password', 'full_name', 'role', 'party_title', 'gov_title', 'union_title', 'dept_id',
        'birth_date', 'gender', 'phone', 'email', 'is_active', 'target_role', 'role_id', 'manager_id',
-       'management_role', 'final_evaluator_id', 'is_party_member'],
+       'management_role', 'final_evaluator_id', 'is_party_member', 'employee_type'],
       ['id'],
       ['username', 'password', 'full_name', 'role', 'party_title', 'gov_title', 'union_title', 'dept_id',
        'birth_date', 'gender', 'phone', 'email', 'is_active', 'target_role', 'role_id', 'manager_id',
-       'management_role', 'final_evaluator_id', 'is_party_member'],
-      users.map(u => ({ ...u, is_active: u.is_active ?? 1, is_party_member: u.is_party_member ?? 0 }))
+       'management_role', 'final_evaluator_id', 'is_party_member', 'employee_type'],
+      users.map(u => ({ ...u, is_active: u.is_active ?? 1, is_party_member: u.is_party_member ?? 0, employee_type: u.employee_type || 'vien_chuc' }))
     );
     stats.users = users.length;
 
@@ -684,8 +685,8 @@ async function pullFromSupabase() {
       INSERT OR REPLACE INTO users (
         id, username, password, full_name, role, party_title, gov_title, union_title, dept_id,
         birth_date, gender, phone, email, is_active, target_role, role_id, manager_id,
-        management_role, final_evaluator_id, is_party_member
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        management_role, final_evaluator_id, is_party_member, employee_type
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
       for (const u of supUsers.rows) {
@@ -696,7 +697,8 @@ async function pullFromSupabase() {
           u.is_active !== undefined && u.is_active !== null && u.is_active !== 0 ? 1 : 0,
           toSqliteVal(u.target_role), toSqliteVal(u.role_id), toSqliteVal(u.manager_id),
           toSqliteVal(u.management_role || 'nhan_vien'), toSqliteVal(u.final_evaluator_id),
-          u.is_party_member ? 1 : 0
+          u.is_party_member ? 1 : 0,
+          toSqliteVal(u.employee_type || 'vien_chuc')
         );
       }
     })();
@@ -1091,8 +1093,8 @@ async function syncDirectUserToSupabase(user) {
       INSERT INTO users (
         id, username, password, full_name, role, party_title, gov_title, union_title, dept_id,
         birth_date, gender, phone, email, is_active, target_role, role_id, manager_id,
-        management_role, final_evaluator_id, is_party_member
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        management_role, final_evaluator_id, is_party_member, employee_type
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       ON CONFLICT (id) DO UPDATE SET
         username = EXCLUDED.username,
         password = EXCLUDED.password,
@@ -1112,13 +1114,15 @@ async function syncDirectUserToSupabase(user) {
         manager_id = EXCLUDED.manager_id,
         management_role = EXCLUDED.management_role,
         final_evaluator_id = EXCLUDED.final_evaluator_id,
-        is_party_member = EXCLUDED.is_party_member
+        is_party_member = EXCLUDED.is_party_member,
+        employee_type = EXCLUDED.employee_type
     `;
     await client.query(sql, [
       user.id, user.username, user.password, user.full_name, user.role, user.party_title,
       user.gov_title, user.union_title, user.dept_id, user.birth_date, user.gender, user.phone, user.email,
       user.is_active !== undefined ? user.is_active : 1, user.target_role, user.role_id, user.manager_id,
-      user.management_role || 'nhan_vien', user.final_evaluator_id, user.is_party_member ? 1 : 0
+      user.management_role || 'nhan_vien', user.final_evaluator_id, user.is_party_member ? 1 : 0,
+      user.employee_type || 'vien_chuc'
     ]);
     console.log(`[Supabase Direct Sync] ✓ Đã cập nhật tức thì cán bộ "${user.full_name}" (${user.username}) lên Supabase.`);
   } catch (err) {

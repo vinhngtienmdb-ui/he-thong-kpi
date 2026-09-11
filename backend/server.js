@@ -849,6 +849,7 @@ app.get('/api/users', (req, res) => {
            u.role_id, u.manager_id, u.management_role, u.final_evaluator_id,
            u.birth_date, u.gender, u.phone, u.email, COALESCE(u.is_active, 1) as is_active,
            COALESCE(u.is_party_member, 0) as is_party_member,
+           COALESCE(u.employee_type, 'vien_chuc') as employee_type,
            d.name as dept_name,
            r.name as role_name, r.code as role_code, r.data_scope,
            mgr.full_name as manager_name,
@@ -943,6 +944,8 @@ app.get('/api/directory', (req, res) => {
     SELECT u.id, u.username, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.union_title, u.dept_id,
            u.role_id, u.manager_id, u.management_role, u.final_evaluator_id,
            u.birth_date, u.gender, u.phone, u.email, COALESCE(u.is_active, 1) as is_active,
+           COALESCE(u.is_party_member, 0) as is_party_member,
+           COALESCE(u.employee_type, 'vien_chuc') as employee_type,
            d.name as dept_name, d.code as dept_code, d.location_name as dept_location,
            r.name as role_name, r.code as role_code,
            mgr.full_name as manager_name,
@@ -1112,7 +1115,7 @@ app.post('/api/admin/users', requireCanManageUsers, async (req, res) => {
   const { 
     username, password, full_name, role, target_role, role_id, manager_id,
     management_role, final_evaluator_id,
-    party_title, gov_title, union_title, dept_id, birth_date, gender, phone, email 
+    party_title, gov_title, union_title, dept_id, birth_date, gender, phone, email, employee_type 
   } = req.body;
   if (!username || !full_name) {
     return res.status(400).json({ success: false, message: 'Thiếu tên đăng nhập hoặc họ tên' });
@@ -1187,14 +1190,15 @@ app.post('/api/admin/users', requireCanManageUsers, async (req, res) => {
   }
 
   db.prepare(`
-    INSERT INTO users (id, username, password, full_name, role, target_role, role_id, manager_id, management_role, final_evaluator_id, party_title, gov_title, union_title, dept_id, birth_date, gender, phone, email, is_active, is_party_member)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+    INSERT INTO users (id, username, password, full_name, role, target_role, role_id, manager_id, management_role, final_evaluator_id, party_title, gov_title, union_title, dept_id, birth_date, gender, phone, email, is_active, is_party_member, employee_type)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
   `).run(
     id, username, password || '123456', full_name, effectiveRole, effectiveTargetRole,
     effectiveRoleId || null, manager_id || null, effectiveMgmtRole || 'nhan_vien', final_evaluator_id || null,
     party_title || '', gov_title || 'Chuyên viên', union_title || '', dept_id || null,
     birth_date || '1985-01-01', gender || 'Nam', phone || '', email || '',
-    req.body.is_party_member ? 1 : (party_title && party_title.trim() && !party_title.toLowerCase().includes('quần chúng') ? 1 : 0)
+    req.body.is_party_member ? 1 : (party_title && party_title.trim() && !party_title.toLowerCase().includes('quần chúng') ? 1 : 0),
+    employee_type || 'vien_chuc'
   );
 
   const newUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
@@ -1258,7 +1262,7 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
   const { 
     full_name, role, target_role, role_id, manager_id,
     management_role, final_evaluator_id,
-    party_title, gov_title, union_title, dept_id, birth_date, gender, phone, email, is_active, password, positions 
+    party_title, gov_title, union_title, dept_id, birth_date, gender, phone, email, is_active, password, positions, employee_type 
   } = req.body;
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
@@ -1371,11 +1375,14 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
     SET full_name = ?, role = ?, target_role = ?, role_id = ?, manager_id = ?,
         management_role = ?, final_evaluator_id = ?,
         party_title = ?, gov_title = ?, union_title = ?, dept_id = ?,
-        birth_date = ?, gender = ?, phone = ?, email = ?, is_active = ?, is_party_member = ?
+        birth_date = ?, gender = ?, phone = ?, email = ?, is_active = ?, is_party_member = ?,
+        employee_type = ?
   `;
   const partyMemberVal = req.body.is_party_member !== undefined
     ? (req.body.is_party_member ? 1 : 0)
     : (party_title !== undefined ? (party_title && party_title.trim() && !party_title.toLowerCase().includes('quần chúng') ? 1 : 0) : user.is_party_member);
+
+  const effectiveEmployeeType = employee_type !== undefined ? employee_type : (user.employee_type || 'vien_chuc');
 
   const params = [
     full_name || user.full_name, effectiveRole, effectiveTargetRole,
@@ -1388,7 +1395,8 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
     targetDeptId,
     birth_date || user.birth_date, gender || user.gender, phone !== undefined ? phone : user.phone,
     email !== undefined ? email : user.email, is_active !== undefined ? is_active : user.is_active,
-    partyMemberVal
+    partyMemberVal,
+    effectiveEmployeeType
   ];
 
   if (password) {
@@ -4811,6 +4819,7 @@ app.get('/api/reports/mau-02', (req, res) => {
 
   let query = `
     SELECT u.id as user_id, u.full_name, u.role, u.target_role, u.management_role, u.party_title, u.gov_title, u.union_title, u.dept_id, d.name as dept_name,
+           COALESCE(u.employee_type, 'vien_chuc') as employee_type,
            e.id as evaluation_id, e.status as evaluation_status, e.step,
            CASE WHEN e.status IN ('submitted', 'approved') THEN e.part1_score ELSE 0 END as part1_score,
            CASE WHEN e.status IN ('submitted', 'approved') THEN e.part2_score ELSE 0 END as part2_score,

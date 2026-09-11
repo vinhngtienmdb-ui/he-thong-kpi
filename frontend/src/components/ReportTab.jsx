@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   Download, 
   FileText, 
@@ -284,13 +284,46 @@ export default function ReportTab({
     });
   }
 
-  // Calculate Mẫu 02 stats
+  // Calculate Mẫu 02 stats & groups by employee_type
+  const calcGroupStats = (list) => {
+    const total = list.length;
+    const exc = list.filter(r => (r.superior_rank || r.rank_proposed || '').includes('xuất sắc')).length;
+    const good = list.filter(r => (r.superior_rank || r.rank_proposed || '').includes('tốt')).length;
+    const complete = list.filter(r => (r.superior_rank || r.rank_proposed || '') === 'Hoàn thành nhiệm vụ').length;
+    const fail = list.filter(r => (r.superior_rank || r.rank_proposed || '').toLowerCase().includes('không')).length;
+    const excPercent = total > 0 ? ((exc / total) * 100).toFixed(1) : '0.0';
+    const goodPercent = total > 0 ? ((good / total) * 100).toFixed(1) : '0.0';
+    const completePercent = total > 0 ? ((complete / total) * 100).toFixed(1) : '0.0';
+    const failPercent = total > 0 ? ((fail / total) * 100).toFixed(1) : '0.0';
+    return {
+      total,
+      exc,
+      good,
+      complete,
+      fail,
+      excPercent,
+      goodPercent,
+      completePercent,
+      failPercent,
+      isExcExceeded: Number(excPercent) > 20
+    };
+  };
+
+  const congChucList = useMemo(() => mau02List.filter(r => r.employee_type === 'cong_chuc'), [mau02List]);
+  const vienChucList = useMemo(() => mau02List.filter(r => (r.employee_type || 'vien_chuc') === 'vien_chuc'), [mau02List]);
+  const laoDongList = useMemo(() => mau02List.filter(r => r.employee_type === 'nguoi_lao_dong'), [mau02List]);
+
   const totalStaff = mau02List.length;
   const countExc = mau02List.filter(r => (r.superior_rank || r.rank_proposed || '').includes('xuất sắc')).length;
   const countGood = mau02List.filter(r => (r.superior_rank || r.rank_proposed || '').includes('tốt')).length;
   const countFail = mau02List.filter(r => (r.superior_rank || r.rank_proposed || '').toLowerCase().includes('không')).length;
   const countComplete = mau02List.filter(r => (r.superior_rank || r.rank_proposed || '') === 'Hoàn thành nhiệm vụ').length;
   const excPercent = totalStaff > 0 ? ((countExc / totalStaff) * 100).toFixed(1) : 0;
+
+  const totalStats = useMemo(() => calcGroupStats(mau02List), [mau02List]);
+  const congChucStats = useMemo(() => calcGroupStats(congChucList), [congChucList]);
+  const vienChucStats = useMemo(() => calcGroupStats(vienChucList), [vienChucList]);
+  const laoDongStats = useMemo(() => calcGroupStats(laoDongList), [laoDongList]);
 
   return (
     <div className="space-y-6">
@@ -492,7 +525,7 @@ export default function ReportTab({
             <b>Chức vụ Đảng:</b> {targetUser.party_title || 'Đảng viên'}
           </p>
           <p>
-            <b>Chức vụ chính quyền:</b> {targetUser.gov_title || (isCbnv ? 'Chuyên viên' : 'Lãnh đạo')}
+            <b>Chức vụ / Vị trí việc làm:</b> {targetUser.gov_title || (isCbnv ? 'Chuyên viên' : 'Lãnh đạo')}
           </p>
           <p>
             <b>Chức vụ đoàn thể:</b> {targetUser.union_title || 'Không có'}
@@ -1047,7 +1080,7 @@ export default function ReportTab({
                 <b>Chức vụ Đảng:</b> {targetUser.party_title || 'Đảng viên'}
               </p>
               <p>
-                <b>Chức vụ chính quyền:</b> {targetUser.gov_title || (isCbnv ? 'Chuyên viên' : 'Lãnh đạo')}
+                <b>Chức vụ / Vị trí việc làm:</b> {targetUser.gov_title || (isCbnv ? 'Chuyên viên' : 'Lãnh đạo')}
               </p>
               <p>
                 <b>Chức vụ đoàn thể:</b> {targetUser.union_title || 'Không có'}
@@ -1262,49 +1295,190 @@ export default function ReportTab({
       {/* ========================================================= */}
       {activeReportView === 'mau_02' && (
         <div className="space-y-6">
-          {/* Mẫu 02 Stat Cards (Screen only) */}
-          <div className="no-print grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-              <div className="text-xs text-slate-500 font-medium">Tổng số cán bộ</div>
-              <div className="text-2xl font-bold text-slate-900 mt-1">{totalStaff}</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">Toàn cơ quan, đơn vị</div>
+          {/* Mẫu 02 Stat Cards & Group Rate Breakdown (Screen only) */}
+          <div className="no-print space-y-4">
+            {/* Top overview stat cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+                <div className="text-xs text-slate-500 font-medium">Tổng số cán bộ</div>
+                <div className="text-2xl font-bold text-slate-900 mt-1">{totalStaff}</div>
+                <div className="text-[11px] text-slate-400 mt-0.5">Toàn cơ quan, đơn vị</div>
+              </div>
+
+              <div className={`p-4 rounded-xl border shadow-xs ${Number(excPercent) <= 20 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-300'}`}>
+                <div className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                  <span>🌟 Xuất sắc</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${Number(excPercent) <= 20 ? 'bg-emerald-200 text-emerald-900' : 'bg-rose-200 text-rose-900'}`}>
+                    {Number(excPercent) <= 20 ? 'Đạt chỉ tiêu ≤20%' : 'Vượt 20% HD.06!'}
+                  </span>
+                </div>
+                <div className="text-2xl font-bold text-slate-900 mt-1">{countExc}</div>
+                <div className="text-[11px] text-slate-600 mt-0.5 font-medium">
+                  Tỷ lệ: {excPercent}% (Quy định ≤ 20%)
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-blue-200 shadow-xs">
+                <div className="text-xs text-blue-700 font-semibold">Tốt</div>
+                <div className="text-2xl font-bold text-blue-900 mt-1">{countGood}</div>
+                <div className="text-[11px] text-blue-600 mt-0.5">
+                  Tỷ lệ {totalStaff > 0 ? ((countGood / totalStaff) * 100).toFixed(1) : 0}%
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+                <div className="text-xs text-slate-600 font-semibold">Hoàn thành</div>
+                <div className="text-2xl font-bold text-slate-800 mt-1">{countComplete}</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  Tỷ lệ {totalStaff > 0 ? ((countComplete / totalStaff) * 100).toFixed(1) : 0}%
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-rose-200 shadow-xs">
+                <div className="text-xs text-rose-700 font-semibold">Không hoàn thành</div>
+                <div className="text-2xl font-bold text-rose-800 mt-1">{countFail}</div>
+                <div className="text-[11px] text-rose-600 mt-0.5">
+                  Tỷ lệ {totalStaff > 0 ? ((countFail / totalStaff) * 100).toFixed(1) : 0}%
+                </div>
+              </div>
             </div>
 
-            <div className={`p-4 rounded-xl border shadow-xs ${Number(excPercent) <= 20 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-300'}`}>
-              <div className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                <span>🌟 Xuất sắc</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${Number(excPercent) <= 20 ? 'bg-emerald-200 text-emerald-900' : 'bg-rose-200 text-rose-900'}`}>
-                  {Number(excPercent) <= 20 ? 'Đạt chỉ tiêu ≤20%' : 'Vượt 20% HD.06!'}
+            {/* Group Rate Breakdown Table (Phân tách theo loại người dùng) */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-4 overflow-x-auto">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-3">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-600"></span>
+                  Tỷ lệ xếp loại theo khối đối tượng (Công chức / Viên chức / Người lao động)
+                </h3>
+                <span className="text-[11px] text-slate-500 italic">
+                  * Khống chế tỷ lệ Hoàn thành xuất sắc nhiệm vụ (HTXSNV) ≤ 20% theo từng khối đối tượng
                 </span>
               </div>
-              <div className="text-2xl font-bold text-slate-900 mt-1">{countExc}</div>
-              <div className="text-[11px] text-slate-600 mt-0.5 font-medium">
-                Tỷ lệ: {excPercent}% (Quy định ≤ 20%)
-              </div>
-            </div>
+              <table className="w-full text-xs text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-700 font-semibold border-y border-slate-200">
+                    <th className="py-2.5 px-3">Khối đối tượng</th>
+                    <th className="py-2.5 px-3 text-center">Tổng số</th>
+                    <th className="py-2.5 px-3 text-center">🌟 HTXSNV</th>
+                    <th className="py-2.5 px-3 text-center">Tỷ lệ HTXSNV</th>
+                    <th className="py-2.5 px-3 text-center">👍 HTTNV</th>
+                    <th className="py-2.5 px-3 text-center">Tỷ lệ HTTNV</th>
+                    <th className="py-2.5 px-3 text-center">⚖️ HTNV</th>
+                    <th className="py-2.5 px-3 text-center">⚠️ Không HTNV</th>
+                    <th className="py-2.5 px-3 text-center">Quy định HTXSNV ≤20%</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {/* Khối Công chức */}
+                  <tr className="hover:bg-slate-50 transition">
+                    <td className="py-2.5 px-3 font-semibold text-slate-800 flex items-center gap-1.5">
+                      <span>🏛️</span>
+                      <span>Khối Công chức</span>
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-slate-900">{congChucStats.total}</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">{congChucStats.exc}</td>
+                    <td className="py-2.5 px-3 text-center font-semibold text-emerald-800">{congChucStats.excPercent}%</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-blue-700">{congChucStats.good}</td>
+                    <td className="py-2.5 px-3 text-center text-blue-800">{congChucStats.goodPercent}%</td>
+                    <td className="py-2.5 px-3 text-center text-slate-700">{congChucStats.complete} ({congChucStats.completePercent}%)</td>
+                    <td className="py-2.5 px-3 text-center text-rose-700">{congChucStats.fail} ({congChucStats.failPercent}%)</td>
+                    <td className="py-2.5 px-3 text-center">
+                      {congChucStats.total === 0 ? (
+                        <span className="text-slate-400 text-[10px]">Không có CB</span>
+                      ) : congChucStats.isExcExceeded ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                          Vượt trần 20%
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                          Đạt chỉ tiêu ≤20%
+                        </span>
+                      )}
+                    </td>
+                  </tr>
 
-            <div className="bg-white p-4 rounded-xl border border-blue-200 shadow-xs">
-              <div className="text-xs text-blue-700 font-semibold">Tốt</div>
-              <div className="text-2xl font-bold text-blue-900 mt-1">{countGood}</div>
-              <div className="text-[11px] text-blue-600 mt-0.5">
-                Tỷ lệ {totalStaff > 0 ? ((countGood / totalStaff) * 100).toFixed(1) : 0}%
-              </div>
-            </div>
+                  {/* Khối Viên chức */}
+                  <tr className="hover:bg-slate-50 transition">
+                    <td className="py-2.5 px-3 font-semibold text-slate-800 flex items-center gap-1.5">
+                      <span>🎓</span>
+                      <span>Khối Viên chức</span>
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-slate-900">{vienChucStats.total}</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">{vienChucStats.exc}</td>
+                    <td className="py-2.5 px-3 text-center font-semibold text-emerald-800">{vienChucStats.excPercent}%</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-blue-700">{vienChucStats.good}</td>
+                    <td className="py-2.5 px-3 text-center text-blue-800">{vienChucStats.goodPercent}%</td>
+                    <td className="py-2.5 px-3 text-center text-slate-700">{vienChucStats.complete} ({vienChucStats.completePercent}%)</td>
+                    <td className="py-2.5 px-3 text-center text-rose-700">{vienChucStats.fail} ({vienChucStats.failPercent}%)</td>
+                    <td className="py-2.5 px-3 text-center">
+                      {vienChucStats.total === 0 ? (
+                        <span className="text-slate-400 text-[10px]">Không có VC</span>
+                      ) : vienChucStats.isExcExceeded ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                          Vượt trần 20%
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                          Đạt chỉ tiêu ≤20%
+                        </span>
+                      )}
+                    </td>
+                  </tr>
 
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-              <div className="text-xs text-slate-600 font-semibold">Hoàn thành</div>
-              <div className="text-2xl font-bold text-slate-800 mt-1">{countComplete}</div>
-              <div className="text-[11px] text-slate-500 mt-0.5">
-                Tỷ lệ {totalStaff > 0 ? ((countComplete / totalStaff) * 100).toFixed(1) : 0}%
-              </div>
-            </div>
+                  {/* Khối Người lao động */}
+                  <tr className="hover:bg-slate-50 transition">
+                    <td className="py-2.5 px-3 font-semibold text-slate-800 flex items-center gap-1.5">
+                      <span>👷</span>
+                      <span>Khối Người lao động</span>
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-slate-900">{laoDongStats.total}</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-emerald-700">{laoDongStats.exc}</td>
+                    <td className="py-2.5 px-3 text-center font-semibold text-emerald-800">{laoDongStats.excPercent}%</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-blue-700">{laoDongStats.good}</td>
+                    <td className="py-2.5 px-3 text-center text-blue-800">{laoDongStats.goodPercent}%</td>
+                    <td className="py-2.5 px-3 text-center text-slate-700">{laoDongStats.complete} ({laoDongStats.completePercent}%)</td>
+                    <td className="py-2.5 px-3 text-center text-rose-700">{laoDongStats.fail} ({laoDongStats.failPercent}%)</td>
+                    <td className="py-2.5 px-3 text-center">
+                      {laoDongStats.total === 0 ? (
+                        <span className="text-slate-400 text-[10px]">Không có NLĐ</span>
+                      ) : laoDongStats.isExcExceeded ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                          Vượt trần 20%
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                          Đạt chỉ tiêu ≤20%
+                        </span>
+                      )}
+                    </td>
+                  </tr>
 
-            <div className="bg-white p-4 rounded-xl border border-rose-200 shadow-xs">
-              <div className="text-xs text-rose-700 font-semibold">Không hoàn thành</div>
-              <div className="text-2xl font-bold text-rose-800 mt-1">{countFail}</div>
-              <div className="text-[11px] text-rose-600 mt-0.5">
-                Tỷ lệ {totalStaff > 0 ? ((countFail / totalStaff) * 100).toFixed(1) : 0}%
-              </div>
+                  {/* Toàn cơ quan */}
+                  <tr className="bg-slate-50/80 font-bold border-t border-slate-300">
+                    <td className="py-2.5 px-3 text-slate-900 uppercase">Toàn cơ quan / Đơn vị</td>
+                    <td className="py-2.5 px-3 text-center text-slate-900">{totalStats.total}</td>
+                    <td className="py-2.5 px-3 text-center text-emerald-700">{totalStats.exc}</td>
+                    <td className="py-2.5 px-3 text-center text-emerald-800">{totalStats.excPercent}%</td>
+                    <td className="py-2.5 px-3 text-center text-blue-700">{totalStats.good}</td>
+                    <td className="py-2.5 px-3 text-center text-blue-800">{totalStats.goodPercent}%</td>
+                    <td className="py-2.5 px-3 text-center text-slate-700">{totalStats.complete} ({totalStats.completePercent}%)</td>
+                    <td className="py-2.5 px-3 text-center text-rose-700">{totalStats.fail} ({totalStats.failPercent}%)</td>
+                    <td className="py-2.5 px-3 text-center">
+                      {totalStats.total === 0 ? (
+                        <span className="text-slate-400 text-[10px]">-</span>
+                      ) : totalStats.isExcExceeded ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                          Vượt trần 20%
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                          Đạt chỉ tiêu ≤20%
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -1361,7 +1535,7 @@ export default function ReportTab({
                   <tr className="bg-slate-100 font-bold text-black text-center text-[14pt]">
                     <th rowSpan="2" className="border border-black px-3 py-2.5 w-12">STT</th>
                     <th rowSpan="2" className="border border-black px-3 py-2.5 min-w-[190px]">Họ và tên</th>
-                    <th rowSpan="2" className="border border-black px-3 py-2.5 min-w-[150px]">Chức vụ</th>
+                    <th rowSpan="2" className="border border-black px-3 py-2.5 min-w-[170px]">Chức vụ / Vị trí việc làm</th>
                     <th rowSpan="2" className="border border-black px-3 py-2.5 min-w-[170px]">Đơn vị</th>
                     <th colSpan="4" className="border border-black px-3 py-2">Điểm đánh giá chi tiết</th>
                     <th colSpan="2" className="border border-black px-3 py-2">Kết quả xếp loại</th>
@@ -1392,132 +1566,249 @@ export default function ReportTab({
                       </td>
                     </tr>
                   ) : (
-                    mau02List.map((r, idx) => {
-                      const isEditing = editingRow === r.user_id;
-                      const isEvaluated = Boolean((r.superior_rank && r.superior_rank !== 'Chưa xếp loại') || (r.rank_proposed && !['Chưa tự đánh giá', 'Chưa đánh giá', 'Chưa xếp loại'].includes(r.rank_proposed) && Number(r.total_score) > 0));
-                      const p1 = isEvaluated && r.part1_score !== null && r.part1_score !== undefined ? Number(r.part1_score) : 0;
-                      const p2 = isEvaluated && r.part2_score !== null && r.part2_score !== undefined ? Number(r.part2_score) : 0;
-                      const bonus = isEvaluated && r.bonus_score !== null && r.bonus_score !== undefined ? Number(r.bonus_score) : 0;
-                      const total = isEvaluated ? (r.total_score !== null && r.total_score !== undefined ? Number(r.total_score) : (p1 + p2 + bonus)) : 0;
-                      const selfRank = isEvaluated ? (r.rank_proposed || 'Chưa tự đánh giá') : 'Chưa đánh giá';
-                      const finalRank = r.superior_rank || selfRank;
+                    (() => {
+                      const renderRow = (r, displayIdx) => {
+                        const isEditing = editingRow === r.user_id;
+                        const isEvaluated = Boolean((r.superior_rank && r.superior_rank !== 'Chưa xếp loại') || (r.rank_proposed && !['Chưa tự đánh giá', 'Chưa đánh giá', 'Chưa xếp loại'].includes(r.rank_proposed) && Number(r.total_score) > 0));
+                        const p1 = isEvaluated && r.part1_score !== null && r.part1_score !== undefined ? Number(r.part1_score) : 0;
+                        const p2 = isEvaluated && r.part2_score !== null && r.part2_score !== undefined ? Number(r.part2_score) : 0;
+                        const bonus = isEvaluated && r.bonus_score !== null && r.bonus_score !== undefined ? Number(r.bonus_score) : 0;
+                        const total = isEvaluated ? (r.total_score !== null && r.total_score !== undefined ? Number(r.total_score) : (p1 + p2 + bonus)) : 0;
+                        const selfRank = isEvaluated ? (r.rank_proposed || 'Chưa tự đánh giá') : 'Chưa đánh giá';
+                        const finalRank = r.superior_rank || selfRank;
 
+                        return (
+                          <tr key={r.user_id} className="hover:bg-slate-50 transition">
+                            <td className="border border-black px-3.5 py-2.5 text-center text-slate-700">{displayIdx}</td>
+                            <td className="border border-black px-3.5 py-2.5">
+                              <div className="font-bold text-black">{r.full_name}</div>
+                            </td>
+                            <td className="border border-black px-3.5 py-2.5 text-black">
+                              <div>{r.gov_title || r.party_title || 'Cán bộ'}</div>
+                              {r.union_title && (
+                                <div className="text-[12pt] text-indigo-900 italic mt-0.5">{r.union_title}</div>
+                              )}
+                            </td>
+                            <td className="border border-black px-3.5 py-2.5 text-black">
+                              {r.dept_name || ''}
+                            </td>
+
+                            {/* Scores */}
+                            <td className="border border-black px-3.5 py-2.5 text-center font-bold">{p1}</td>
+                            <td className="border border-black px-3.5 py-2.5 text-center font-bold">{p2}</td>
+                            <td className="border border-black px-3.5 py-2.5 text-center text-emerald-800 font-bold">{bonus > 0 ? bonus : '-'}</td>
+                            <td className="border border-black px-3.5 py-2.5 text-center font-bold text-red-900 text-[14pt]">{total}</td>
+
+                            {/* Self Rank */}
+                            <td className="border border-black px-3.5 py-2.5 text-center text-black">
+                              {r.rank_proposed || <span className="text-slate-400 italic">Chưa tự đánh giá</span>}
+                            </td>
+
+                            {/* Superior Rank */}
+                            <td className="border border-black px-3.5 py-2.5 text-center font-semibold">
+                              {isEditing ? (
+                                <select
+                                  value={rowEditData.superior_rank}
+                                  onChange={(e) => setRowEditData({ ...rowEditData, superior_rank: e.target.value })}
+                                  className="w-full text-xs font-semibold p-1.5 border border-blue-400 rounded bg-white"
+                                >
+                                  <option value="Hoàn thành xuất sắc nhiệm vụ">Hoàn thành xuất sắc nhiệm vụ</option>
+                                  <option value="Hoàn thành tốt nhiệm vụ">Hoàn thành tốt nhiệm vụ</option>
+                                  <option value="Hoàn thành nhiệm vụ">Hoàn thành nhiệm vụ</option>
+                                  <option value="Không hoàn thành nhiệm vụ">Không hoàn thành nhiệm vụ</option>
+                                </select>
+                              ) : (
+                                <span className="font-bold">
+                                  {finalRank}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Summary reason */}
+                            <td className="border border-black px-3.5 py-2.5 text-black">
+                              {isEditing ? (
+                                <textarea
+                                  rows="2"
+                                  value={rowEditData.summary_reason}
+                                  onChange={(e) => setRowEditData({ ...rowEditData, summary_reason: e.target.value })}
+                                  className="w-full text-xs p-1.5 border border-blue-400 rounded"
+                                  placeholder="Ghi tóm tắt lý do đánh giá..."
+                                />
+                              ) : (
+                                <span className="text-[14pt]">{r.summary_reason || r.superior_comment || '-'}</span>
+                              )}
+                            </td>
+
+                            {/* Cadre Proposal Note */}
+                            <td className="border border-black px-3.5 py-2.5 text-black">
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={rowEditData.cadre_proposal_note}
+                                  onChange={(e) => setRowEditData({ ...rowEditData, cadre_proposal_note: e.target.value })}
+                                  className="w-full text-xs p-1.5 border border-blue-400 rounded"
+                                  placeholder="Quy hoạch, Bổ nhiệm, Khen thưởng..."
+                                />
+                              ) : (
+                                <span className="text-[14pt] font-medium text-black">{r.cadre_proposal_note || '-'}</span>
+                              )}
+                            </td>
+
+                            {/* Actions (Screen only) */}
+                            <td className="no-print border border-black px-3.5 py-2.5 text-center">
+                              {isEditing ? (
+                                <div className="flex flex-col gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={mau02Saving}
+                                    onClick={() => handleSaveMau02Row(r.user_id)}
+                                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold cursor-pointer"
+                                  >
+                                    Lưu
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingRow(null)}
+                                    className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[10px] cursor-pointer"
+                                  >
+                                    Huỷ
+                                  </button>
+                                </div>
+                              ) : canEditMau02 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditMau02(r)}
+                                  className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[11px] font-medium border border-indigo-200 cursor-pointer"
+                                >
+                                  Đề xuất
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 italic">Chỉ xem</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      };
+
+                      let currentStt = 0;
                       return (
-                        <tr key={r.user_id} className="hover:bg-slate-50 transition">
-                          <td className="border border-black px-3.5 py-2.5 text-center text-slate-700">{idx + 1}</td>
-                          <td className="border border-black px-3.5 py-2.5">
-                            <div className="font-bold text-black">{r.full_name}</div>
-                          </td>
-                          <td className="border border-black px-3.5 py-2.5 text-black">
-                            <div>{r.gov_title || r.party_title || 'Cán bộ'}</div>
-                            {r.union_title && (
-                              <div className="text-[12pt] text-indigo-900 italic mt-0.5">{r.union_title}</div>
-                            )}
-                          </td>
-                          <td className="border border-black px-3.5 py-2.5 text-black">
-                            {r.dept_name || ''}
-                          </td>
+                        <React.Fragment>
+                          {/* KHỐI 1: CÔNG CHỨC */}
+                          {congChucList.length > 0 && (
+                            <React.Fragment>
+                              <tr className="bg-slate-200 font-bold text-black text-[14pt]">
+                                <td colSpan="13" className="border border-black px-3.5 py-2 uppercase tracking-wide">
+                                  I. KHỐI CÔNG CHỨC ({congChucList.length} đồng chí — HTXSNV: {congChucStats.exc}/{congChucStats.total} đạt {congChucStats.excPercent}%)
+                                </td>
+                              </tr>
+                              {congChucList.map(r => {
+                                currentStt += 1;
+                                return renderRow(r, currentStt);
+                              })}
+                            </React.Fragment>
+                          )}
 
-                          {/* Scores */}
-                          <td className="border border-black px-3.5 py-2.5 text-center font-bold">{p1}</td>
-                          <td className="border border-black px-3.5 py-2.5 text-center font-bold">{p2}</td>
-                          <td className="border border-black px-3.5 py-2.5 text-center text-emerald-800 font-bold">{bonus > 0 ? bonus : '-'}</td>
-                          <td className="border border-black px-3.5 py-2.5 text-center font-bold text-red-900 text-[14pt]">{total}</td>
+                          {/* KHỐI 2: VIÊN CHỨC */}
+                          {vienChucList.length > 0 && (
+                            <React.Fragment>
+                              <tr className="bg-slate-200 font-bold text-black text-[14pt]">
+                                <td colSpan="13" className="border border-black px-3.5 py-2 uppercase tracking-wide">
+                                  {congChucList.length > 0 ? 'II' : 'I'}. KHỐI VIÊN CHỨC ({vienChucList.length} đồng chí — HTXSNV: {vienChucStats.exc}/{vienChucStats.total} đạt {vienChucStats.excPercent}%)
+                                </td>
+                              </tr>
+                              {vienChucList.map(r => {
+                                currentStt += 1;
+                                return renderRow(r, currentStt);
+                              })}
+                            </React.Fragment>
+                          )}
 
-                          {/* Self Rank */}
-                          <td className="border border-black px-3.5 py-2.5 text-center text-black">
-                            {r.rank_proposed || <span className="text-slate-400 italic">Chưa tự đánh giá</span>}
-                          </td>
-
-                          {/* Superior Rank */}
-                          <td className="border border-black px-3.5 py-2.5 text-center font-semibold">
-                            {isEditing ? (
-                              <select
-                                value={rowEditData.superior_rank}
-                                onChange={(e) => setRowEditData({ ...rowEditData, superior_rank: e.target.value })}
-                                className="w-full text-xs font-semibold p-1.5 border border-blue-400 rounded bg-white"
-                              >
-                                <option value="Hoàn thành xuất sắc nhiệm vụ">Hoàn thành xuất sắc nhiệm vụ</option>
-                                <option value="Hoàn thành tốt nhiệm vụ">Hoàn thành tốt nhiệm vụ</option>
-                                <option value="Hoàn thành nhiệm vụ">Hoàn thành nhiệm vụ</option>
-                                <option value="Không hoàn thành nhiệm vụ">Không hoàn thành nhiệm vụ</option>
-                              </select>
-                            ) : (
-                              <span className="font-bold">
-                                {finalRank}
-                              </span>
-                            )}
-                          </td>
-
-                          {/* Summary reason */}
-                          <td className="border border-black px-3.5 py-2.5 text-black">
-                            {isEditing ? (
-                              <textarea
-                                rows="2"
-                                value={rowEditData.summary_reason}
-                                onChange={(e) => setRowEditData({ ...rowEditData, summary_reason: e.target.value })}
-                                className="w-full text-xs p-1.5 border border-blue-400 rounded"
-                                placeholder="Ghi tóm tắt lý do đánh giá..."
-                              />
-                            ) : (
-                              <span className="text-[14pt]">{r.summary_reason || r.superior_comment || '-'}</span>
-                            )}
-                          </td>
-
-                          {/* Cadre Proposal Note */}
-                          <td className="border border-black px-3.5 py-2.5 text-black">
-                            {isEditing ? (
-                              <input
-                                type="text"
-                                value={rowEditData.cadre_proposal_note}
-                                onChange={(e) => setRowEditData({ ...rowEditData, cadre_proposal_note: e.target.value })}
-                                className="w-full text-xs p-1.5 border border-blue-400 rounded"
-                                placeholder="Quy hoạch, Bổ nhiệm, Khen thưởng..."
-                              />
-                            ) : (
-                              <span className="text-[14pt] font-medium text-black">{r.cadre_proposal_note || '-'}</span>
-                            )}
-                          </td>
-
-                          {/* Actions (Screen only) */}
-                          <td className="no-print border border-black px-3.5 py-2.5 text-center">
-                            {isEditing ? (
-                              <div className="flex flex-col gap-1">
-                                <button
-                                  type="button"
-                                  disabled={mau02Saving}
-                                  onClick={() => handleSaveMau02Row(r.user_id)}
-                                  className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold cursor-pointer"
-                                >
-                                  Lưu
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingRow(null)}
-                                  className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[10px] cursor-pointer"
-                                >
-                                  Huỷ
-                                </button>
-                              </div>
-                            ) : canEditMau02 ? (
-                              <button
-                                type="button"
-                                onClick={() => handleStartEditMau02(r)}
-                                className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[11px] font-medium border border-indigo-200 cursor-pointer"
-                              >
-                                Đề xuất
-                              </button>
-                            ) : (
-                              <span className="text-[10px] text-slate-400 italic">Chỉ xem</span>
-                            )}
-                          </td>
-                        </tr>
+                          {/* KHỐI 3: NGƯỜI LAO ĐỘNG */}
+                          {laoDongList.length > 0 && (
+                            <React.Fragment>
+                              <tr className="bg-slate-200 font-bold text-black text-[14pt]">
+                                <td colSpan="13" className="border border-black px-3.5 py-2 uppercase tracking-wide">
+                                  {congChucList.length > 0 && vienChucList.length > 0 ? 'III' : (congChucList.length > 0 || vienChucList.length > 0 ? 'II' : 'I')}. KHỐI NGƯỜI LAO ĐỘNG ({laoDongList.length} đồng chí — HTXSNV: {laoDongStats.exc}/{laoDongStats.total} đạt {laoDongStats.excPercent}%)
+                                </td>
+                              </tr>
+                              {laoDongList.map(r => {
+                                currentStt += 1;
+                                return renderRow(r, currentStt);
+                              })}
+                            </React.Fragment>
+                          )}
+                        </React.Fragment>
                       );
-                    })
+                    })()
                   )}
                 </tbody>
               </table>
             </div>
+
+            {/* Thống kê tỷ lệ xếp loại theo khối đối tượng trên bản in Mẫu 02 */}
+            {mau02List.length > 0 && (
+              <div className="pt-2 space-y-2 text-[13pt] text-black">
+                <p className="font-bold uppercase tracking-tight text-[13pt]">
+                  * BẢNG TỔNG HỢP TỶ LỆ XẾP LOẠI THEO TỪNG KHỐI ĐỐI TƯỢNG (QUY ĐỊNH HTXSNV ≤ 20%):
+                </p>
+                <table className="w-full text-left text-[13pt] border-collapse border border-black font-times text-black">
+                  <thead>
+                    <tr className="bg-slate-100 font-bold text-center">
+                      <th className="border border-black px-3 py-1.5">Khối đối tượng</th>
+                      <th className="border border-black px-3 py-1.5 text-center">Tổng số</th>
+                      <th className="border border-black px-3 py-1.5 text-center">Hoàn thành XSNV</th>
+                      <th className="border border-black px-3 py-1.5 text-center">Tỷ lệ XSNV</th>
+                      <th className="border border-black px-3 py-1.5 text-center">Hoàn thành TNV</th>
+                      <th className="border border-black px-3 py-1.5 text-center">Hoàn thành NV</th>
+                      <th className="border border-black px-3 py-1.5 text-center">Không HTNV</th>
+                      <th className="border border-black px-3 py-1.5 text-center">Kiểm tra trần 20%</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="border border-black px-3 py-1.5 font-bold">1. Khối Công chức</td>
+                      <td className="border border-black px-3 py-1.5 text-center font-bold">{congChucStats.total}</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{congChucStats.exc}</td>
+                      <td className="border border-black px-3 py-1.5 text-center font-bold">{congChucStats.excPercent}%</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{congChucStats.good} ({congChucStats.goodPercent}%)</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{congChucStats.complete} ({congChucStats.completePercent}%)</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{congChucStats.fail} ({congChucStats.failPercent}%)</td>
+                      <td className="border border-black px-3 py-1.5 text-center italic">{congChucStats.total === 0 ? '—' : congChucStats.isExcExceeded ? 'Vượt trần 20%' : 'Đạt ≤ 20%'}</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-black px-3 py-1.5 font-bold">2. Khối Viên chức</td>
+                      <td className="border border-black px-3 py-1.5 text-center font-bold">{vienChucStats.total}</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{vienChucStats.exc}</td>
+                      <td className="border border-black px-3 py-1.5 text-center font-bold">{vienChucStats.excPercent}%</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{vienChucStats.good} ({vienChucStats.goodPercent}%)</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{vienChucStats.complete} ({vienChucStats.completePercent}%)</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{vienChucStats.fail} ({vienChucStats.failPercent}%)</td>
+                      <td className="border border-black px-3 py-1.5 text-center italic">{vienChucStats.total === 0 ? '—' : vienChucStats.isExcExceeded ? 'Vượt trần 20%' : 'Đạt ≤ 20%'}</td>
+                    </tr>
+                    <tr>
+                      <td className="border border-black px-3 py-1.5 font-bold">3. Khối Người lao động</td>
+                      <td className="border border-black px-3 py-1.5 text-center font-bold">{laoDongStats.total}</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{laoDongStats.exc}</td>
+                      <td className="border border-black px-3 py-1.5 text-center font-bold">{laoDongStats.excPercent}%</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{laoDongStats.good} ({laoDongStats.goodPercent}%)</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{laoDongStats.complete} ({laoDongStats.completePercent}%)</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{laoDongStats.fail} ({laoDongStats.failPercent}%)</td>
+                      <td className="border border-black px-3 py-1.5 text-center italic">{laoDongStats.total === 0 ? '—' : laoDongStats.isExcExceeded ? 'Vượt trần 20%' : 'Đạt ≤ 20%'}</td>
+                    </tr>
+                    <tr className="font-bold bg-slate-50">
+                      <td className="border border-black px-3 py-1.5 uppercase">Toàn cơ quan / Đơn vị</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{totalStats.total}</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{totalStats.exc}</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{totalStats.excPercent}%</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{totalStats.good} ({totalStats.goodPercent}%)</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{totalStats.complete} ({totalStats.completePercent}%)</td>
+                      <td className="border border-black px-3 py-1.5 text-center">{totalStats.fail} ({totalStats.failPercent}%)</td>
+                      <td className="border border-black px-3 py-1.5 text-center italic">{totalStats.total === 0 ? '—' : totalStats.isExcExceeded ? 'Vượt trần 20%' : 'Đạt ≤ 20%'}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* Bottom 2-Column Signatures */}
             <div className="grid grid-cols-2 text-center pt-8 text-[14pt] text-black">

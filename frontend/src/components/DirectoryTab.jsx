@@ -353,7 +353,7 @@ export default function DirectoryTab({
         <div className="relative">
           <input
             type="text"
-            placeholder="Tìm theo họ tên, số điện thoại, email, chức danh chính quyền, chức vụ Đảng..."
+            placeholder="Tìm theo họ tên, số điện thoại, email, chức vụ / vị trí việc làm, chức vụ Đảng..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs sm:text-sm rounded-xl pl-9 pr-8 py-2.5 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500 transition shadow-inner"
@@ -753,7 +753,7 @@ export default function DirectoryTab({
                   </span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-slate-400 block text-[10px] font-medium">Chức danh chính quyền</span>
+                  <span className="text-slate-400 block text-[10px] font-medium">Chức vụ / Vị trí việc làm</span>
                   <span className="font-semibold text-slate-800 text-xs mt-0.5 block">
                     {selectedUser.gov_title || '—'}
                   </span>

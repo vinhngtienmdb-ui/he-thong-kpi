@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS users (
     role_id TEXT REFERENCES roles(id) ON DELETE SET NULL,
     manager_id TEXT,
     management_role TEXT DEFAULT 'nhan_vien',
-    final_evaluator_id TEXT
+    final_evaluator_id TEXT,
+    employee_type TEXT DEFAULT 'vien_chuc'
 );
 
 -- 4. Periods (Ky danh gia KPI)

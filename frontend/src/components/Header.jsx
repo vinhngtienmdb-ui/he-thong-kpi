@@ -1164,7 +1164,7 @@ export default function Header({
                 </div>
 
                 <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                  <span className="text-slate-400 font-semibold block text-[11px] uppercase">Chức vụ Chính quyền</span>
+                  <span className="text-slate-400 font-semibold block text-[11px] uppercase">Chức vụ / Vị trí việc làm</span>
                   <span className="font-semibold text-slate-900">{currentUser?.gov_title || 'Chuyên viên'}</span>
                 </div>
 
@@ -1824,7 +1824,7 @@ export default function Header({
                     <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
                       <li><em>Tài khoản & Phân quyền Hệ thống:</em> Tên đăng nhập, mật khẩu, vai trò kèm nhãn cảnh báo User chức năng tự động, mẫu phiếu KPI thông minh tự khóa đối với tài khoản miễn đánh giá.</li>
                       <li><em>Đơn vị công tác & Tuyến Quản lý:</em> Phòng ban trực thuộc, chức vụ quản lý, người quản lý trực tiếp và người đánh giá cuối cùng.</li>
-                      <li><em>Thông tin Cá nhân & Chức danh:</em> Họ và tên, chức vụ chính quyền, chức vụ Đảng, ngày sinh (bộ chọn ngày), giới tính (Nam/Nữ), điện thoại, email.</li>
+                      <li><em>Thông tin Cá nhân & Chức danh:</em> Họ và tên, chức vụ / vị trí việc làm, chức vụ Đảng, ngày sinh (bộ chọn ngày), giới tính (Nam/Nữ), điện thoại, email.</li>
                     </ul>
                   </li>
                   <li><strong>Cơ chế 24/7 Anti-Sleep & High-Availability (Hệ thống chạy ổn định liên tục, không ngủ):</strong>

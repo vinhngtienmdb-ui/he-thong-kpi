@@ -1729,6 +1729,7 @@ async function exportMau02Workbook(periodId) {
 
   const rows = db.prepare(`
     SELECT u.id as user_id, u.full_name, u.role, u.target_role, u.management_role, u.party_title, u.gov_title, u.union_title, d.name as dept_name,
+           COALESCE(u.employee_type, 'vien_chuc') as employee_type,
            e.id as evaluation_id, e.step, e.part1_score, e.part2_score, e.bonus_score, e.total_score,
            e.rank_proposed, e.superior_rank, e.summary_reason, e.cadre_proposal_note, e.superior_comment
     FROM users u
@@ -1754,7 +1755,7 @@ async function exportMau02Workbook(periodId) {
   ws.columns = [
     { width: 6 },  // STT
     { width: 25 }, // Họ và tên
-    { width: 22 }, // Chức vụ
+    { width: 26 }, // Chức vụ / Vị trí việc làm
     { width: 22 }, // Đơn vị
     { width: 12 }, // Phần A (30đ)
     { width: 12 }, // Phần B (70đ)
@@ -1803,7 +1804,7 @@ async function exportMau02Workbook(periodId) {
 
   // Table header row 1 & 2
   const th1 = ws.addRow([
-    'STT', 'Họ và tên', 'Chức vụ', 'Đơn vị công tác',
+    'STT', 'Họ và tên', 'Chức vụ / Vị trí việc làm', 'Đơn vị công tác',
     'Điểm đánh giá chi tiết', '', '', '',
     'Kết quả xếp loại', '',
     'Tóm tắt căn cứ, lý do đề xuất xếp loại',
@@ -1842,98 +1843,144 @@ async function exportMau02Workbook(periodId) {
     c2.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
   }
 
-  // Data rows
-  let countExcellent = 0;
-  let countGood = 0;
-  let countComplete = 0;
-  let countFail = 0;
+  // Group definitions according to employee_type
+  const groupDefs = [
+    { type: 'cong_chuc', label: 'I. KHỐI CÔNG CHỨC', prefix: 'Công chức' },
+    { type: 'vien_chuc', label: 'II. KHỐI VIÊN CHỨC', prefix: 'Viên chức' },
+    { type: 'nguoi_lao_dong', label: 'III. KHỐI NGƯỜI LAO ĐỘNG', prefix: 'Người lao động' }
+  ];
 
-  rows.forEach((r, idx) => {
-    const isEvaluated = Boolean((r.superior_rank && r.superior_rank !== 'Chưa xếp loại') || (r.rank_proposed && !['Chưa tự đánh giá', 'Chưa đánh giá', 'Chưa xếp loại'].includes(r.rank_proposed) && Number(r.total_score) > 0));
-    const p1 = isEvaluated && r.part1_score !== null && r.part1_score !== undefined ? Number(r.part1_score) : 0;
-    const p2 = isEvaluated && r.part2_score !== null && r.part2_score !== undefined ? Number(r.part2_score) : 0;
-    const bonus = isEvaluated && r.bonus_score !== null && r.bonus_score !== undefined ? Number(r.bonus_score) : 0;
-    const total = isEvaluated ? (r.total_score !== null && r.total_score !== undefined ? Number(r.total_score) : (p1 + p2 + bonus)) : 0;
+  let overallExc = 0;
+  let overallGood = 0;
+  let overallComplete = 0;
+  let overallFail = 0;
+  let globalStt = 1;
 
-    const selfRank = isEvaluated ? (r.rank_proposed || 'Chưa tự đánh giá') : 'Chưa đánh giá';
-    const finalRank = r.superior_rank || selfRank;
+  const groupStats = [];
 
-    if (finalRank.includes('xuất sắc')) countExcellent++;
-    else if (finalRank.includes('tốt')) countGood++;
-    else if (finalRank.includes('Không') || finalRank.includes('không')) countFail++;
-    else if (finalRank.includes('Hoàn thành')) countComplete++;
+  groupDefs.forEach((grp) => {
+    const groupRows = rows.filter(r => (r.employee_type || 'vien_chuc') === grp.type);
+    if (groupRows.length === 0) return;
 
-    const row = ws.addRow([
-      idx + 1,
-      r.full_name,
-      r.gov_title || r.party_title || 'Cán bộ',
-      r.dept_name || '',
-      p1,
-      p2,
-      bonus > 0 ? bonus : '',
-      total,
-      selfRank,
-      finalRank,
-      r.summary_reason || '',
-      r.cadre_proposal_note || '',
-      ''
-    ]);
-
-    row.font = { name: 'Times New Roman', size: 14 };
-    row.height = 30;
-    row.alignment = { vertical: 'middle', wrapText: true };
-
-    row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
-    row.getCell(5).alignment = { horizontal: 'right', vertical: 'middle' };
-    row.getCell(6).alignment = { horizontal: 'right', vertical: 'middle' };
-    row.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
-    row.getCell(8).alignment = { horizontal: 'right', vertical: 'middle' };
-    row.getCell(8).font = { name: 'Times New Roman', size: 14, bold: true };
-    row.getCell(9).alignment = { horizontal: 'center', vertical: 'middle' };
-    row.getCell(10).alignment = { horizontal: 'center', vertical: 'middle' };
-    row.getCell(10).font = { name: 'Times New Roman', size: 14, bold: true };
-
+    // Group Header Row
+    const grpHeader = ws.addRow([`${grp.label} (Tổng số: ${groupRows.length} người)`]);
+    grpHeader.font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF1E3A8A' } };
+    grpHeader.height = 28;
+    ws.mergeCells(`A${grpHeader.number}:M${grpHeader.number}`);
+    grpHeader.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
     for (let c = 1; c <= 13; c++) {
-      row.getCell(c).border = {
-        top: { style: 'thin' },
-        bottom: { style: 'thin' },
-        left: { style: 'thin' },
-        right: { style: 'thin' }
-      };
+      grpHeader.getCell(c).border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
     }
+
+    let grpExc = 0;
+    let grpGood = 0;
+    let grpComp = 0;
+    let grpFail = 0;
+
+    groupRows.forEach((r) => {
+      const isEvaluated = Boolean((r.superior_rank && r.superior_rank !== 'Chưa xếp loại') || (r.rank_proposed && !['Chưa tự đánh giá', 'Chưa đánh giá', 'Chưa xếp loại'].includes(r.rank_proposed) && Number(r.total_score) > 0));
+      const p1 = isEvaluated && r.part1_score !== null && r.part1_score !== undefined ? Number(r.part1_score) : 0;
+      const p2 = isEvaluated && r.part2_score !== null && r.part2_score !== undefined ? Number(r.part2_score) : 0;
+      const bonus = isEvaluated && r.bonus_score !== null && r.bonus_score !== undefined ? Number(r.bonus_score) : 0;
+      const total = isEvaluated ? (r.total_score !== null && r.total_score !== undefined ? Number(r.total_score) : (p1 + p2 + bonus)) : 0;
+
+      const selfRank = isEvaluated ? (r.rank_proposed || 'Chưa tự đánh giá') : 'Chưa đánh giá';
+      const finalRank = r.superior_rank || selfRank;
+
+      if (finalRank.includes('xuất sắc')) { grpExc++; overallExc++; }
+      else if (finalRank.includes('tốt')) { grpGood++; overallGood++; }
+      else if (finalRank.includes('Không') || finalRank.includes('không')) { grpFail++; overallFail++; }
+      else if (finalRank.includes('Hoàn thành')) { grpComp++; overallComplete++; }
+
+      const row = ws.addRow([
+        globalStt++,
+        r.full_name,
+        r.gov_title || r.party_title || 'Cán bộ',
+        r.dept_name || '',
+        p1,
+        p2,
+        bonus > 0 ? bonus : '',
+        total,
+        selfRank,
+        finalRank,
+        r.summary_reason || '',
+        r.cadre_proposal_note || '',
+        ''
+      ]);
+
+      row.font = { name: 'Times New Roman', size: 14 };
+      row.height = 30;
+      row.alignment = { vertical: 'middle', wrapText: true };
+
+      row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+      row.getCell(5).alignment = { horizontal: 'right', vertical: 'middle' };
+      row.getCell(6).alignment = { horizontal: 'right', vertical: 'middle' };
+      row.getCell(7).alignment = { horizontal: 'right', vertical: 'middle' };
+      row.getCell(8).alignment = { horizontal: 'right', vertical: 'middle' };
+      row.getCell(8).font = { name: 'Times New Roman', size: 14, bold: true };
+      row.getCell(9).alignment = { horizontal: 'center', vertical: 'middle' };
+      row.getCell(10).alignment = { horizontal: 'center', vertical: 'middle' };
+      row.getCell(10).font = { name: 'Times New Roman', size: 14, bold: true };
+
+      for (let c = 1; c <= 13; c++) {
+        row.getCell(c).border = {
+          top: { style: 'thin' },
+          bottom: { style: 'thin' },
+          left: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      }
+    });
+
+    const gTotal = groupRows.length;
+    groupStats.push({
+      label: grp.label,
+      total: gTotal,
+      exc: grpExc,
+      good: grpGood,
+      complete: grpComp,
+      fail: grpFail,
+      excPct: gTotal > 0 ? ((grpExc / gTotal) * 100).toFixed(1) : '0.0',
+      goodPct: gTotal > 0 ? ((grpGood / gTotal) * 100).toFixed(1) : '0.0',
+      compPct: gTotal > 0 ? ((grpComp / gTotal) * 100).toFixed(1) : '0.0',
+      failPct: gTotal > 0 ? ((grpFail / gTotal) * 100).toFixed(1) : '0.0',
+      checkExc: Number(gTotal > 0 ? ((grpExc / gTotal) * 100).toFixed(1) : 0) <= 20
+    });
   });
 
   // Summary statistics box
   ws.addRow([]);
-  const sHead = ws.addRow(['THỐNG KÊ KẾT QUẢ ĐÁNH GIÁ, XẾP LOẠI TOÀN CƠ QUAN:']);
-  sHead.font = { name: 'Times New Roman', size: 14, bold: true };
-  ws.mergeCells(`A${sHead.number}:G${sHead.number}`);
+  const sHead = ws.addRow(['THỐNG KÊ TỶ LỆ XẾP LOẠI CHI TIẾT THEO TỪNG KHỐI ĐỐI TƯỢNG (Chuẩn Nghị định & Hướng dẫn 06-HD/TU):']);
+  sHead.font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF1E3A8A' } };
+  ws.mergeCells(`A${sHead.number}:M${sHead.number}`);
+
+  groupStats.forEach(gs => {
+    const rGHead = ws.addRow([`• ${gs.label}: Tổng số ${gs.total} người (100%)`]);
+    rGHead.font = { name: 'Times New Roman', size: 14, bold: true };
+    ws.mergeCells(`A${rGHead.number}:M${rGHead.number}`);
+
+    const rGExc = ws.addRow([`   - Hoàn thành xuất sắc nhiệm vụ: ${gs.exc} người (${gs.excPct}% - Quy định tối đa ≤ 20%): ${gs.checkExc ? 'ĐẠT QUY ĐỊNH' : 'VƯỢT CHỈ TIÊU CHO PHÉP'}`]);
+    rGExc.font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: gs.checkExc ? 'FF15803D' : 'FFB91C1C' } };
+    ws.mergeCells(`A${rGExc.number}:M${rGExc.number}`);
+
+    const rGDetails = ws.addRow([`   - Hoàn thành tốt: ${gs.good} người (${gs.goodPct}%) | Hoàn thành: ${gs.complete} người (${gs.compPct}%) | Không hoàn thành: ${gs.fail} người (${gs.failPct}%)`]);
+    rGDetails.font = { name: 'Times New Roman', size: 14 };
+    ws.mergeCells(`A${rGDetails.number}:M${rGDetails.number}`);
+  });
 
   const totalPersonnel = rows.length;
-  const excPct = totalPersonnel > 0 ? ((countExcellent / totalPersonnel) * 100).toFixed(1) : 0;
-  const goodPct = totalPersonnel > 0 ? ((countGood / totalPersonnel) * 100).toFixed(1) : 0;
-  const compPct = totalPersonnel > 0 ? ((countComplete / totalPersonnel) * 100).toFixed(1) : 0;
-  const failPct = totalPersonnel > 0 ? ((countFail / totalPersonnel) * 100).toFixed(1) : 0;
+  const overallExcPct = totalPersonnel > 0 ? ((overallExc / totalPersonnel) * 100).toFixed(1) : '0.0';
+  const overallGoodPct = totalPersonnel > 0 ? ((overallGood / totalPersonnel) * 100).toFixed(1) : '0.0';
+  const overallCompPct = totalPersonnel > 0 ? ((overallComplete / totalPersonnel) * 100).toFixed(1) : '0.0';
+  const overallFailPct = totalPersonnel > 0 ? ((overallFail / totalPersonnel) * 100).toFixed(1) : '0.0';
 
-  const s1 = ws.addRow([`- Tổng số cán bộ, công chức, viên chức: ${totalPersonnel} người (100%)`]);
-  s1.font = { name: 'Times New Roman', size: 14 };
-  ws.mergeCells(`A${s1.number}:G${s1.number}`);
+  const rAllHead = ws.addRow([`• TỔNG HỢP TOÀN CƠ QUAN / ĐƠN VỊ: ${totalPersonnel} cán bộ, công chức, viên chức, người lao động (100%)`]);
+  rAllHead.font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF990000' } };
+  ws.mergeCells(`A${rAllHead.number}:M${rAllHead.number}`);
 
-  const s2 = ws.addRow([`- Hoàn thành xuất sắc nhiệm vụ: ${countExcellent} người (${excPct}% - Quy định HD.06 tối đa không quá 20%): ${Number(excPct) <= 20 ? 'ĐẠT QUY ĐỊNH' : 'VƯỢT CHỈ TIÊU CHO PHÉP'}`]);
-  s2.font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: Number(excPct) <= 20 ? 'FF15803D' : 'FFB91C1C' } };
-  ws.mergeCells(`A${s2.number}:G${s2.number}`);
-
-  const s3 = ws.addRow([`- Hoàn thành tốt nhiệm vụ: ${countGood} người (${goodPct}%)`]);
-  s3.font = { name: 'Times New Roman', size: 14 };
-  ws.mergeCells(`A${s3.number}:G${s3.number}`);
-
-  const s4 = ws.addRow([`- Hoàn thành nhiệm vụ: ${countComplete} người (${compPct}%)`]);
-  s4.font = { name: 'Times New Roman', size: 14 };
-  ws.mergeCells(`A${s4.number}:G${s4.number}`);
-
-  const s5 = ws.addRow([`- Không hoàn thành nhiệm vụ: ${countFail} người (${failPct}%)`]);
-  s5.font = { name: 'Times New Roman', size: 14 };
-  ws.mergeCells(`A${s5.number}:G${s5.number}`);
+  const rAllDetails = ws.addRow([`   - Xuất sắc: ${overallExc} người (${overallExcPct}%) | Tốt: ${overallGood} người (${overallGoodPct}%) | Hoàn thành: ${overallComplete} người (${overallCompPct}%) | Không hoàn thành: ${overallFail} người (${overallFailPct}%)`]);
+  rAllDetails.font = { name: 'Times New Roman', size: 14, bold: true };
+  ws.mergeCells(`A${rAllDetails.number}:M${rAllDetails.number}`);
 
   // Signatures for Mẫu 02
   ws.addRow([]);
