@@ -1986,6 +1986,38 @@ app.get('/api/assigned-tasks', (req, res) => {
   res.json(tasks);
 });
 
+// Lấy thông tin chi tiết 1 nhiệm vụ theo ID
+app.get('/api/assigned-tasks/:id', (req, res) => {
+  const { id } = req.params;
+  const task = db.prepare(`
+    SELECT t.*, u.full_name as user_name, u.role as user_role, u.gov_title as user_title, d.name as dept_name,
+           assigner.full_name as assigner_name,
+           mgr.full_name as manager_name,
+           fe.full_name as final_evaluator_name,
+           ext_rev.full_name as extension_reviewed_by_name,
+           eval_u.full_name as evaluator_name,
+           eval_u.gov_title as evaluator_title,
+           eval_u.role as evaluator_role,
+           eval_u.management_role as evaluator_management_role,
+           del_by.full_name as delegated_by_name
+    FROM assigned_tasks t
+    JOIN users u ON t.user_id = u.id
+    LEFT JOIN departments d ON u.dept_id = d.id
+    LEFT JOIN users assigner ON t.assigned_by = assigner.id
+    LEFT JOIN users mgr ON u.manager_id = mgr.id
+    LEFT JOIN users fe ON u.final_evaluator_id = fe.id
+    LEFT JOIN users ext_rev ON t.extension_reviewed_by = ext_rev.id
+    LEFT JOIN users eval_u ON t.evaluator_id = eval_u.id
+    LEFT JOIN users del_by ON t.delegated_by = del_by.id
+    WHERE t.id = ?
+  `).get(id);
+
+  if (!task) {
+    return res.status(404).json({ success: false, message: 'Không tìm thấy nhiệm vụ!' });
+  }
+  res.json({ success: true, data: task });
+});
+
 // Helper: Check duplicate tasks for user(s) in a given period (Không cho phép giao trùng cùng 1 đầu việc)
 function checkTaskDuplicates({ period_id, user_ids, standard_task_id, task_name }) {
   if (!period_id || !user_ids || user_ids.length === 0) return [];
@@ -3322,11 +3354,16 @@ app.put('/api/assigned-tasks/:id/evaluation-feedback', (req, res) => {
 function createNotification({ userId, title, message, type = 'system', taskId = null, tab = 'assignment' }) {
   if (!userId || !title || !message) return null;
   try {
+    // Sanitize any YYYY-MM-DD in message to Vietnamese administrative standard DD/MM/YYYY
+    const formattedMessage = typeof message === 'string'
+      ? message.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, '$3/$2/$1')
+      : message;
+
     const id = 'notif-' + uuidv4();
     db.prepare(`
       INSERT INTO notifications (id, user_id, title, message, type, task_id, tab, is_read, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 0, CURRENT_TIMESTAMP)
-    `).run(id, userId, title, message, type, taskId, tab);
+    `).run(id, userId, title, formattedMessage, type, taskId, tab);
     return id;
   } catch (err) {
     console.error('[Notification] Error creating notification:', err);
@@ -3416,7 +3453,7 @@ app.post('/api/assigned-tasks/:id/request-extension', (req, res) => {
       createNotification({
         userId: targetLeaderId,
         title: '🔔 Cán bộ yêu cầu xin gia hạn công việc',
-        message: `Cán bộ ${task.user_name || 'nhân sự'} đề xuất gia hạn nhiệm vụ "${task.task_name}" đến ngày ${requested_deadline}. Lý do: ${reason.trim()}`,
+        message: `Cán bộ ${task.user_name || 'nhân sự'} đề xuất gia hạn nhiệm vụ "${task.task_name}" đến ngày ${formatDateVN(requested_deadline)}. Lý do: ${reason.trim()}`,
         type: 'extension_requested',
         taskId: id,
         tab: 'assignment'
@@ -3439,7 +3476,7 @@ app.post('/api/assigned-tasks/:id/request-extension', (req, res) => {
 app.put('/api/assigned-tasks/:id/review-extension', requireManagerOrAdmin, (req, res) => {
   try {
     const { id } = req.params;
-    const { action, reject_reason } = req.body; // action: 'approve' | 'reject'
+    const { action, reject_reason, new_deadline } = req.body; // action: 'approve' | 'reject'
     const viewer = getViewer(req);
     const viewerId = viewer?.id || getViewerId(req);
 
@@ -3459,7 +3496,7 @@ app.put('/api/assigned-tasks/:id/review-extension', requireManagerOrAdmin, (req,
     }
 
     if (action === 'approve') {
-      const newDeadline = task.requested_deadline;
+      const newDeadline = new_deadline || task.requested_deadline;
       if (!newDeadline) {
         return res.status(400).json({ success: false, message: 'Không tìm thấy thông tin hạn đề xuất mới!' });
       }
@@ -3478,7 +3515,7 @@ app.put('/api/assigned-tasks/:id/review-extension', requireManagerOrAdmin, (req,
       createNotification({
         userId: task.user_id,
         title: '✅ Yêu cầu gia hạn đã được phê duyệt',
-        message: `Lãnh đạo đã phê duyệt gia hạn nhiệm vụ "${task.task_name}". Thời hạn mới: ${newDeadline}.`,
+        message: `Lãnh đạo đã phê duyệt gia hạn nhiệm vụ "${task.task_name}". Thời hạn mới: ${formatDateVN(newDeadline)}.`,
         type: 'extension_approved',
         taskId: id,
         tab: 'execution'
@@ -3487,7 +3524,7 @@ app.put('/api/assigned-tasks/:id/review-extension', requireManagerOrAdmin, (req,
       triggerBackgroundSupabaseSync();
       return res.json({
         success: true,
-        message: `Đã phê duyệt gia hạn nhiệm vụ đến ngày ${newDeadline} thành công!`
+        message: `Đã phê duyệt gia hạn nhiệm vụ đến ngày ${formatDateVN(newDeadline)} thành công!`
       });
     } else if (action === 'reject') {
       const reason = reject_reason ? reject_reason.trim() : 'Không chấp thuận gia hạn';
@@ -3566,7 +3603,7 @@ app.put('/api/assigned-tasks/:id/extend-deadline', requireManagerOrAdmin, (req, 
     createNotification({
       userId: task.user_id,
       title: '📅 Nhiệm vụ được Lãnh đạo gia hạn',
-      message: `Lãnh đạo đã điều chỉnh hạn hoàn thành nhiệm vụ "${task.task_name}" đến ngày ${new_deadline}.${reason ? ` Lý do: ${reason.trim()}` : ''}`,
+      message: `Lãnh đạo đã điều chỉnh hạn hoàn thành nhiệm vụ "${task.task_name}" đến ngày ${formatDateVN(new_deadline)}.${reason ? ` Lý do: ${reason.trim()}` : ''}`,
       type: 'extension_approved',
       taskId: id,
       tab: 'execution'
@@ -3576,7 +3613,7 @@ app.put('/api/assigned-tasks/:id/extend-deadline', requireManagerOrAdmin, (req, 
 
     res.json({
       success: true,
-      message: `Đã gia hạn nhiệm vụ đến ngày ${new_deadline} thành công!`
+      message: `Đã gia hạn nhiệm vụ đến ngày ${formatDateVN(new_deadline)} thành công!`
     });
   } catch (err) {
     console.error('Error extending task deadline:', err);
@@ -3703,7 +3740,7 @@ function runDailyDeadlineScan() {
           createNotification({
             userId: task.user_id,
             title: '⚠️ Cảnh báo: Công việc đã quá hạn',
-            message: `Nhiệm vụ "${task.task_name}" đã quá hạn ${overdueDays} ngày (Hạn chót: ${task.deadline}). Vui lòng khẩn trương nộp minh chứng hoàn thành hoặc gửi yêu cầu gia hạn!`,
+            message: `Nhiệm vụ "${task.task_name}" đã quá hạn ${overdueDays} ngày (Hạn chót: ${formatDateVN(task.deadline)}). Vui lòng khẩn trương nộp minh chứng hoàn thành hoặc gửi yêu cầu gia hạn!`,
             type: 'deadline_warning',
             taskId: task.id,
             tab: 'execution'
@@ -3725,8 +3762,8 @@ function runDailyDeadlineScan() {
             ? '⏰ Nhắc nhở: Công việc đến hạn hôm nay'
             : `⏰ Nhắc nhở: Công việc sắp đến hạn (còn ${diffDays} ngày)`;
           const message = diffDays === 0
-            ? `Nhiệm vụ "${task.task_name}" có hạn chót là HÔM NAY (${task.deadline}). Vui lòng nộp sản phẩm đúng hạn!`
-            : `Nhiệm vụ "${task.task_name}" sẽ đến hạn vào ngày ${task.deadline} (còn ${diffDays} ngày). Vui lòng hoàn thành đúng tiến độ!`;
+            ? `Nhiệm vụ "${task.task_name}" có hạn chót là HÔM NAY (${formatDateVN(task.deadline)}). Vui lòng nộp sản phẩm đúng hạn!`
+            : `Nhiệm vụ "${task.task_name}" sẽ đến hạn vào ngày ${formatDateVN(task.deadline)} (còn ${diffDays} ngày). Vui lòng hoàn thành đúng tiến độ!`;
 
           createNotification({
             userId: task.user_id,

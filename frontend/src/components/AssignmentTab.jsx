@@ -44,6 +44,8 @@ export default function AssignmentTab({
   axes, 
   prefillTask, 
   clearPrefillTask,
+  focusExtensionTaskId,
+  clearFocusExtensionTaskId,
   setCurrentTab
 }) {
   const [standardTasks, setStandardTasks] = useState([]);
@@ -104,6 +106,7 @@ export default function AssignmentTab({
 
   // 2. Lãnh đạo xem xét duyệt/từ chối yêu cầu gia hạn
   const [extensionReviewModalTask, setExtensionReviewModalTask] = useState(null);
+  const [reviewApprovedDeadline, setReviewApprovedDeadline] = useState('');
   const [rejectReason, setRejectReason] = useState('');
   const [isReviewingExtension, setIsReviewingExtension] = useState(false);
 
@@ -736,7 +739,33 @@ export default function AssignmentTab({
   function openExtensionReviewModal(task) {
     setExtensionReviewModalTask(task);
     setRejectReason('');
+    setReviewApprovedDeadline(toInputDateFormat(task.requested_deadline || task.deadline || ''));
   }
+
+  // Lắng nghe yêu cầu mở modal xem xét gia hạn từ popup thông báo (focusExtensionTaskId)
+  useEffect(() => {
+    if (!focusExtensionTaskId) return;
+
+    const taskId = String(focusExtensionTaskId);
+    const found = assignedTasks.find(t => String(t.id) === taskId);
+    if (found) {
+      openExtensionReviewModal(found);
+      if (clearFocusExtensionTaskId) clearFocusExtensionTaskId();
+    } else {
+      api.getAssignedTaskById(taskId)
+        .then(res => {
+          if (res && res.data) {
+            openExtensionReviewModal(res.data);
+          }
+        })
+        .catch(err => {
+          console.error('Error fetching task for extension review:', err);
+        })
+        .finally(() => {
+          if (clearFocusExtensionTaskId) clearFocusExtensionTaskId();
+        });
+    }
+  }, [focusExtensionTaskId, assignedTasks]);
 
   // 2. Lãnh đạo phê duyệt hoặc từ chối yêu cầu gia hạn
   async function handleReviewExtension(action) {
@@ -745,10 +774,16 @@ export default function AssignmentTab({
       alert('Vui lòng nhập lý do từ chối gia hạn!');
       return;
     }
+    if (action === 'approve' && !reviewApprovedDeadline) {
+      alert('Vui lòng chọn thời hạn hoàn thành mới!');
+      return;
+    }
     try {
       setIsReviewingExtension(true);
+      const chosenDeadline = reviewApprovedDeadline || extensionReviewModalTask.requested_deadline;
       const res = await api.reviewTaskExtension(extensionReviewModalTask.id, {
         action,
+        new_deadline: chosenDeadline,
         reject_reason: rejectReason.trim()
       });
       alert(res.message || (action === 'approve' ? 'Đã phê duyệt gia hạn nhiệm vụ thành công!' : 'Đã từ chối gia hạn nhiệm vụ.'));
@@ -4069,6 +4104,24 @@ export default function AssignmentTab({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Chọn thời điểm hoàn thành mới được duyệt:
+                </label>
+                <div className="relative">
+                  <input
+                    type="date"
+                    value={reviewApprovedDeadline}
+                    onChange={(e) => setReviewApprovedDeadline(e.target.value)}
+                    className="w-full text-xs p-2.5 pl-9 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 font-semibold text-emerald-800 bg-emerald-50/40"
+                  />
+                  <Calendar className="w-4 h-4 text-emerald-600 absolute left-3 top-3 pointer-events-none" />
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  * Mặc định là hạn đề xuất của cán bộ ({formatDate(extensionReviewModalTask.requested_deadline)}). Lãnh đạo có thể chọn thời điểm gia hạn mới phù hợp.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
                   Ý kiến / Lý do từ chối (bắt buộc nếu từ chối):
                 </label>
                 <textarea
@@ -4105,7 +4158,7 @@ export default function AssignmentTab({
                   onClick={() => handleReviewExtension('approve')}
                   disabled={isReviewingExtension}
                   className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer"
-                  title="Đồng ý cập nhật hạn chót mới theo đề xuất của cán bộ"
+                  title="Đồng ý cập nhật hạn chót mới theo ngày đã chọn"
                 >
                   {isReviewingExtension ? 'Đang duyệt...' : '✓ Phê duyệt gia hạn'}
                 </button>

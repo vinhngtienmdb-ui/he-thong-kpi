@@ -54,6 +54,7 @@ export default function Header({
   departments = [], 
   onOpenMobileMenu,
   setCurrentTab,
+  onNotificationClick,
   onLogout
 }) {
   const [timeStr, setTimeStr] = useState('');
@@ -200,9 +201,16 @@ export default function Header({
     } catch (e) {}
 
     setShowNotificationsDropdown(false);
-    if (notif.tab && setCurrentTab) {
+    if (onNotificationClick) {
+      onNotificationClick(notif);
+    } else if (notif.tab && setCurrentTab) {
       setCurrentTab(notif.tab);
     }
+  };
+
+  const formatMessageDates = (text) => {
+    if (!text) return '';
+    return text.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, '$3/$2/$1');
   };
 
   const formatNotifTime = (dateStr) => {
@@ -575,7 +583,7 @@ export default function Header({
                               )}
                             </div>
                             <p className="text-xs text-slate-600 mt-1 line-clamp-2 leading-relaxed">
-                              {notif.message}
+                              {formatMessageDates(notif.message)}
                             </p>
                             <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1.5">
                               <span>{notif.time || formatNotifTime(notif.created_at)}</span>
@@ -1239,12 +1247,44 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 4.7 */}
+              {/* Version 4.8 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.7</span>
-                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Không Giới Hạn Điểm Tối Đa Mỗi Trục)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.8</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Điều Hướng Thông Báo Gia Hạn & Chuẩn Hóa Ngày Tháng)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Điều Hướng Thao Tác Trực Tiếp Từ Thông Báo Gia Hạn, Cho Phép Lãnh Đạo Chọn Thời Điểm Mới & Chuẩn Hóa Định Dạng Ngày Tháng (DD/MM/YYYY)
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Tương Tác Trực Tiếp Từ Popup Thông Báo Xin Gia Hạn:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Khi Lãnh đạo bấm vào thông báo đề xuất gia hạn công việc, hệ thống tự động chuyển ngay đến màn hình giao việc và tự động mở modal xem xét duyệt gia hạn cho nhiệm vụ đó.</li>
+                      <li>Tự động tải dữ liệu nhiệm vụ chính xác ngay cả khi danh sách công việc đang tải nền.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Cho Phép Lãnh Đạo Chọn Thời Điểm Hoàn Thành Mới:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Tại modal xem xét gia hạn, Lãnh đạo có thể trực tiếp chọn/điều chỉnh thời hạn hoàn thành mới (bằng date picker trực quan) thay vì chỉ duyệt cố định ngày cán bộ đề xuất.</li>
+                      <li>Mặc định khởi tạo theo ngày cán bộ xin gia hạn, Lãnh đạo có toàn quyền linh hoạt thay đổi thời hạn được duyệt theo tình hình thực tế.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Chuẩn Hóa Quy Cách Định Dạng Ngày Tháng (DD/MM/YYYY):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Toàn bộ thông báo hệ thống (xin gia hạn, duyệt gia hạn, cảnh báo sắp đến hạn, quá hạn...) được hiển thị chuẩn thể thức hành chính Việt Nam theo định dạng DD/MM/YYYY (ví dụ: 15/09/2026 thay vì 2026-09-15).</li>
+                      <li>Tự động chuyển đổi dữ liệu thông báo cũ trong cơ sở dữ liệu và bảo vệ 2 lớp tại tầng giao diện và backend.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 4.7 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-300 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 4.7</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Không Giới Hạn Điểm Tối Đa Mỗi Trục)</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Bỏ Giới Hạn Cứng Điểm Tối Đa Mỗi Trục Công Việc (Điểm Tối Đa Là Tổng Điểm Các Công Việc Được Giao) & Giữ Nguyên Cách Tính KPI Hiện Hữu Chuẩn Hướng Dẫn 06

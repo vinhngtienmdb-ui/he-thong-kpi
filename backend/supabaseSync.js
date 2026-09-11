@@ -871,13 +871,23 @@ async function pullFromSupabase() {
       `);
       db.transaction(() => {
         for (const n of supNotifs.rows) {
+          const rawMsg = toSqliteVal(n.message);
+          const sanitizedMsg = typeof rawMsg === 'string'
+            ? rawMsg.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, '$3/$2/$1')
+            : rawMsg;
           insNotif.run(
             toSqliteVal(n.id), toSqliteVal(n.user_id), toSqliteVal(n.title),
-            toSqliteVal(n.message), toSqliteVal(n.type), toSqliteVal(n.task_id),
+            sanitizedMsg, toSqliteVal(n.type), toSqliteVal(n.task_id),
             toSqliteVal(n.tab), n.is_read ? 1 : 0, toSqliteVal(n.created_at)
           );
         }
       })();
+      // Cập nhật chuẩn hóa ngày tháng cả trên Supabase Cloud
+      await client.query(`
+        UPDATE notifications 
+        SET message = regexp_replace(message, '(\\d{4})-(\\d{2})-(\\d{2})', '\\3/\\2/\\1', 'g') 
+        WHERE message ~ '\\d{4}-\\d{2}-\\d{2}'
+      `).catch(() => {});
       stats.notifications = supNotifs.rows.length;
     } catch (e) {
       stats.notifications = 0;

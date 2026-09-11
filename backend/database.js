@@ -457,6 +457,20 @@ function initDatabase() {
     db.prepare("UPDATE assigned_tasks SET axis_code = 'TRUC_1' WHERE axis_code = 'CHUYEN_MON' OR axis_code IS NULL OR axis_code = ''").run();
   } catch (e) {}
 
+  // Chuẩn hóa định dạng ngày trong bảng notifications sang DD/MM/YYYY
+  try {
+    const notifs = db.prepare("SELECT id, message FROM notifications WHERE message LIKE '%202_-%'").all();
+    const updateNotif = db.prepare("UPDATE notifications SET message = ? WHERE id = ?");
+    for (const n of notifs) {
+      if (n.message) {
+        const formatted = n.message.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, '$3/$2/$1');
+        if (formatted !== n.message) {
+          updateNotif.run(formatted, n.id);
+        }
+      }
+    }
+  } catch (e) {}
+
   // Ensure common_criteria does not have a global UNIQUE constraint on code
   try {
     const critTableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='common_criteria'").get();

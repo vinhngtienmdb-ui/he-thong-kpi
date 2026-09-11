@@ -218,6 +218,9 @@ export const api = {
     const query = new URLSearchParams(queryObj).toString();
     return fetchApi(`/assigned-tasks?${query}`);
   },
+  getAssignedTaskById: (id) => {
+    return fetchApi(`/assigned-tasks/${id}`);
+  },
   assignTask: (data) => {
     return fetchApi('/assigned-tasks/assign', {
       method: 'POST',

@@ -75,6 +75,21 @@ export default function App() {
   // Cross-tab prefill task for assignment
   const [prefillTask, setPrefillTask] = useState(null);
 
+  // Focus specific task for extension review when clicking notification
+  const [focusExtensionTaskId, setFocusExtensionTaskId] = useState(null);
+
+  const handleNotificationClick = (notif) => {
+    if (notif.type === 'extension_requested') {
+      const taskId = notif.task_id || notif.taskId;
+      if (taskId) {
+        setFocusExtensionTaskId(taskId);
+      }
+      setCurrentTab('assignment');
+    } else if (notif.tab) {
+      setCurrentTab(notif.tab);
+    }
+  };
+
   const loadInitialData = async () => {
     try {
       const [periodsData, usersData, axesData, deptsData] = await Promise.all([
@@ -347,6 +362,7 @@ export default function App() {
           departments={departments} 
           onOpenMobileMenu={() => setMobileOpen(true)} 
           setCurrentTab={setCurrentTab}
+          onNotificationClick={handleNotificationClick}
           onLogout={handleLogout}
         />
 
@@ -483,6 +499,8 @@ export default function App() {
               axes={axes}
               prefillTask={prefillTask}
               clearPrefillTask={() => setPrefillTask(null)}
+              focusExtensionTaskId={focusExtensionTaskId}
+              clearFocusExtensionTaskId={() => setFocusExtensionTaskId(null)}
               setCurrentTab={setCurrentTab}
             />
           )}
