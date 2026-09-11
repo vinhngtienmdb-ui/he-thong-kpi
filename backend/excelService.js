@@ -1682,18 +1682,19 @@ async function exportMau02Workbook(periodId) {
   let countFail = 0;
 
   rows.forEach((r, idx) => {
-    const p1 = r.part1_score !== null && r.part1_score !== undefined ? Number(r.part1_score) : 30;
-    const p2 = r.part2_score !== null && r.part2_score !== undefined ? Number(r.part2_score) : 0;
-    const bonus = r.bonus_score !== null && r.bonus_score !== undefined ? Number(r.bonus_score) : 0;
-    const total = r.total_score !== null && r.total_score !== undefined ? Number(r.total_score) : (p1 + p2 + bonus);
+    const isEvaluated = Boolean((r.superior_rank && r.superior_rank !== 'Chưa xếp loại') || (r.rank_proposed && !['Chưa tự đánh giá', 'Chưa đánh giá', 'Chưa xếp loại'].includes(r.rank_proposed) && Number(r.total_score) > 0));
+    const p1 = isEvaluated && r.part1_score !== null && r.part1_score !== undefined ? Number(r.part1_score) : 0;
+    const p2 = isEvaluated && r.part2_score !== null && r.part2_score !== undefined ? Number(r.part2_score) : 0;
+    const bonus = isEvaluated && r.bonus_score !== null && r.bonus_score !== undefined ? Number(r.bonus_score) : 0;
+    const total = isEvaluated ? (r.total_score !== null && r.total_score !== undefined ? Number(r.total_score) : (p1 + p2 + bonus)) : 0;
 
-    const selfRank = r.rank_proposed || 'Chưa tự đánh giá';
+    const selfRank = isEvaluated ? (r.rank_proposed || 'Chưa tự đánh giá') : 'Chưa đánh giá';
     const finalRank = r.superior_rank || selfRank;
 
     if (finalRank.includes('xuất sắc')) countExcellent++;
     else if (finalRank.includes('tốt')) countGood++;
     else if (finalRank.includes('Không') || finalRank.includes('không')) countFail++;
-    else countComplete++;
+    else if (finalRank.includes('Hoàn thành')) countComplete++;
 
     const row = ws.addRow([
       idx + 1,

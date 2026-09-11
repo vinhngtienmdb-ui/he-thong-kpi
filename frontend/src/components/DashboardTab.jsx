@@ -174,13 +174,20 @@ export default function DashboardTab({
   const currentDeptObj = departments.find(d => d.id === effectiveDeptId) || { name: currentUser?.dept_name || 'Đơn vị' };
   const deptStaffList = mau02Data.filter(u => u.dept_id === effectiveDeptId);
   const deptStaffCount = deptStaffList.length;
-  const deptTotalScoreSum = deptStaffList.reduce((acc, u) => acc + (u.total_score || 0), 0);
-  const deptAvgKpi = deptStaffCount > 0 ? (deptTotalScoreSum / deptStaffCount).toFixed(1) : '0';
 
-  const deptExcellentStaff = deptStaffList.filter(u => (u.superior_rank || u.rank_proposed) === 'Hoàn thành xuất sắc nhiệm vụ');
-  const deptGoodStaff = deptStaffList.filter(u => (u.superior_rank || u.rank_proposed) === 'Hoàn thành tốt nhiệm vụ');
-  const deptCompleteStaff = deptStaffList.filter(u => (u.superior_rank || u.rank_proposed) === 'Hoàn thành nhiệm vụ');
-  const deptFailStaff = deptStaffList.filter(u => (u.superior_rank || u.rank_proposed) === 'Không hoàn thành nhiệm vụ');
+  // Cán bộ đã thực hiện đánh giá xong (đã được CBQL kết luận hoặc đã nộp tự đánh giá và có điểm)
+  const deptEvaluatedStaff = deptStaffList.filter(u => 
+    (u.superior_rank && u.superior_rank !== 'Chưa xếp loại') || 
+    (u.evaluation_status === 'approved' || (u.evaluation_status === 'submitted' && Number(u.total_score) > 0))
+  );
+  const deptEvaluatedCount = deptEvaluatedStaff.length;
+  const deptTotalScoreSum = deptEvaluatedStaff.reduce((acc, u) => acc + (u.total_score || 0), 0);
+  const deptAvgKpi = deptEvaluatedCount > 0 ? (deptTotalScoreSum / deptEvaluatedCount).toFixed(1) : '0';
+
+  const deptExcellentStaff = deptEvaluatedStaff.filter(u => (u.superior_rank || u.rank_proposed) === 'Hoàn thành xuất sắc nhiệm vụ');
+  const deptGoodStaff = deptEvaluatedStaff.filter(u => (u.superior_rank || u.rank_proposed) === 'Hoàn thành tốt nhiệm vụ');
+  const deptCompleteStaff = deptEvaluatedStaff.filter(u => (u.superior_rank || u.rank_proposed) === 'Hoàn thành nhiệm vụ');
+  const deptFailStaff = deptEvaluatedStaff.filter(u => (u.superior_rank || u.rank_proposed) === 'Không hoàn thành nhiệm vụ');
 
   const deptExcellentPct = deptStaffCount > 0 ? Number(((deptExcellentStaff.length / deptStaffCount) * 100).toFixed(1)) : 0;
   const isDeptExceedingQuota = deptExcellentPct > maxExcellentPct;
@@ -191,9 +198,14 @@ export default function DashboardTab({
 
   // --- Calculations for Agency View ---
   const agencyStaffCount = mau02Data.length;
-  const agencyTotalScoreSum = mau02Data.reduce((acc, u) => acc + (u.total_score || 0), 0);
-  const agencyAvgKpi = agencyStaffCount > 0 ? (agencyTotalScoreSum / agencyStaffCount).toFixed(1) : '0';
-  const agencyExcellentStaff = mau02Data.filter(u => (u.superior_rank || u.rank_proposed) === 'Hoàn thành xuất sắc nhiệm vụ');
+  const agencyEvaluatedStaff = mau02Data.filter(u => 
+    (u.superior_rank && u.superior_rank !== 'Chưa xếp loại') || 
+    (u.evaluation_status === 'approved' || (u.evaluation_status === 'submitted' && Number(u.total_score) > 0))
+  );
+  const agencyEvaluatedCount = agencyEvaluatedStaff.length;
+  const agencyTotalScoreSum = agencyEvaluatedStaff.reduce((acc, u) => acc + (u.total_score || 0), 0);
+  const agencyAvgKpi = agencyEvaluatedCount > 0 ? (agencyTotalScoreSum / agencyEvaluatedCount).toFixed(1) : '0';
+  const agencyExcellentStaff = agencyEvaluatedStaff.filter(u => (u.superior_rank || u.rank_proposed) === 'Hoàn thành xuất sắc nhiệm vụ');
   const agencyExcellentPct = agencyStaffCount > 0 ? Number(((agencyExcellentStaff.length / agencyStaffCount) * 100).toFixed(1)) : 0;
   const isAgencyExceedingQuota = agencyExcellentPct > maxExcellentPct;
 
@@ -201,10 +213,15 @@ export default function DashboardTab({
   const deptRankings = departments.map(d => {
     const dUsers = mau02Data.filter(u => u.dept_id === d.id);
     const count = dUsers.length;
-    const avgP1 = count > 0 ? (dUsers.reduce((s, u) => s + (u.part1_score || 0), 0) / count).toFixed(1) : '0';
-    const avgP2 = count > 0 ? (dUsers.reduce((s, u) => s + (u.part2_score || 0), 0) / count).toFixed(1) : '0';
-    const totalScoreAvg = count > 0 ? Number((dUsers.reduce((s, u) => s + (u.total_score || 0), 0) / count).toFixed(1)) : 0;
-    const excCount = dUsers.filter(u => (u.superior_rank || u.rank_proposed) === 'Hoàn thành xuất sắc nhiệm vụ').length;
+    const dEvaluated = dUsers.filter(u => 
+      (u.superior_rank && u.superior_rank !== 'Chưa xếp loại') || 
+      (u.evaluation_status === 'approved' || (u.evaluation_status === 'submitted' && Number(u.total_score) > 0))
+    );
+    const evalCount = dEvaluated.length;
+    const avgP1 = evalCount > 0 ? (dEvaluated.reduce((s, u) => s + (u.part1_score || 0), 0) / evalCount).toFixed(1) : '0';
+    const avgP2 = evalCount > 0 ? (dEvaluated.reduce((s, u) => s + (u.part2_score || 0), 0) / evalCount).toFixed(1) : '0';
+    const totalScoreAvg = evalCount > 0 ? Number((dEvaluated.reduce((s, u) => s + (u.total_score || 0), 0) / evalCount).toFixed(1)) : 0;
+    const excCount = dEvaluated.filter(u => (u.superior_rank || u.rank_proposed) === 'Hoàn thành xuất sắc nhiệm vụ').length;
     const excPct = count > 0 ? Number(((excCount / count) * 100).toFixed(1)) : 0;
     const dTasks = dUsers.reduce((s, u) => s + (u.total_tasks || 0), 0);
     const dApprTasks = dUsers.reduce((s, u) => s + (u.approved_tasks || 0), 0);
@@ -213,6 +230,7 @@ export default function DashboardTab({
     return {
       dept: d,
       staffCount: count,
+      evalCount,
       avgP1,
       avgP2,
       avgTotal: totalScoreAvg,
@@ -997,7 +1015,9 @@ export default function DashboardTab({
                 <span className="text-xs font-normal text-slate-400">/ 100 điểm</span>
               </div>
               <p className="mt-2 text-xs text-slate-500 font-normal">
-                Điểm bình quân thực hiện công việc và tiêu chí chung
+                {deptEvaluatedCount > 0 
+                  ? `Bình quân (${deptEvaluatedCount}/${deptStaffCount} cán bộ đã hoàn thành đánh giá)`
+                  : 'Chưa có cán bộ nào thực hiện đánh giá xong'}
               </p>
             </div>
 
@@ -1316,7 +1336,9 @@ export default function DashboardTab({
                 <span className="text-xs font-normal text-slate-400">/ 100 điểm</span>
               </div>
               <p className="mt-2 text-xs text-slate-500 font-normal">
-                Điểm KPI trung bình của toàn thể cán bộ trong toàn cơ quan
+                {agencyEvaluatedCount > 0 
+                  ? `Bình quân (${agencyEvaluatedCount}/${agencyStaffCount} cán bộ đã hoàn thành đánh giá)`
+                  : 'Chưa có cán bộ nào thực hiện đánh giá xong'}
               </p>
             </div>
 

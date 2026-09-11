@@ -1239,12 +1239,44 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 4.4 */}
+              {/* Version 4.5 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.4</span>
-                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Đồng bộ Dữ liệu Tức thì & Tối ưu Màn hình B2)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 4.5</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026 (Bản phát hành mới nhất - Chuẩn hóa Bảng Giám Sát & Reset Đánh Giá)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Chuẩn Hóa Điểm KPI Trung Bình Đơn Vị & Reset Toàn Bộ Đánh Giá Về Trạng Thái Chưa Đánh Giá (Bảng Giám Sát & Báo Cáo Mẫu 02)
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Reset Toàn Bộ Đánh Giá Về Trạng Thái "Chưa Đánh Giá":</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Đã thực hiện reset hoàn toàn dữ liệu đánh giá cá nhân (CSDL SQLite và Supabase Cloud PostgreSQL) về trạng thái khởi tạo ban đầu (Chưa đánh giá).</li>
+                      <li>Xóa bỏ các điểm tự chấm hoặc dữ liệu chấm điểm thử nghiệm trước đó để bảo đảm tính khách quan, công bằng trước khi các đơn vị chính thức bước vào quy trình tự đánh giá và thẩm định.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Khắc Phục Lỗi Hiển Thị Điểm KPI Trung Bình Khi Chưa Ai Hoàn Thành Đánh Giá:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li><strong>Nguyên nhân:</strong> Do cơ chế khởi tạo mặc định trước đây tự động gán điểm Phần I (30 điểm) cho bản ghi nháp khi cán bộ mở xem màn hình, khiến công thức tính trung bình cộng toàn đơn vị bị cộng dồn điểm nháp.</li>
+                      <li><strong>Xử lý triệt để:</strong> Tách biệt hoàn toàn trạng thái Nháp (Draft) với Đã đánh giá (Submitted / Approved). Chỉ khi cán bộ thực sự nộp bản tự đánh giá (B3) hoặc được Cán bộ Quản lý kết luận thẩm định (B4) thì điểm số mới được ghi nhận vào Bảng giám sát và Báo cáo Mẫu 02.</li>
+                      <li>Khi chưa có cán bộ nào hoàn thành đánh giá, <strong>Điểm KPI trung bình đơn vị sẽ hiển thị chính xác là 0 điểm</strong> kèm thông báo rõ ràng <em>"Chưa có cán bộ nào thực hiện đánh giá xong"</em>.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Chuẩn Hóa Phân Bổ Xếp Loại Thi Đua:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Các chỉ số thống kê tỷ lệ Xuất sắc, Tốt, Hoàn thành, Không hoàn thành tại Bảng giám sát và Báo cáo tổng hợp Mẫu 02 chỉ tính trên số lượng cán bộ đã có kết quả đánh giá chính thức, không tự động gán cán bộ chưa đánh giá vào mức Hoàn thành.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 4.4 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-300 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 4.4</span>
+                  <span className="text-xs text-slate-500 font-medium">11/09/2026</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Đồng Bộ Dữ Liệu Tức Thì Khi Admin Xóa Công Việc Bị Giao Sai & Ưu Tiên Sắp Xếp Theo Trục (Trục 1 - 6) Rồi Đến Hạn Sớm Nhất Tại Màn Hình B2 Nộp Sản Phẩm

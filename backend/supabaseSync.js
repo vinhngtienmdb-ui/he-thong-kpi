@@ -392,36 +392,47 @@ async function pushToSupabase() {
 
     // 12. evaluations
     const evaluations = db.prepare('SELECT * FROM evaluations').all();
-    await batchUpsert(
-      client, 'evaluations',
-      ['id', 'period_id', 'user_id', 'part1_score', 'part2_score', 'total_score',
-       'rank_proposed', 'superior_rank', 'superior_comment', 'status', 'updated_at',
-       'step', 'bonus_score', 'bonus_note', 'plan_total_max_score', 'executed_total_conv_score',
-       'summary_reason', 'cadre_proposal_note', 'return_reason', 'returned_at',
-       'returned_by', 'submitted_at'],
-      ['period_id', 'user_id'],
-      ['total_score', 'status', 'step', 'superior_rank', 'updated_at'],
-      evaluations.map(ev => ({
-        ...ev,
-        returned_by: validUserIds.has(ev.returned_by) ? ev.returned_by : null
-      }))
-    );
+    if (evaluations.length > 0) {
+      await batchUpsert(
+        client, 'evaluations',
+        ['id', 'period_id', 'user_id', 'part1_score', 'part2_score', 'total_score',
+         'rank_proposed', 'superior_rank', 'superior_comment', 'status', 'updated_at',
+         'step', 'bonus_score', 'bonus_note', 'plan_total_max_score', 'executed_total_conv_score',
+         'summary_reason', 'cadre_proposal_note', 'return_reason', 'returned_at',
+         'returned_by', 'submitted_at'],
+        ['period_id', 'user_id'],
+        ['total_score', 'status', 'step', 'superior_rank', 'updated_at'],
+        evaluations.map(ev => ({
+          ...ev,
+          returned_by: validUserIds.has(ev.returned_by) ? ev.returned_by : null
+        }))
+      );
+      await client.query(`DELETE FROM evaluations WHERE NOT (id = ANY($1))`, [evaluations.map(e => e.id)]);
+    } else {
+      await client.query('DELETE FROM evaluation_criteria_details');
+      await client.query('DELETE FROM evaluations');
+    }
     stats.evaluations = evaluations.length;
 
     // 13. evaluation_criteria_details
     const critDetails = db.prepare('SELECT * FROM evaluation_criteria_details').all();
-    await batchUpsert(
-      client, 'evaluation_criteria_details',
-      ['id', 'evaluation_id', 'criteria_id', 'is_satisfied', 'score', 'note'],
-      ['id'],
-      ['is_satisfied', 'score', 'note'],
-      critDetails.map(cd => ({
-        ...cd,
-        is_satisfied: cd.is_satisfied ?? 1,
-        score: cd.score ?? 0
-      })),
-      100
-    );
+    if (critDetails.length > 0) {
+      await batchUpsert(
+        client, 'evaluation_criteria_details',
+        ['id', 'evaluation_id', 'criteria_id', 'is_satisfied', 'score', 'note'],
+        ['id'],
+        ['is_satisfied', 'score', 'note'],
+        critDetails.map(cd => ({
+          ...cd,
+          is_satisfied: cd.is_satisfied ?? 1,
+          score: cd.score ?? 0
+        })),
+        100
+      );
+      await client.query(`DELETE FROM evaluation_criteria_details WHERE NOT (id = ANY($1))`, [critDetails.map(cd => cd.id)]);
+    } else {
+      await client.query('DELETE FROM evaluation_criteria_details');
+    }
     stats.evaluation_criteria_details = critDetails.length;
 
     // 14. votes
@@ -1110,6 +1121,31 @@ async function deleteUserFromSupabase(userId) {
   }
 }
 
+/**
+ * Reset toàn bộ bảng evaluations và criteria_details trên Supabase Cloud
+ */
+async function resetAllEvaluationsFromSupabase() {
+  if (!isSupabaseConfigured()) return;
+  const pool = getPool();
+  if (!pool) return;
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    await client.query('DELETE FROM evaluation_criteria_details');
+    await client.query('DELETE FROM evaluations');
+    await client.query('DELETE FROM votes');
+    await client.query('COMMIT');
+    console.log('[Supabase Reset] Đã reset toàn bộ bảng evaluations, criteria_details, votes trên Supabase Cloud.');
+  } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    console.error('[Supabase Reset] Lỗi khi reset evaluations trên Supabase:', err.message);
+  } finally {
+    if (client) client.release();
+    if (pool) await pool.end();
+  }
+}
+
 module.exports = {
   isSupabaseConfigured,
   getSupabaseStatus,
@@ -1122,6 +1158,7 @@ module.exports = {
   autoRestoreFromSupabaseIfFresh,
   deleteStandardTasksFromSupabase,
   deleteAssignedTasksFromSupabase,
-  deleteUserFromSupabase
+  deleteUserFromSupabase,
+  resetAllEvaluationsFromSupabase
 };
 

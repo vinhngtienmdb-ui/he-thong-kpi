@@ -36,7 +36,8 @@ const {
   autoRestoreFromSupabaseIfFresh,
   deleteStandardTasksFromSupabase,
   deleteAssignedTasksFromSupabase,
-  deleteUserFromSupabase
+  deleteUserFromSupabase,
+  resetAllEvaluationsFromSupabase
 } = require('./supabaseSync');
 
 // Initialize database
@@ -3454,7 +3455,7 @@ app.get('/api/evaluations', (req, res) => {
     const evalId = uuidv4();
     db.prepare(`
       INSERT INTO evaluations (id, period_id, user_id, part1_score, part2_score, bonus_score, total_score, rank_proposed, status, step)
-      VALUES (?, ?, ?, 30, 0, 0, 30, 'Chưa tự đánh giá', 'draft', 'step_1_register')
+      VALUES (?, ?, ?, 0, 0, 0, 0, 'Chưa tự đánh giá', 'draft', 'step_1_register')
     `).run(evalId, period_id, user_id);
     evaluation = db.prepare('SELECT * FROM evaluations WHERE id = ?').get(evalId);
   }
@@ -3579,7 +3580,15 @@ app.get('/api/evaluations', (req, res) => {
     };
   });
 
-  // Update evaluation record with accurate calculations
+  // Update evaluation record:
+  // Nếu cán bộ chưa nộp tự đánh giá (status === 'draft' hoặc 'returned'),
+  // total_score trong CSDL phải giữ bằng 0 và rank_proposed là 'Chưa tự đánh giá'
+  // để không làm sai lệch Bảng giám sát KPI và Báo cáo Mẫu 02
+  const isEvaluated = evaluation.status === 'submitted' || evaluation.status === 'approved';
+  const savedTotalScore = isEvaluated ? grandTotal : 0;
+  const savedRankProposed = isEvaluated ? autoRank : (evaluation.rank_proposed && evaluation.rank_proposed !== 'Hoàn thành tốt nhiệm vụ' && evaluation.rank_proposed !== 'Hoàn thành xuất sắc nhiệm vụ' && evaluation.rank_proposed !== 'Hoàn thành nhiệm vụ' && evaluation.rank_proposed !== 'Không hoàn thành nhiệm vụ' ? evaluation.rank_proposed : 'Chưa tự đánh giá');
+  const savedPart1Score = isEvaluated || (evaluation.part1_score && evaluation.part1_score > 0) ? part1Score : 0;
+
   db.prepare(`
     UPDATE evaluations
     SET part1_score = ?, part2_score = ?, bonus_score = ?, total_score = ?,
@@ -3587,9 +3596,9 @@ app.get('/api/evaluations', (req, res) => {
         rank_proposed = ?, step = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(
-    part1Score, part2Score, cappedBonusScore, grandTotal,
+    savedPart1Score, part2Score, cappedBonusScore, savedTotalScore,
     planTotalMaxScore, executedTotalConvScore,
-    autoRank, currentStep, evaluation.id
+    savedRankProposed, currentStep, evaluation.id
   );
 
   res.json({
@@ -3599,10 +3608,12 @@ app.get('/api/evaluations', (req, res) => {
       part1_score: part1Score,
       part2_score: part2Score,
       bonus_score: cappedBonusScore,
-      total_score: grandTotal,
+      total_score: isEvaluated ? grandTotal : 0,
+      preview_total_score: grandTotal,
       plan_total_max_score: planTotalMaxScore,
       executed_total_conv_score: executedTotalConvScore,
-      rank_proposed: autoRank,
+      rank_proposed: isEvaluated ? autoRank : 'Chưa tự đánh giá',
+      preview_rank: autoRank,
       step: currentStep
     },
     criteria,
@@ -3673,15 +3684,29 @@ app.post('/api/evaluations/submit', (req, res) => {
     return res.status(403).json({ success: false, message: `Kỳ đánh giá "${evalRec.period_name}" đã Chốt KPI. Không thể nộp sửa đổi!` });
   }
 
+  // Calculate submitted total_score and autoRank
+  const p1 = Number(evalRec.part1_score || 0);
+  const p2 = Number(evalRec.part2_score || 0);
+  const bonus = Number(evalRec.bonus_score || 0);
+  const submittedTotal = Number(Math.min(100, p1 + p2 + bonus).toFixed(2));
+
+  let submittedRank = 'Chưa xếp loại';
+  if (submittedTotal >= 90) submittedRank = 'Hoàn thành xuất sắc nhiệm vụ';
+  else if (submittedTotal >= 70) submittedRank = 'Hoàn thành tốt nhiệm vụ';
+  else if (submittedTotal >= 50) submittedRank = 'Hoàn thành nhiệm vụ';
+  else submittedRank = 'Không hoàn thành nhiệm vụ';
+
   db.prepare(`
     UPDATE evaluations
     SET status = 'submitted',
+        total_score = ?,
+        rank_proposed = ?,
         step = 'step_4_grading',
         submitted_at = CURRENT_TIMESTAMP,
         return_reason = NULL,
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
-  `).run(evaluation_id);
+  `).run(submittedTotal, submittedRank, evaluation_id);
 
   res.json({ success: true, message: 'Đã nộp bản tự đánh giá thành công! Hồ sơ đã được chuyển cho Cán bộ Quản lý/Lãnh đạo thẩm định.' });
 });
@@ -3710,6 +3735,9 @@ app.post('/api/evaluations/return', requireManagerOrAdmin, (req, res) => {
   db.prepare(`
     UPDATE evaluations
     SET status = 'returned',
+        total_score = 0,
+        rank_proposed = 'Chưa tự đánh giá',
+        superior_rank = NULL,
         step = 'step_3_self_eval',
         return_reason = ?,
         returned_at = CURRENT_TIMESTAMP,
@@ -3801,8 +3829,13 @@ app.get('/api/reports/mau-02', (req, res) => {
 
   let query = `
     SELECT u.id as user_id, u.full_name, u.role, u.target_role, u.management_role, u.party_title, u.gov_title, u.union_title, u.dept_id, d.name as dept_name,
-           e.id as evaluation_id, e.step, e.part1_score, e.part2_score, e.bonus_score, e.total_score,
-           e.rank_proposed, e.superior_rank, e.summary_reason, e.cadre_proposal_note, e.superior_comment,
+           e.id as evaluation_id, e.status as evaluation_status, e.step,
+           CASE WHEN e.status IN ('submitted', 'approved') THEN e.part1_score ELSE 0 END as part1_score,
+           CASE WHEN e.status IN ('submitted', 'approved') THEN e.part2_score ELSE 0 END as part2_score,
+           CASE WHEN e.status IN ('submitted', 'approved') THEN e.bonus_score ELSE 0 END as bonus_score,
+           CASE WHEN e.status IN ('submitted', 'approved') THEN e.total_score ELSE 0 END as total_score,
+           CASE WHEN e.status IN ('submitted', 'approved') THEN e.rank_proposed ELSE 'Chưa tự đánh giá' END as rank_proposed,
+           e.superior_rank, e.summary_reason, e.cadre_proposal_note, e.superior_comment,
            (SELECT COUNT(*) FROM assigned_tasks t WHERE t.user_id = u.id AND t.period_id = ? AND t.status != 'rejected') as total_tasks,
            (SELECT COUNT(*) FROM assigned_tasks t WHERE t.user_id = u.id AND t.period_id = ? AND t.status = 'approved') as approved_tasks,
            (SELECT COUNT(*) FROM assigned_tasks t WHERE t.user_id = u.id AND t.period_id = ? AND t.status = 'approved' AND ((t.progress_pct = 1.0 AND t.actual_finish_date < t.deadline) OR t.bonus_score > 0)) as ahead_tasks
@@ -3948,10 +3981,10 @@ app.get('/api/stats/dashboard', (req, res) => {
   const inProgressTasks = db.prepare(`SELECT COUNT(*) as count FROM assigned_tasks WHERE period_id = ? AND status = 'in_progress' ${userFilterClause}`).get(...paramsTasks).count;
   const pendingTasks = db.prepare(`SELECT COUNT(*) as count FROM assigned_tasks WHERE period_id = ? AND status = 'pending_approval' ${userFilterClause}`).get(...paramsTasks).count;
 
-  // Average KPI score of users
+  // Average KPI score of users (chỉ tính cán bộ đã nộp tự đánh giá hoặc đã thẩm định)
   const avgScores = db.prepare(`
     SELECT AVG(total_score) as avg_total, AVG(part1_score) as avg_p1, AVG(part2_score) as avg_p2
-    FROM evaluations WHERE period_id = ? ${userFilterClause}
+    FROM evaluations WHERE period_id = ? AND status IN ('submitted', 'approved') ${userFilterClause}
   `).get(...paramsEvals);
 
   res.json({
@@ -4346,8 +4379,8 @@ app.get('/api/stats/charts', (req, res) => {
   const onTime = db.prepare(`SELECT COUNT(*) as count FROM assigned_tasks WHERE period_id = ? AND actual_finish_date IS NOT NULL AND actual_finish_date <= deadline ${userFilterClause}`).get(...paramsTasks).count;
   const late = totalCompleted - onTime;
 
-  // 3. Score ranges
-  const evals = db.prepare(`SELECT total_score, superior_rank, rank_proposed FROM evaluations WHERE period_id = ? ${userFilterClause}`).all(...paramsEvals);
+  // 3. Score ranges (chỉ tính cán bộ đã nộp tự đánh giá hoặc đã được thẩm định chấm điểm)
+  const evals = db.prepare(`SELECT total_score, superior_rank, rank_proposed, status FROM evaluations WHERE period_id = ? AND status IN ('submitted', 'approved') ${userFilterClause}`).all(...paramsEvals);
   const scoreDist = [
     { range: 'Dưới 70 điểm (Không HT)', count: evals.filter(e => e.total_score < 70).length },
     { range: '70 - 79 điểm (Hoàn thành)', count: evals.filter(e => e.total_score >= 70 && e.total_score < 80).length },
@@ -4370,6 +4403,32 @@ app.get('/api/stats/charts', (req, res) => {
     rankDistribution: rankDist,
     totalEvaluated: evals.length
   });
+});
+
+// Reset toàn bộ đánh giá về trạng thái Chưa đánh giá (Dành cho Quản trị viên & Lãnh đạo)
+app.post('/api/evaluations/reset-all', requireManagerOrAdmin, async (req, res) => {
+  try {
+    const { period_id } = req.body;
+    if (period_id) {
+      db.prepare(`DELETE FROM evaluation_criteria_details WHERE evaluation_id IN (SELECT id FROM evaluations WHERE period_id = ?)`).run(period_id);
+      db.prepare(`DELETE FROM evaluations WHERE period_id = ?`).run(period_id);
+      db.prepare(`DELETE FROM votes WHERE period_id = ?`).run(period_id);
+    } else {
+      db.prepare(`DELETE FROM evaluation_criteria_details`).run();
+      db.prepare(`DELETE FROM evaluations`).run();
+      db.prepare(`DELETE FROM votes`).run();
+    }
+    
+    // Đồng bộ lên Supabase Cloud
+    if (typeof resetAllEvaluationsFromSupabase === 'function') {
+      await resetAllEvaluationsFromSupabase().catch(err => console.error('Lỗi reset Supabase:', err));
+    }
+    triggerBackgroundSupabaseSync();
+
+    res.json({ success: true, message: 'Đã reset toàn bộ đánh giá về trạng thái Chưa đánh giá thành công!' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Lỗi khi reset đánh giá: ' + err.message });
+  }
 });
 
 // -------------------------------------------------------------

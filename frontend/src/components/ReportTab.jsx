@@ -247,7 +247,7 @@ export default function ReportTab({
   const countExc = mau02List.filter(r => (r.superior_rank || r.rank_proposed || '').includes('xuất sắc')).length;
   const countGood = mau02List.filter(r => (r.superior_rank || r.rank_proposed || '').includes('tốt')).length;
   const countFail = mau02List.filter(r => (r.superior_rank || r.rank_proposed || '').toLowerCase().includes('không')).length;
-  const countComplete = totalStaff - countExc - countGood - countFail;
+  const countComplete = mau02List.filter(r => (r.superior_rank || r.rank_proposed || '') === 'Hoàn thành nhiệm vụ').length;
   const excPercent = totalStaff > 0 ? ((countExc / totalStaff) * 100).toFixed(1) : 0;
 
   return (
@@ -1340,11 +1340,13 @@ export default function ReportTab({
                   ) : (
                     mau02List.map((r, idx) => {
                       const isEditing = editingRow === r.user_id;
-                      const p1 = r.part1_score !== null && r.part1_score !== undefined ? Number(r.part1_score) : 30;
-                      const p2 = r.part2_score !== null && r.part2_score !== undefined ? Number(r.part2_score) : 0;
-                      const bonus = r.bonus_score !== null && r.bonus_score !== undefined ? Number(r.bonus_score) : 0;
-                      const total = r.total_score !== null && r.total_score !== undefined ? Number(r.total_score) : (p1 + p2 + bonus);
-                      const finalRank = r.superior_rank || r.rank_proposed || 'Chưa xếp loại';
+                      const isEvaluated = Boolean((r.superior_rank && r.superior_rank !== 'Chưa xếp loại') || (r.rank_proposed && !['Chưa tự đánh giá', 'Chưa đánh giá', 'Chưa xếp loại'].includes(r.rank_proposed) && Number(r.total_score) > 0));
+                      const p1 = isEvaluated && r.part1_score !== null && r.part1_score !== undefined ? Number(r.part1_score) : 0;
+                      const p2 = isEvaluated && r.part2_score !== null && r.part2_score !== undefined ? Number(r.part2_score) : 0;
+                      const bonus = isEvaluated && r.bonus_score !== null && r.bonus_score !== undefined ? Number(r.bonus_score) : 0;
+                      const total = isEvaluated ? (r.total_score !== null && r.total_score !== undefined ? Number(r.total_score) : (p1 + p2 + bonus)) : 0;
+                      const selfRank = isEvaluated ? (r.rank_proposed || 'Chưa tự đánh giá') : 'Chưa đánh giá';
+                      const finalRank = r.superior_rank || selfRank;
 
                       return (
                         <tr key={r.user_id} className="hover:bg-slate-50 transition">
