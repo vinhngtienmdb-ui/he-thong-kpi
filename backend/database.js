@@ -115,6 +115,7 @@ function initDatabase() {
       role TEXT NOT NULL CHECK(role IN ('admin', 'cbql', 'cbnv')),
       party_title TEXT,
       gov_title TEXT,
+      union_title TEXT,
       dept_id TEXT,
       FOREIGN KEY(dept_id) REFERENCES departments(id)
     );
@@ -389,7 +390,8 @@ function initDatabase() {
     "ALTER TABLE standard_tasks ADD COLUMN original_task_id TEXT;",
     "ALTER TABLE standard_tasks ADD COLUMN approved_by TEXT;",
     "ALTER TABLE standard_tasks ADD COLUMN approved_at TEXT;",
-    "ALTER TABLE standard_tasks ADD COLUMN rejection_reason TEXT;"
+    "ALTER TABLE standard_tasks ADD COLUMN rejection_reason TEXT;",
+    "ALTER TABLE users ADD COLUMN union_title TEXT;"
   ];
 
   for (const m of migrations) {

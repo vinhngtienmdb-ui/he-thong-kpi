@@ -1052,7 +1052,7 @@ async function exportCBQLWorkbook(periodId, userId) {
   setInfoRow(6, 'Họ và tên:', `${user.full_name || ''}                                Ngày sinh: ${birthStr}`);
   setInfoRow(7, 'Chức vụ Đảng:', user.party_title || 'Đảng viên');
   setInfoRow(8, 'Chức vụ chính quyền:', user.gov_title || (isCbnv ? 'Chuyên viên' : 'Lãnh đạo'));
-  setInfoRow(9, 'Chức vụ đoàn thể:', 'Không có');
+  setInfoRow(9, 'Chức vụ đoàn thể:', user.union_title || 'Không có');
   setInfoRow(10, 'Đơn vị công tác:', user.dept_name || '');
 
   // Row 11-12: Section Header
@@ -1309,10 +1309,16 @@ async function exportCBQLWorkbook(periodId, userId) {
   confSub.alignment = { horizontal: 'center' };
   ws.mergeCells(`D${confSub.number}:I${confSub.number}`);
 
+  const isUnitLeader = Boolean(
+    (leaderName && user.full_name?.trim().toLowerCase() === leaderName.trim().toLowerCase()) ||
+    (user.management_role === 'lanh_dao' && (!user.manager_id || user.role === 'admin')) ||
+    (/\b(trưởng ban|giám đốc|hiệu trưởng|bí thư)\b/i.test(user.gov_title || '') && !/\bphó\b/i.test(user.gov_title || ''))
+  );
+
   ws.addRow([]);
   ws.addRow([]);
 
-  const confName = ws.addRow(['', '', '', leaderName]);
+  const confName = ws.addRow(['', '', '', isUnitLeader ? '' : leaderName]);
   confName.font = { name: 'Times New Roman', size: 14, bold: true };
   confName.alignment = { horizontal: 'center' };
   ws.mergeCells(`D${confName.number}:I${confName.number}`);
@@ -1537,7 +1543,7 @@ async function exportCBQLWorkbook(periodId, userId) {
 
   const s2SigNames = wsTasks.addRow([
     '', user.full_name, '', '', '', '', '', '', '', '', '', '',
-    leaderName
+    isUnitLeader ? '' : leaderName
   ]);
   s2SigNames.font = { name: 'Times New Roman', size: 14, bold: true };
   wsTasks.mergeCells(`B${s2SigNames.number}:E${s2SigNames.number}`);
@@ -1571,7 +1577,7 @@ async function exportMau02Workbook(periodId) {
   const leaderTitle = sysConfigs.LEADER_SIGNER_TITLE || 'PHÓ TRƯỞNG BAN THƯỜNG TRỰC';
 
   const rows = db.prepare(`
-    SELECT u.id as user_id, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, d.name as dept_name,
+    SELECT u.id as user_id, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.union_title, d.name as dept_name,
            e.id as evaluation_id, e.step, e.part1_score, e.part2_score, e.bonus_score, e.total_score,
            e.rank_proposed, e.superior_rank, e.summary_reason, e.cadre_proposal_note, e.superior_comment
     FROM users u

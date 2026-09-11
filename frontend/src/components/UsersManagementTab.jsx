@@ -77,6 +77,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
     target_role: 'cbnv',
     party_title: 'Đảng viên',
     gov_title: 'Chuyên viên',
+    union_title: '',
     phone: '',
     email: '',
     is_active: 1
@@ -238,6 +239,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       target_role: 'cbnv',
       party_title: 'Đảng viên',
       gov_title: 'Chuyên viên',
+      union_title: '',
       birth_date: '1990-01-01',
       gender: 'Nam',
       phone: '',
@@ -265,6 +267,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
       target_role: isExempt ? 'admin' : (user.target_role || (user.role === 'cbnv' ? 'cbnv' : 'cbql')),
       party_title: user.party_title || '',
       gov_title: user.gov_title || '',
+      union_title: user.union_title || '',
       birth_date: user.birth_date || '1990-01-01',
       gender: user.gender || 'Nam',
       phone: user.phone || '',
@@ -583,6 +586,9 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                         </div>
                         <div className="text-slate-800 font-medium text-xs">{u.gov_title || 'Chuyên viên'}</div>
                         <div className="text-[11px] text-slate-500">{u.party_title || 'Đảng viên'}</div>
+                        {u.union_title && (
+                          <div className="text-[11px] text-indigo-600 font-medium">{u.union_title}</div>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-center">
@@ -1107,7 +1113,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
                         Chức vụ chính quyền
@@ -1117,7 +1123,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                         value={formData.gov_title}
                         onChange={(e) => setFormData({ ...formData, gov_title: e.target.value })}
                         className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                        placeholder="vd: Chuyên viên, Trưởng phòng, Phó Hiệu trưởng..."
+                        placeholder="vd: Chuyên viên, Trưởng phòng..."
                       />
                     </div>
 
@@ -1130,7 +1136,20 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                         value={formData.party_title}
                         onChange={(e) => setFormData({ ...formData, party_title: e.target.value })}
                         className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                        placeholder="vd: Bí thư, Phó Bí thư, Cấp ủy viên, Đảng viên..."
+                        placeholder="vd: Bí thư, Cấp ủy viên, Đảng viên..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Chức vụ đoàn thể
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.union_title}
+                        onChange={(e) => setFormData({ ...formData, union_title: e.target.value })}
+                        className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                        placeholder="vd: Bí thư Chi đoàn, Chủ tịch CĐ..."
                       />
                     </div>
                   </div>

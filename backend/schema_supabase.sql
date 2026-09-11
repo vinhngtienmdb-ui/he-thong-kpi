@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS users (
     role TEXT NOT NULL CHECK (role IN ('admin', 'cbql', 'cbnv')),
     party_title TEXT,
     gov_title TEXT,
+    union_title TEXT,
     dept_id TEXT REFERENCES departments(id) ON DELETE SET NULL,
     birth_date TEXT DEFAULT '1985-05-15',
     gender TEXT DEFAULT 'Nam',

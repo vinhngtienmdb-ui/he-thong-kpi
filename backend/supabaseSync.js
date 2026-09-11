@@ -164,6 +164,10 @@ async function pushToSupabase() {
   const stats = {};
 
   try {
+    try {
+      await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS union_title TEXT;');
+    } catch (e) {}
+
     // 1. system_configs
     const configs = db.prepare('SELECT * FROM system_configs').all();
     await batchUpsert(
@@ -201,11 +205,11 @@ async function pushToSupabase() {
     const users = db.prepare('SELECT * FROM users').all();
     await batchUpsert(
       client, 'users',
-      ['id', 'username', 'password', 'full_name', 'role', 'party_title', 'gov_title', 'dept_id',
+      ['id', 'username', 'password', 'full_name', 'role', 'party_title', 'gov_title', 'union_title', 'dept_id',
        'birth_date', 'gender', 'phone', 'email', 'is_active', 'target_role', 'role_id', 'manager_id',
        'management_role', 'final_evaluator_id'],
       ['id'],
-      ['username', 'password', 'full_name', 'role', 'party_title', 'gov_title', 'dept_id',
+      ['username', 'password', 'full_name', 'role', 'party_title', 'gov_title', 'union_title', 'dept_id',
        'birth_date', 'gender', 'phone', 'email', 'is_active', 'target_role', 'role_id', 'manager_id',
        'management_role', 'final_evaluator_id'],
       users.map(u => ({ ...u, is_active: u.is_active ?? 1 }))
@@ -501,16 +505,16 @@ async function pullFromSupabase() {
     const supUsers = await client.query('SELECT * FROM users');
     const insUser = db.prepare(`
       INSERT OR REPLACE INTO users (
-        id, username, password, full_name, role, party_title, gov_title, dept_id,
+        id, username, password, full_name, role, party_title, gov_title, union_title, dept_id,
         birth_date, gender, phone, email, is_active, target_role, role_id, manager_id,
         management_role, final_evaluator_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
       for (const u of supUsers.rows) {
         insUser.run(
           toSqliteVal(u.id), toSqliteVal(u.username), toSqliteVal(u.password), toSqliteVal(u.full_name),
-          toSqliteVal(u.role), toSqliteVal(u.party_title), toSqliteVal(u.gov_title), toSqliteVal(u.dept_id),
+          toSqliteVal(u.role), toSqliteVal(u.party_title), toSqliteVal(u.gov_title), toSqliteVal(u.union_title), toSqliteVal(u.dept_id),
           toSqliteVal(u.birth_date), toSqliteVal(u.gender), toSqliteVal(u.phone), toSqliteVal(u.email),
           u.is_active !== undefined && u.is_active !== null && u.is_active !== 0 ? 1 : 0,
           toSqliteVal(u.target_role), toSqliteVal(u.role_id), toSqliteVal(u.manager_id),
@@ -820,10 +824,10 @@ async function syncDirectUserToSupabase(user) {
     client = await pool.connect();
     const sql = `
       INSERT INTO users (
-        id, username, password, full_name, role, party_title, gov_title, dept_id,
+        id, username, password, full_name, role, party_title, gov_title, union_title, dept_id,
         birth_date, gender, phone, email, is_active, target_role, role_id, manager_id,
         management_role, final_evaluator_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       ON CONFLICT (id) DO UPDATE SET
         username = EXCLUDED.username,
         password = EXCLUDED.password,
@@ -831,6 +835,7 @@ async function syncDirectUserToSupabase(user) {
         role = EXCLUDED.role,
         party_title = EXCLUDED.party_title,
         gov_title = EXCLUDED.gov_title,
+        union_title = EXCLUDED.union_title,
         dept_id = EXCLUDED.dept_id,
         birth_date = EXCLUDED.birth_date,
         gender = EXCLUDED.gender,
@@ -845,7 +850,7 @@ async function syncDirectUserToSupabase(user) {
     `;
     await client.query(sql, [
       user.id, user.username, user.password, user.full_name, user.role, user.party_title,
-      user.gov_title, user.dept_id, user.birth_date, user.gender, user.phone, user.email,
+      user.gov_title, user.union_title, user.dept_id, user.birth_date, user.gender, user.phone, user.email,
       user.is_active !== undefined ? user.is_active : 1, user.target_role, user.role_id, user.manager_id,
       user.management_role || 'nhan_vien', user.final_evaluator_id
     ]);

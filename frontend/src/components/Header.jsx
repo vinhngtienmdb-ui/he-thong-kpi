@@ -1217,6 +1217,24 @@ export default function Header({
                       <li>Tự động sàng lọc loại trừ các tài khoản quản trị chức năng / miễn đánh giá (Admin, Admin đơn vị) ra khỏi hội đồng biểu quyết xếp loại tại Bước 6, đảm bảo tính khách quan và quy chế bỏ phiếu.</li>
                     </ul>
                   </li>
+                  <li><strong>Chuẩn Hóa Chữ Ký Báo Cáo & Xử Lý Trường Hợp Lãnh Đạo Đơn Vị Tự Đánh Giá:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Tại Bản tự đánh giá (Mẫu 01-A, 01-B) và Báo cáo thực hiện công việc: Mục Xác nhận của Ban Thường vụ / Tập thể lãnh đạo hiển thị họ tên Lãnh đạo đơn vị.</li>
+                      <li>Trường hợp cá nhân tự đánh giá chính là Lãnh đạo đơn vị: Hệ thống tự động <em>bỏ trống người ký</em> tại mục Xác nhận để sẵn sàng trình cấp trên có thẩm quyền ký duyệt, đóng dấu.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Cải Tiến Báo Cáo Kết Quả Thực Hiện Công Việc (Bảng 1 - Phụ Lục 5):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Loại bỏ cột <em>Nguồn việc</em> khỏi bảng in/xuất báo cáo, tinh gọn biểu mẫu theo đúng thể thức Hướng dẫn 06-HD/BTCTU.</li>
+                      <li>Tự động phân nhóm công việc theo từng trụ cột kết quả, hiển thị dòng tiêu đề nhóm nêu rõ nội dung trụ cột, số lượng nhiệm vụ và tổng điểm quy đổi của trục.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Hoàn Thiện Mẫu 02 Tổng Hợp Toàn Cơ Quan & Bổ Sung Chức Vụ Đoàn Thể:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Loại bỏ dòng ghi chú mẫu đánh giá dưới tên cán bộ tại Mẫu 02 Tổng hợp xếp loại toàn đơn vị.</li>
+                      <li>Bổ sung mục <em>Chức vụ đoàn thể</em> trong cấu hình người dùng và tự động liên thông đưa thông tin chức vụ đoàn thể vào toàn bộ hệ thống báo cáo in ấn và xuất file Excel.</li>
+                    </ul>
+                  </li>
                 </ul>
               </div>
 

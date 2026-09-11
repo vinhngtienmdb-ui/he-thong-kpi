@@ -146,6 +146,11 @@ export default function ReportTab({
 
   const targetUser = users.find(u => u.id === selectedUser) || evalData?.user || currentUser || {};
   const isCbnv = (targetUser?.target_role === 'cbnv') || (targetUser?.role === 'cbnv' && targetUser?.target_role !== 'cbql');
+  const isUnitLeader = Boolean(
+    (configs.LEADER_SIGNER_NAME && targetUser.full_name?.trim().toLowerCase() === configs.LEADER_SIGNER_NAME.trim().toLowerCase()) ||
+    (targetUser.management_role === 'lanh_dao' && (!targetUser.manager_id || targetUser.role === 'admin')) ||
+    (/\b(trưởng ban|giám đốc|hiệu trưởng|bí thư)\b/i.test(targetUser.gov_title || '') && !/\bphó\b/i.test(targetUser.gov_title || ''))
+  );
   const canEditMau02 = currentUser?.role === 'admin' || currentUser?.role === 'cbql' || (currentUser?.data_scope && currentUser?.data_scope !== 'personal');
   const evaluation = evalData?.evaluation || {};
   const criteria = evalData?.criteria || [];
@@ -199,6 +204,41 @@ export default function ReportTab({
     if (statusFilter !== 'all' && t.status !== statusFilter) return false;
     return true;
   });
+
+  // Phân nhóm công việc theo từng trụ cột (ghi rõ nội dung trụ cột)
+  const defaultAxesList = [
+    { code: 'TRUC_1', name: 'Trục 1 - Thực hiện mục tiêu phát triển kinh tế - xã hội và nhiệm vụ chính trị được giao' },
+    { code: 'TRUC_2', name: 'Trục 2 - Hoàn thiện thể chế, đẩy mạnh phân cấp, phân quyền gắn với kiểm tra, giám sát' },
+    { code: 'TRUC_3', name: 'Trục 3 - Thúc đẩy phát triển khoa học, công nghệ, đổi mới sáng tạo và chuyển đổi số' },
+    { code: 'TRUC_4', name: 'Trục 4 - Xây dựng Đảng và hệ thống chính trị trong sạch, vững mạnh; giữ gìn đoàn kết, thống nhất nội bộ; phòng, chống tham nhũng, lãng phí, tiêu cực' },
+    { code: 'TRUC_5', name: 'Trục 5 - Phát triển văn hóa, con người, bảo đảm an sinh xã hội, nâng cao đời sống nhân dân' },
+    { code: 'TRUC_6', name: 'Trục 6 - Củng cố quốc phòng, an ninh, giữ vững ổn định chính trị - xã hội, nâng cao hiệu quả đối ngoại và hội nhập quốc tế' }
+  ];
+
+  const effectiveAxes = (axes && axes.length > 0) ? axes : defaultAxesList;
+
+  const groupedTasksByAxis = effectiveAxes.map(ax => {
+    const tasks = filteredExecutionTasks.filter(t => (t.axis_code || 'TRUC_1') === ax.code);
+    return {
+      code: ax.code,
+      name: ax.name,
+      tasks,
+      totalStdScore: tasks.reduce((s, t) => s + (t.standard_score || 0), 0),
+      totalConvScore: Number(tasks.reduce((s, t) => s + (t.converted_score || 0), 0).toFixed(2))
+    };
+  }).filter(group => group.tasks.length > 0);
+
+  const mappedCodes = new Set(effectiveAxes.map(ax => ax.code));
+  const unmappedTasks = filteredExecutionTasks.filter(t => t.axis_code && !mappedCodes.has(t.axis_code));
+  if (unmappedTasks.length > 0) {
+    groupedTasksByAxis.push({
+      code: 'OTHER',
+      name: 'Nhiệm vụ khác / Chưa phân nhóm trụ cột',
+      tasks: unmappedTasks,
+      totalStdScore: unmappedTasks.reduce((s, t) => s + (t.standard_score || 0), 0),
+      totalConvScore: Number(unmappedTasks.reduce((s, t) => s + (t.converted_score || 0), 0).toFixed(2))
+    });
+  }
 
   // Calculate Mẫu 02 stats
   const totalStaff = mau02List.length;
@@ -729,9 +769,11 @@ export default function ReportTab({
                     <p className="font-bold text-[14pt] text-black uppercase">
                       {configs.LEADER_SIGNER_TITLE || 'PHÓ TRƯỞNG BAN THƯỜNG TRỰC'}
                     </p>
-                    <p className="font-bold text-[14pt] text-black mt-1">
-                      {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
-                    </p>
+                    {!isUnitLeader && (
+                      <p className="font-bold text-[14pt] text-black mt-1">
+                        {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -787,9 +829,11 @@ export default function ReportTab({
                     <p className="font-bold text-[14pt] text-black uppercase">
                       {configs.LEADER_SIGNER_TITLE || 'PHÓ TRƯỞNG BAN THƯỜNG TRỰC'}
                     </p>
-                    <p className="font-bold text-[14pt] text-black mt-1">
-                      {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
-                    </p>
+                    {!isUnitLeader && (
+                      <p className="font-bold text-[14pt] text-black mt-1">
+                        {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -957,17 +1001,19 @@ export default function ReportTab({
                 <b>Chức vụ chính quyền:</b> {targetUser.gov_title || (isCbnv ? 'Chuyên viên' : 'Lãnh đạo')}
               </p>
               <p>
+                <b>Chức vụ đoàn thể:</b> {targetUser.union_title || 'Không có'}
+              </p>
+              <p>
                 <b>Đơn vị công tác:</b> {unitName}
               </p>
             </div>
 
             {/* Tasks Table */}
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1400px] text-left text-[14pt] border-collapse border border-black font-times text-black">
+              <table className="w-full min-w-[1300px] text-left text-[14pt] border-collapse border border-black font-times text-black">
                 <thead>
                   <tr className="bg-slate-100 font-bold text-black border-b border-black text-center text-[14pt]">
                     <th className="border border-black p-2.5 text-center w-12">STT</th>
-                    <th className="border border-black p-2.5 min-w-[140px]">Nguồn việc</th>
                     <th className="border border-black p-2.5 min-w-[320px]">Tên công việc / Nhiệm vụ</th>
                     <th className="border border-black p-2.5 min-w-[180px]">Kết quả đầu ra</th>
                     <th className="border border-black p-2.5 min-w-[110px] text-center">Hạn chót</th>
@@ -981,122 +1027,124 @@ export default function ReportTab({
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredExecutionTasks.length === 0 ? (
+                  {groupedTasksByAxis.length === 0 ? (
                     <tr>
-                      <td colSpan="12" className="border border-black p-6 text-center text-slate-500 italic">
+                      <td colSpan="11" className="border border-black p-6 text-center text-slate-500 italic">
                         Không có công việc nào thỏa mãn bộ lọc hiện tại.
                       </td>
                     </tr>
                   ) : (
-                    filteredExecutionTasks.map((t, idx) => {
-                      const isApproved = t.status === 'approved';
-                      const isSubmitted = t.status === 'submitted';
-                      return (
-                        <tr key={t.id} className="hover:bg-slate-50">
-                          <td className="border border-black p-2 text-center text-slate-700">{idx + 1}</td>
-                          
-                          {/* Nguồn việc */}
-                          <td className="border border-black p-2 whitespace-nowrap">
-                            {t.origin === 'assigned' ? (
-                              <div>
-                                <span className="font-bold text-indigo-900">
-                                  Lãnh đạo giao
+                    (() => {
+                      let overallIdx = 0;
+                      return groupedTasksByAxis.map((group) => (
+                        <React.Fragment key={group.code}>
+                          {/* Dòng phân nhóm theo từng trụ cột (ghi rõ nội dung trụ cột) */}
+                          <tr className="bg-slate-200/90 font-bold text-black border-y-2 border-black">
+                            <td colSpan="11" className="border border-black px-3 py-2 text-left uppercase text-[14pt]">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="font-bold">{group.name}</span>
+                                <span className="text-[13pt] font-semibold text-slate-800 normal-case">
+                                  ({group.tasks.length} nhiệm vụ • Tổng điểm QĐ: {group.totalConvScore} đ)
                                 </span>
-                                {t.assigner_name && (
-                                  <div className="text-[12pt] text-slate-600 mt-0.5">Bởi: {t.assigner_name}</div>
-                                )}
                               </div>
-                            ) : (
-                              <span className="font-semibold text-amber-900">
-                                Tự đăng ký
-                              </span>
-                            )}
-                          </td>
+                            </td>
+                          </tr>
 
-                          {/* Tên công việc & Trục */}
-                          <td className="border border-black p-2">
-                            <div className="font-bold text-black leading-snug">{t.task_name}</div>
-                            <div className="text-[13pt] text-slate-600 mt-0.5">
-                              {t.axis_code} • {t.task_type}
-                            </div>
-                          </td>
+                          {group.tasks.map((t) => {
+                            overallIdx++;
+                            const isApproved = t.status === 'approved';
+                            const isSubmitted = t.status === 'submitted';
+                            return (
+                              <tr key={t.id} className="hover:bg-slate-50">
+                                <td className="border border-black p-2 text-center text-slate-700">{overallIdx}</td>
 
-                          {/* Kết quả đầu ra */}
-                          <td className="border border-black p-2 text-black">
-                            {t.output_result}
-                          </td>
+                                {/* Tên công việc */}
+                                <td className="border border-black p-2">
+                                  <div className="font-bold text-black leading-snug">{t.task_name}</div>
+                                  <div className="text-[12pt] text-slate-600 mt-0.5">
+                                    {t.task_type || 'Chuyên môn'}
+                                  </div>
+                                </td>
 
-                          {/* Deadline & Actual Finish */}
-                          <td className="border border-black p-2 text-center whitespace-nowrap text-slate-800">
-                            {formatDate(t.deadline)}
-                          </td>
-                          <td className="border border-black p-2 text-center whitespace-nowrap">
-                            {t.actual_finish_date ? (
-                              <span className="text-emerald-800 font-bold">{formatDate(t.actual_finish_date)}</span>
-                            ) : (
-                              <span className="text-slate-400">-</span>
-                            )}
-                          </td>
+                                {/* Kết quả đầu ra */}
+                                <td className="border border-black p-2 text-black">
+                                  {t.output_result}
+                                </td>
 
-                          {/* Tiến độ % */}
-                          <td className="border border-black p-2 text-center whitespace-nowrap">
-                            {t.progress_pct !== null && t.progress_pct !== undefined ? (
-                              <span className="font-bold text-black">
-                                {Math.round(t.progress_pct * 100)}%
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">-</span>
-                            )}
-                          </td>
+                                {/* Deadline & Actual Finish */}
+                                <td className="border border-black p-2 text-center whitespace-nowrap text-slate-800">
+                                  {formatDate(t.deadline)}
+                                </td>
+                                <td className="border border-black p-2 text-center whitespace-nowrap">
+                                  {t.actual_finish_date ? (
+                                    <span className="text-emerald-800 font-bold">{formatDate(t.actual_finish_date)}</span>
+                                  ) : (
+                                    <span className="text-slate-400">-</span>
+                                  )}
+                                </td>
 
-                          {/* Minh chứng */}
-                          <td className="border border-black p-2">
-                            {t.evidence_text && (
-                              <div className="text-black text-[13pt]">{t.evidence_text}</div>
-                            )}
-                            {t.evidence_file_url && (
-                              <div className="flex items-center space-x-1 text-blue-800 text-[13pt] mt-0.5">
-                                <Paperclip className="w-3.5 h-3.5 shrink-0" />
-                                <a 
-                                  href={t.evidence_file_url} 
-                                  target="_blank" 
-                                  rel="noreferrer" 
-                                  className="truncate hover:underline font-medium"
-                                >
-                                  {t.evidence_file_name || 'Tệp đính kèm'}
-                                </a>
-                              </div>
-                            )}
-                            {!t.evidence_text && !t.evidence_file_url && (
-                              <span className="text-slate-400 italic text-[13pt]">Chưa nộp</span>
-                            )}
-                          </td>
+                                {/* Tiến độ % */}
+                                <td className="border border-black p-2 text-center whitespace-nowrap">
+                                  {t.progress_pct !== null && t.progress_pct !== undefined ? (
+                                    <span className="font-bold text-black">
+                                      {Math.round(t.progress_pct * 100)}%
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-400">-</span>
+                                  )}
+                                </td>
 
-                          {/* Điểm chuẩn & HS */}
-                          <td className="border border-black p-2 text-center font-bold">{t.standard_score}</td>
-                          <td className="border border-black p-2 text-center font-bold">{t.difficulty_weight}</td>
+                                {/* Minh chứng */}
+                                <td className="border border-black p-2">
+                                  {t.evidence_text && (
+                                    <div className="text-black text-[13pt]">{t.evidence_text}</div>
+                                  )}
+                                  {t.evidence_file_url && (
+                                    <div className="flex items-center space-x-1 text-blue-800 text-[13pt] mt-0.5">
+                                      <Paperclip className="w-3.5 h-3.5 shrink-0" />
+                                      <a 
+                                        href={t.evidence_file_url} 
+                                        target="_blank" 
+                                        rel="noreferrer" 
+                                        className="truncate hover:underline font-medium"
+                                      >
+                                        {t.evidence_file_name || 'Tệp đính kèm'}
+                                      </a>
+                                    </div>
+                                  )}
+                                  {!t.evidence_text && !t.evidence_file_url && (
+                                    <span className="text-slate-400 italic text-[13pt]">Chưa nộp</span>
+                                  )}
+                                </td>
 
-                          {/* Điểm quy đổi */}
-                          <td className="border border-black p-2 text-center font-bold text-black">
-                            {isApproved ? (
-                              <span className="text-emerald-800 font-bold">{Number(Number(t.converted_score || 0).toFixed(2))}</span>
-                            ) : (
-                              <span className="text-slate-500 font-normal">{Number(Number(t.converted_score || 0).toFixed(2))}</span>
-                            )}
-                          </td>
+                                {/* Điểm chuẩn & HS */}
+                                <td className="border border-black p-2 text-center font-bold">{t.standard_score}</td>
+                                <td className="border border-black p-2 text-center font-bold">{t.difficulty_weight}</td>
 
-                          {/* Trạng thái */}
-                          <td className="border border-black p-2 text-center whitespace-nowrap">
-                            <span className="font-bold">
-                              {isApproved ? 'Đã duyệt' :
-                               isSubmitted ? 'Đã nộp MC' :
-                               t.status === 'pending_approval' ? 'Chờ duyệt' :
-                               t.status === 'rejected' ? 'Bị từ chối' : 'Đang làm'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
+                                {/* Điểm quy đổi */}
+                                <td className="border border-black p-2 text-center font-bold text-black">
+                                  {isApproved ? (
+                                    <span className="text-emerald-800 font-bold">{Number(Number(t.converted_score || 0).toFixed(2))}</span>
+                                  ) : (
+                                    <span className="text-slate-500 font-normal">{Number(Number(t.converted_score || 0).toFixed(2))}</span>
+                                  )}
+                                </td>
+
+                                {/* Trạng thái */}
+                                <td className="border border-black p-2 text-center whitespace-nowrap">
+                                  <span className="font-bold">
+                                    {isApproved ? 'Đã duyệt' :
+                                     isSubmitted ? 'Đã nộp MC' :
+                                     t.status === 'pending_approval' ? 'Chờ duyệt' :
+                                     t.status === 'rejected' ? 'Bị từ chối' : 'Đang làm'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </React.Fragment>
+                      ));
+                    })()
                   )}
                 </tbody>
 
@@ -1104,7 +1152,7 @@ export default function ReportTab({
                 {filteredExecutionTasks.length > 0 && (
                   <tfoot className="bg-slate-100 font-bold text-black border-t-2 border-black">
                     <tr>
-                      <td colSpan="8" className="border border-black p-2.5 text-right uppercase text-[14pt] tracking-wide">
+                      <td colSpan="7" className="border border-black p-2.5 text-right uppercase text-[14pt] tracking-wide">
                         Tổng cộng ({filteredExecutionTasks.length} việc) =
                       </td>
                       <td className="border border-black p-2.5 text-center text-black">
@@ -1140,19 +1188,22 @@ export default function ReportTab({
                     {formatAdministrativeDate(new Date(), locationName)}
                   </p>
                   <p className="font-bold uppercase text-black leading-tight">
-                    THỦ TRƯỞNG CƠ QUAN, ĐƠN VỊ
+                    XÁC NHẬN CỦA BAN THƯỜNG VỤ CẤP ỦY<br />
+                    HOẶC TẬP THỂ LÃNH ĐẠO CƠ QUAN, ĐƠN VỊ
                   </p>
                   <p className="italic text-[14pt] text-slate-700 mt-0.5">
-                    (Ký, ghi rõ họ tên và đóng dấu)
+                    (Xác lập thời điểm, ký, ghi rõ họ tên và đóng dấu)
                   </p>
                 </div>
                 <div>
                   <p className="font-bold text-[14pt] text-black uppercase">
                     {configs.LEADER_SIGNER_TITLE || 'PHÓ TRƯỞNG BAN THƯỜNG TRỰC'}
                   </p>
-                  <p className="font-bold text-[14pt] text-black mt-1">
-                    {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
-                  </p>
+                  {!isUnitLeader && (
+                    <p className="font-bold text-[14pt] text-black mt-1">
+                      {configs.LEADER_SIGNER_NAME || 'Thái Thị Bích Liên'}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -1310,12 +1361,12 @@ export default function ReportTab({
                           <td className="border border-black px-3.5 py-2.5 text-center text-slate-700">{idx + 1}</td>
                           <td className="border border-black px-3.5 py-2.5">
                             <div className="font-bold text-black">{r.full_name}</div>
-                            <div className="text-[12pt] text-slate-600 mt-0.5">
-                              {r.role === 'cbql' ? 'Mẫu 01-A (CBQL)' : 'Mẫu 01-B (CBNV)'}
-                            </div>
                           </td>
                           <td className="border border-black px-3.5 py-2.5 text-black">
-                            {r.gov_title || r.party_title || 'Cán bộ'}
+                            <div>{r.gov_title || r.party_title || 'Cán bộ'}</div>
+                            {r.union_title && (
+                              <div className="text-[12pt] text-indigo-900 italic mt-0.5">{r.union_title}</div>
+                            )}
                           </td>
                           <td className="border border-black px-3.5 py-2.5 text-black">
                             {r.dept_name || ''}

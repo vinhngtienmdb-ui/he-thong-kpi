@@ -712,7 +712,7 @@ app.get('/api/users', (req, res) => {
   const accessibleUserIds = getAccessibleUserIds(viewerId);
 
   let query = `
-    SELECT u.id, u.username, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.dept_id,
+    SELECT u.id, u.username, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.union_title, u.dept_id,
            u.role_id, u.manager_id, u.management_role, u.final_evaluator_id,
            u.birth_date, u.gender, u.phone, u.email, COALESCE(u.is_active, 1) as is_active,
            d.name as dept_name,
@@ -790,7 +790,7 @@ app.get('/api/directory', (req, res) => {
   );
 
   let query = `
-    SELECT u.id, u.username, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.dept_id,
+    SELECT u.id, u.username, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.union_title, u.dept_id,
            u.role_id, u.manager_id, u.management_role, u.final_evaluator_id,
            u.birth_date, u.gender, u.phone, u.email, COALESCE(u.is_active, 1) as is_active,
            d.name as dept_name, d.code as dept_code, d.location_name as dept_location,
@@ -815,8 +815,8 @@ app.get('/api/directory', (req, res) => {
 
   if (search && search.trim()) {
     const term = `%${search.trim()}%`;
-    query += ` AND (u.full_name LIKE ? OR u.phone LIKE ? OR u.email LIKE ? OR u.username LIKE ? OR u.gov_title LIKE ? OR u.party_title LIKE ? OR d.name LIKE ?)`;
-    params.push(term, term, term, term, term, term, term);
+    query += ` AND (u.full_name LIKE ? OR u.phone LIKE ? OR u.email LIKE ? OR u.username LIKE ? OR u.gov_title LIKE ? OR u.party_title LIKE ? OR u.union_title LIKE ? OR d.name LIKE ?)`;
+    params.push(term, term, term, term, term, term, term, term);
   }
 
   query += ` ORDER BY d.id ASC, u.role DESC, u.full_name ASC`;
@@ -898,7 +898,7 @@ app.get('/api/directory/export', async (req, res) => {
     const accessibleSet = accessibleUserIds ? new Set(accessibleUserIds) : null;
 
     let query = `
-      SELECT u.id, u.username, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.dept_id,
+      SELECT u.id, u.username, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.union_title, u.dept_id,
              u.birth_date, u.gender, u.phone, u.email, COALESCE(u.is_active, 1) as is_active,
              d.name as dept_name, mgr.full_name as manager_name
       FROM users u
@@ -915,8 +915,8 @@ app.get('/api/directory/export', async (req, res) => {
     }
     if (search && search.trim()) {
       const term = `%${search.trim()}%`;
-      query += ` AND (u.full_name LIKE ? OR u.phone LIKE ? OR u.email LIKE ? OR u.username LIKE ? OR u.gov_title LIKE ? OR u.party_title LIKE ? OR d.name LIKE ?)`;
-      params.push(term, term, term, term, term, term, term);
+      query += ` AND (u.full_name LIKE ? OR u.phone LIKE ? OR u.email LIKE ? OR u.username LIKE ? OR u.gov_title LIKE ? OR u.party_title LIKE ? OR u.union_title LIKE ? OR d.name LIKE ?)`;
+      params.push(term, term, term, term, term, term, term, term);
     }
 
     query += ` ORDER BY d.id ASC, u.role DESC, u.full_name ASC`;
@@ -960,7 +960,7 @@ app.post('/api/admin/users', requireCanManageUsers, async (req, res) => {
   const { 
     username, password, full_name, role, target_role, role_id, manager_id,
     management_role, final_evaluator_id,
-    party_title, gov_title, dept_id, birth_date, gender, phone, email 
+    party_title, gov_title, union_title, dept_id, birth_date, gender, phone, email 
   } = req.body;
   if (!username || !full_name) {
     return res.status(400).json({ success: false, message: 'Thiếu tên đăng nhập hoặc họ tên' });
@@ -1035,12 +1035,12 @@ app.post('/api/admin/users', requireCanManageUsers, async (req, res) => {
   }
 
   db.prepare(`
-    INSERT INTO users (id, username, password, full_name, role, target_role, role_id, manager_id, management_role, final_evaluator_id, party_title, gov_title, dept_id, birth_date, gender, phone, email, is_active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    INSERT INTO users (id, username, password, full_name, role, target_role, role_id, manager_id, management_role, final_evaluator_id, party_title, gov_title, union_title, dept_id, birth_date, gender, phone, email, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `).run(
     id, username, password || '123456', full_name, effectiveRole, effectiveTargetRole,
     effectiveRoleId || null, manager_id || null, effectiveMgmtRole || 'nhan_vien', final_evaluator_id || null,
-    party_title || 'Đảng viên', gov_title || 'Chuyên viên', dept_id || null,
+    party_title || 'Đảng viên', gov_title || 'Chuyên viên', union_title || '', dept_id || null,
     birth_date || '1985-01-01', gender || 'Nam', phone || '', email || ''
   );
 
@@ -1057,7 +1057,7 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
   const { 
     full_name, role, target_role, role_id, manager_id,
     management_role, final_evaluator_id,
-    party_title, gov_title, dept_id, birth_date, gender, phone, email, is_active, password 
+    party_title, gov_title, union_title, dept_id, birth_date, gender, phone, email, is_active, password 
   } = req.body;
 
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
@@ -1105,7 +1105,7 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
     UPDATE users 
     SET full_name = ?, role = ?, target_role = ?, role_id = ?, manager_id = ?,
         management_role = ?, final_evaluator_id = ?,
-        party_title = ?, gov_title = ?, dept_id = ?,
+        party_title = ?, gov_title = ?, union_title = ?, dept_id = ?,
         birth_date = ?, gender = ?, phone = ?, email = ?, is_active = ?
   `;
   const params = [
@@ -1114,7 +1114,9 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
     management_role !== undefined ? management_role : (user.management_role || 'nhan_vien'),
     final_evaluator_id !== undefined ? final_evaluator_id : user.final_evaluator_id,
     party_title !== undefined ? party_title : user.party_title,
-    gov_title !== undefined ? gov_title : user.gov_title, dept_id || user.dept_id,
+    gov_title !== undefined ? gov_title : user.gov_title,
+    union_title !== undefined ? union_title : user.union_title,
+    dept_id || user.dept_id,
     birth_date || user.birth_date, gender || user.gender, phone !== undefined ? phone : user.phone,
     email !== undefined ? email : user.email, is_active !== undefined ? is_active : user.is_active
   ];
@@ -3303,7 +3305,7 @@ app.get('/api/reports/mau-02', (req, res) => {
   const accessibleUserIds = getAccessibleUserIds(viewerId);
 
   let query = `
-    SELECT u.id as user_id, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.dept_id, d.name as dept_name,
+    SELECT u.id as user_id, u.full_name, u.role, u.target_role, u.party_title, u.gov_title, u.union_title, u.dept_id, d.name as dept_name,
            e.id as evaluation_id, e.step, e.part1_score, e.part2_score, e.bonus_score, e.total_score,
            e.rank_proposed, e.superior_rank, e.summary_reason, e.cadre_proposal_note, e.superior_comment,
            (SELECT COUNT(*) FROM assigned_tasks t WHERE t.user_id = u.id AND t.period_id = ? AND t.status != 'rejected') as total_tasks,
