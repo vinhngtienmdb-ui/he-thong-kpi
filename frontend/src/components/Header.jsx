@@ -1252,12 +1252,26 @@ export default function Header({
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 5.2</span>
-                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 00:05 (Bản phát hành mới nhất - Chuẩn Hóa Danh Mục Theo Quý, Cây Đơn Vị Thứ Bậc, Phân Quyền Giao Việc & Trình Văn Thư, Khắc Phục Phân Quyền Động CBQL)</span>
+                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 00:20 (Bản phát hành mới nhất - Hoàn thành Văn bản, Gán Quyền Văn thư, Khắc phục Quyền Động CBQL, Chuẩn hóa Danh mục theo Quý & Cây Đơn vị Thứ bậc)</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
-                  Chuẩn Hóa Danh Mục Công Việc Chuẩn Theo Quý, Sắp Xếp Cây Đơn Vị Từ Cao Xuống Thấp, Phân Định Thẩm Quyền Phân Công Công Việc, Phân Quyền Văn Thư Trình Văn Bản & Khắc Phục Triệt Để Lỗi Phân Quyền Động Cho CBQL
+                  Cập Nhật Trạng Thái Hoàn Thành Sau Khi Xử Lý Văn Bản, Cơ Chế Phân Quyền Văn Thư Trình Lãnh Đạo, Khắc Phục Triệt Để Lỗi Phân Quyền Động CBQL, Chuẩn Hóa Danh Mục Theo Quý & Sắp Xếp Cây Đơn Vị Thứ Bậc
                 </h4>
                 <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Cho phép chọn trạng thái Hoàn thành sau khi xử lý xong văn bản:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Bổ sung nút bấm <strong>"Hoàn thành"</strong> trực tiếp trên từng dòng bảng danh sách văn bản, thẻ di động và trong Modal Xem chi tiết văn bản.</li>
+                      <li>Hỗ trợ nhập ghi chú kết quả hoàn tất văn bản (tùy chọn) và tự động đồng bộ đánh dấu hoàn tất các lượt phân bổ cá nhân liên quan.</li>
+                      <li>Tích hợp trường chọn Trạng thái văn bản (<em>Chờ phân bổ, Đã trình Lãnh đạo, Đang xử lý, Hoàn thành</em>) ngay trong Modal Thêm mới và Chỉnh sửa văn bản; cho phép "Mở lại" văn bản bất cứ lúc nào khi phát sinh công việc cần tiếp tục xử lý.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Cơ chế Phân quyền & Hướng dẫn gán quyền Cán bộ Văn thư:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Khởi tạo vai trò chuẩn <strong>Cán bộ Văn thư</strong> (<code>role-van-thu</code>) sở hữu quyền đặc thù <code>can_submit_documents</code> (Trình văn bản cho Lãnh đạo).</li>
+                      <li>Chỉ cán bộ có quyền Văn thư mới hiển thị nút và tính năng "Trình LĐ" tại phân hệ Quản lý & Phân bổ văn bản; đồng thời bảo vệ API backend <code>POST /api/documents/:id/submit-to-leader</code>.</li>
+                      <li><em>Cách gán quyền:</em> Quản trị viên vào <strong>Quản lý người dùng</strong> &rarr; Chỉnh sửa cán bộ &rarr; Chọn vai trò là <strong>"Cán bộ Văn thư"</strong> (hoặc vào <strong>Cấu hình hệ thống &rarr; Phân quyền vai trò</strong> &rarr; Bật quyền "Trình văn bản cho Lãnh đạo" cho vai trò bất kỳ).</li>
+                    </ul>
+                  </li>
                   <li><strong>Khắc phục triệt để lỗi phân quyền động CBQL truy cập Quản lý người dùng & Cấu hình hệ thống:</strong>
                     <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
                       <li>Loại bỏ hoàn toàn các rào cản kiểm tra tĩnh tại <code>UsersManagementTab</code> và <code>SystemConfigTab</code>; chuyển đổi thống nhất sang kiểm tra động theo <code>getUserPermissions(currentUser)</code>.</li>
@@ -1283,18 +1297,6 @@ export default function Header({
                       <li>Chỉ người dùng có chức danh Lãnh đạo hoặc Cán bộ Quản lý (CBQL) mới có thẩm quyền phân công công việc tại phân hệ Giao việc (B1).</li>
                       <li>Cán bộ nhân viên (CBNV) bị khóa các nút sửa, xóa danh mục công việc chuẩn để bảo toàn tính toàn vẹn của danh mục chung.</li>
                       <li>Sau khi Lãnh đạo đã phân công công việc từ văn bản, nút "Phân công" tự động ẩn để tránh thao tác trùng lặp.</li>
-                    </ul>
-                  </li>
-                  <li><strong>Quyền Văn thư Trình văn bản cho Lãnh đạo:</strong>
-                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
-                      <li>Bổ sung vai trò Cán bộ Văn thư (<code>role-van-thu</code>) với quyền đặc thù <code>can_submit_documents</code>.</li>
-                      <li>Chỉ người dùng có quyền Văn thư mới hiển thị tính năng "Trình LĐ" tại phân hệ Quản lý & Phân bổ văn bản; bảo vệ API <code>POST /api/documents/:id/submit-to-leader</code> chống truy cập trái phép.</li>
-                    </ul>
-                  </li>
-                  <li><strong>Cho phép chọn trạng thái Hoàn thành sau khi xử lý xong văn bản:</strong>
-                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
-                      <li>Bổ sung nút bấm <strong>"Hoàn thành"</strong> trực tiếp trên từng dòng danh sách văn bản, thẻ di động và trong Modal Xem chi tiết văn bản; hỗ trợ nhập ghi chú kết quả xử lý và tự động hoàn tất các lượt phân bổ liên quan.</li>
-                      <li>Tích hợp trường chọn Trạng thái văn bản (Chờ phân bổ, Đã trình Lãnh đạo, Đang xử lý, Hoàn thành) ngay trong Modal Thêm / Chỉnh sửa văn bản; cho phép mở lại văn bản khi có nhu cầu xử lý tiếp.</li>
                     </ul>
                   </li>
                 </ul>
