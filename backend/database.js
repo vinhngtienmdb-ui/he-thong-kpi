@@ -516,17 +516,6 @@ function initDatabase() {
     try { db.exec(m); } catch (e) {}
   }
 
-  // Đảm bảo không gán Đảng viên hay Đoàn viên cho tất cả user hiện tại theo yêu cầu
-  try {
-    db.prepare(`
-      UPDATE users 
-      SET is_party_member = 0, 
-          party_title = '', 
-          union_title = ''
-      WHERE is_party_member = 1 OR (party_title IS NOT NULL AND party_title != '') OR (union_title IS NOT NULL AND union_title != '')
-    `).run();
-  } catch (e) {}
-
   // Backfill management_role for users if default
   try {
     db.prepare(`
