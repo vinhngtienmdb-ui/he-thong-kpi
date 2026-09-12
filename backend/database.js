@@ -540,6 +540,11 @@ function initDatabase() {
     db.prepare("UPDATE assigned_tasks SET axis_code = 'TRUC_1' WHERE axis_code = 'CHUYEN_MON' OR axis_code IS NULL OR axis_code = ''").run();
   } catch (e) {}
 
+  // Chuẩn hóa danh mục công việc chuẩn hiện có mặc định áp dụng cho Quý III/2026 (p-2)
+  try {
+    db.prepare("UPDATE standard_tasks SET period_id = 'p-2' WHERE period_id IS NULL OR period_id = ''").run();
+  } catch (e) {}
+
   // Chuẩn hóa định dạng ngày trong bảng notifications sang DD/MM/YYYY
   try {
     const notifs = db.prepare("SELECT id, message FROM notifications WHERE message LIKE '%202_-%'").all();

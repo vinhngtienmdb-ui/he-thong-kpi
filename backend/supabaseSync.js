@@ -760,7 +760,7 @@ async function pullFromSupabase() {
     db.transaction(() => {
       for (const t of supStdTasks.rows) {
         insStdTask.run(
-          toSqliteVal(t.id), toSqliteVal(t.period_id), toSqliteVal(t.dept_code), toSqliteVal(t.task_name),
+          toSqliteVal(t.id), toSqliteVal(t.period_id || 'p-2'), toSqliteVal(t.dept_code), toSqliteVal(t.task_name),
           toSqliteVal(t.output_result), toSqliteVal(t.deadline), toSqliteVal(t.task_type),
           toSqliteVal(t.standard_score), toSqliteVal(t.difficulty_weight), toSqliteVal(t.max_converted_score),
           toSqliteVal(t.expected_evidence), toSqliteVal(t.note), toSqliteVal(t.axis_code),

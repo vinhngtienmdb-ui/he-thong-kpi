@@ -1876,8 +1876,18 @@ app.get('/api/standard-tasks', (req, res) => {
   const params = [];
 
   if (period_id) {
-    query += ' AND period_id = ?';
-    params.push(period_id);
+    const period = db.prepare('SELECT id, code FROM periods WHERE id = ? OR code = ?').get(period_id, period_id);
+    const isQ3 = period_id === 'p-2' || period_id === 'KPI-Q3-2026' || (period && (period.id === 'p-2' || period.code === 'KPI-Q3-2026'));
+    if (isQ3) {
+      // Quý III/2026: Luôn bao gồm các công việc thuộc p-2, KPI-Q3-2026 hoặc chưa gán kỳ (legacy/null)
+      query += " AND (period_id = 'p-2' OR period_id = 'KPI-Q3-2026' OR period_id IS NULL OR period_id = '')";
+    } else if (period) {
+      query += ' AND (period_id = ? OR period_id = ?)';
+      params.push(period.id, period.code);
+    } else {
+      query += ' AND period_id = ?';
+      params.push(period_id);
+    }
   }
   if (axis_code) {
     query += ' AND axis_code = ?';
