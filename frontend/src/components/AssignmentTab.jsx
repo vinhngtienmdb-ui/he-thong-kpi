@@ -703,6 +703,10 @@ export default function AssignmentTab({
 
   // 1. CBNV Mở modal xin gia hạn
   function openExtensionRequestModal(task) {
+    if (task.status === 'rejected') {
+      alert('Nhiệm vụ đã bị từ chối tiếp nhận, không thể xin gia hạn!');
+      return;
+    }
     if (!isTaskDueOrOverdue(task)) {
       alert('Theo quy định, chỉ được gửi yêu cầu xin gia hạn khi công việc đã đến hạn hoặc quá hạn!');
       return;
@@ -809,6 +813,10 @@ export default function AssignmentTab({
 
   // 3. Lãnh đạo mở modal chủ động gia hạn tiến độ
   function openLeaderExtendModal(task) {
+    if (task.status === 'rejected') {
+      alert('Nhiệm vụ đã bị từ chối tiếp nhận, không thể gia hạn!');
+      return;
+    }
     setLeaderExtendModalTask(task);
     const curr = task.deadline || todayStr;
     const next = new Date(curr);
@@ -2601,8 +2609,8 @@ export default function AssignmentTab({
                                       Nộp MC
                                     </button>
 
-                                    {/* Nút xin gia hạn: CHỈ HIỂN THỊ KHI VIỆC ĐÃ ĐẾN HẠN HOẶC QUÁ HẠN */}
-                                    {isTaskDueOrOverdue(t) && (
+                                    {/* Nút xin gia hạn: CHỈ HIỂN THỊ KHI VIỆC ĐÃ ĐẾN HẠN HOẶC QUÁ HẠN VÀ KHÔNG BỊ TỪ CHỐI */}
+                                    {isTaskDueOrOverdue(t) && t.status !== 'rejected' && (
                                       t.extension_status === 'pending' ? (
                                         <span className="px-2 py-1 bg-amber-50 text-amber-800 border border-amber-300 font-bold text-[11px] rounded-lg">
                                           ⏳ Chờ duyệt GH
@@ -2620,7 +2628,7 @@ export default function AssignmentTab({
                                     )}
 
                                     {/* Lãnh đạo chủ động gia hạn */}
-                                    {t.extension_status !== 'pending' && t.status !== 'approved' && ((currentUser?.id === t.assigned_by) || isCBQL) && (
+                                    {t.extension_status !== 'pending' && t.status !== 'approved' && t.status !== 'rejected' && ((currentUser?.id === t.assigned_by) || isCBQL) && (
                                       <button
                                         type="button"
                                         onClick={() => openLeaderExtendModal(t)}
@@ -2914,8 +2922,8 @@ export default function AssignmentTab({
                                 Nộp MC →
                               </button>
 
-                              {/* Nút xin gia hạn: CHỈ HIỂN THỊ KHI VIỆC ĐÃ ĐẾN HẠN HOẶC QUÁ HẠN */}
-                              {isTaskDueOrOverdue(t) && (
+                              {/* Nút xin gia hạn: CHỈ HIỂN THỊ KHI VIỆC ĐÃ ĐẾN HẠN HOẶC QUÁ HẠN VÀ KHÔNG BỊ TỪ CHỐI */}
+                              {isTaskDueOrOverdue(t) && t.status !== 'rejected' && (
                                 t.extension_status === 'pending' ? (
                                   <span className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-300 font-bold text-xs rounded-xl">
                                     ⏳ Chờ duyệt GH
@@ -2933,7 +2941,7 @@ export default function AssignmentTab({
                               )}
 
                               {/* Lãnh đạo chủ động gia hạn */}
-                              {t.extension_status !== 'pending' && t.status !== 'approved' && ((currentUser?.id === t.assigned_by) || isCBQL) && (
+                              {t.extension_status !== 'pending' && t.status !== 'approved' && t.status !== 'rejected' && ((currentUser?.id === t.assigned_by) || isCBQL) && (
                                 <button
                                   type="button"
                                   onClick={() => openLeaderExtendModal(t)}

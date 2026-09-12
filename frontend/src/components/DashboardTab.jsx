@@ -94,7 +94,7 @@ export default function DashboardTab({
       const [dashStats, userEval, tasks, mau02, cfg] = await Promise.all(promises);
       setStats(dashStats);
       setEvalData(userEval);
-      setUserTasks(tasks || []);
+      setUserTasks((tasks || []).filter(t => t.status !== 'rejected' && t.status !== 'cancelled'));
       setMau02Data(mau02 || []);
       setConfigs(cfg);
     } catch (err) {
@@ -259,7 +259,7 @@ export default function DashboardTab({
   });
 
   // Filtered Personal Tasks
-  const filteredPersonalTasks = userTasks.filter(t => {
+  const filteredPersonalTasks = userTasks.filter(t => t.status !== 'rejected' && t.status !== 'cancelled').filter(t => {
     if (personalTaskFilter === 'all') return true;
     if (personalTaskFilter === 'approved') return t.status === 'approved';
     if (personalTaskFilter === 'submitted') return t.status === 'submitted';

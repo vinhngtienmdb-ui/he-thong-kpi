@@ -118,7 +118,7 @@ async function exportCBQLDocx(periodId, userId) {
     SELECT t.*, a.name as axis_name 
     FROM assigned_tasks t
     LEFT JOIN axes a ON t.axis_code = a.code
-    WHERE t.period_id = ? AND t.user_id = ?
+    WHERE t.period_id = ? AND t.user_id = ? AND t.status NOT IN ('rejected', 'cancelled')
     ORDER BY t.axis_code ASC, t.created_at ASC
   `).all(periodId, userId);
 
@@ -1182,7 +1182,7 @@ async function exportTasksDocx(periodId, userId) {
     SELECT t.*, a.name as axis_name 
     FROM assigned_tasks t
     LEFT JOIN axes a ON t.axis_code = a.code
-    WHERE t.period_id = ? AND t.user_id = ?
+    WHERE t.period_id = ? AND t.user_id = ? AND t.status NOT IN ('rejected', 'cancelled')
     ORDER BY t.axis_code ASC, t.created_at ASC
   `).all(periodId, userId);
 

@@ -168,7 +168,7 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
       ]);
       setEvalData(evalRes);
       setCriteriaList(evalRes.criteria || []);
-      setUserTasks(tasksRes);
+      setUserTasks((tasksRes || []).filter(t => t.status !== 'rejected' && t.status !== 'cancelled'));
       setSuperiorRank(evalRes.evaluation?.superior_rank || evalRes.evaluation?.rank_proposed || '');
       setSuperiorComment(evalRes.evaluation?.superior_comment || '');
     } catch (err) {

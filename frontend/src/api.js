@@ -208,11 +208,12 @@ export const api = {
       method: 'PUT',
     });
   },
-  rejectStandardTaskProposal: (id, reason) => {
+  rejectStandardTaskProposal: (id, payload = {}) => {
+    const body = typeof payload === 'string' ? { rejection_reason: payload } : (payload || {});
     return fetchApi(`/standard-tasks/${id}/reject-proposal`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rejection_reason: reason }),
+      body: JSON.stringify(body),
     });
   },
 
@@ -361,27 +362,7 @@ export const api = {
       body: JSON.stringify({ ids }),
     });
   },
-  proposeStandardTask: (data) => {
-    return fetchApi('/standard-tasks/propose', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-  },
-  approveStandardTaskProposal: (id, data = {}) => {
-    return fetchApi(`/standard-tasks/${id}/approve-proposal`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-  },
-  rejectStandardTaskProposal: (id, data = {}) => {
-    return fetchApi(`/standard-tasks/${id}/reject-proposal`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-  },
+
   submitEvaluationFeedback: (id, data) => {
     return fetchApi(`/assigned-tasks/${id}/evaluation-feedback`, {
       method: 'PUT',
@@ -601,11 +582,12 @@ export const api = {
       body: JSON.stringify({ is_active }),
     });
   },
-  resetAdminUserPassword: (id, data = {}) => {
+  resetAdminUserPassword: (id, payload = {}) => {
+    const body = typeof payload === 'string' ? { new_password: payload } : payload;
     return fetchApi(`/admin/users/${id}/reset-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify(body),
     });
   },
 

@@ -61,7 +61,7 @@ export default function SelfEvaluationTab({ selectedPeriod, currentUser, users =
       ]);
       setEvalData(res);
       setCriteriaList(res.criteria || []);
-      setTasks(tasksRes || []);
+      setTasks((tasksRes || []).filter(t => t.status !== 'rejected' && t.status !== 'cancelled'));
     } catch (err) {
       console.error('Error loading self-evaluation:', err);
     } finally {

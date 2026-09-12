@@ -325,6 +325,10 @@ export default function ExecutionTab({
 
   // Handle Extension Request
   function openExtensionModal(task) {
+    if (task.status === 'rejected') {
+      alert('Nhiệm vụ đã bị từ chối tiếp nhận, không thể xin gia hạn!');
+      return;
+    }
     if (!isTaskDueOrOverdue(task)) {
       alert('Theo quy định, chỉ được gửi yêu cầu xin gia hạn khi công việc đã đến hạn hoặc quá hạn!');
       return;
@@ -831,8 +835,8 @@ export default function ExecutionTab({
                         <span>Xem phân công</span>
                       </button>
 
-                      {/* Request Extension Button (Only if due or overdue) */}
-                      {isTaskDueOrOverdue(task) && task.extension_status !== 'pending' && !isApproved && (
+                      {/* Request Extension Button (Only if due or overdue and not rejected) */}
+                      {isTaskDueOrOverdue(task) && task.extension_status !== 'pending' && !isApproved && task.status !== 'rejected' && (
                         <button
                           type="button"
                           onClick={() => openExtensionModal(task)}

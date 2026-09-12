@@ -1772,27 +1772,45 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
 
       {/* Add / Edit User Modal (Multi-Position Support) */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl w-[95%] sm:max-w-3xl max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden my-auto">
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full sm:max-w-4xl lg:max-w-5xl max-h-[92vh] flex flex-col shadow-2xl border border-slate-200/80 overflow-hidden my-auto">
             {/* Modal Header */}
-            <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/10 border border-white/20 flex items-center justify-center text-amber-300">
-                  {editingUser ? <User className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+            <div className="px-6 py-4.5 bg-gradient-to-r from-slate-900 via-slate-850 to-indigo-950 text-white flex items-center justify-between shrink-0 border-b border-slate-800">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-11 h-11 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-amber-300 shadow-inner shrink-0">
+                  {editingUser ? <User className="w-6 h-6 text-amber-300" /> : <Plus className="w-6 h-6 text-emerald-400" />}
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">
-                    {editingUser ? `Hồ sơ cán bộ: ${editingUser.full_name}` : 'Thêm Cán bộ Mới vào Hệ thống'}
-                  </h3>
-                  <p className="text-xs text-slate-300">
-                    Hỗ trợ quản lý đa chức vụ / kiêm nhiệm tại một hoặc nhiều đơn vị
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight" style={{ color: '#ffffff' }}>
+                      {editingUser ? `Hồ sơ cán bộ: ${editingUser.full_name}` : 'Thêm Cán bộ Mới vào Hệ thống'}
+                    </h3>
+                    {editingUser && (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/10 text-indigo-200 border border-white/15">
+                        @{formData.username}
+                      </span>
+                    )}
+                    {editingUser && (
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                        formData.is_active === 1 
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                          : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      }`}>
+                        {formData.is_active === 1 ? '● Đang hoạt động' : '○ Tạm khóa'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-300 mt-0.5 truncate" style={{ color: '#cbd5e1' }}>
+                    Quản lý định danh, đa vị trí kiêm nhiệm, tổ chức Đảng - Đoàn thể và tuyến phê duyệt đánh giá
                   </p>
                 </div>
               </div>
+
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-white/70 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition cursor-pointer"
+                className="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-white/10 transition cursor-pointer shrink-0 ml-3"
+                title="Đóng cửa sổ (Esc)"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1800,27 +1818,37 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
 
             {/* Modal Body */}
             <form onSubmit={handleSubmitUser} className="flex flex-col flex-1 overflow-hidden">
-              <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1 bg-slate-50/60">
+              <div className="p-5 sm:p-7 overflow-y-auto space-y-6 flex-1 bg-slate-50/70">
                 {errorMsg && (
-                  <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-sm flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5 shrink-0 text-rose-600" />
-                    <span>{errorMsg}</span>
+                  <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-sm flex items-start gap-3 shadow-xs">
+                    <AlertCircle className="w-5 h-5 shrink-0 text-rose-600 mt-0.5" />
+                    <div className="flex-1">
+                      <span className="font-bold">Đã xảy ra lỗi: </span>
+                      <span>{errorMsg}</span>
+                    </div>
                   </div>
                 )}
 
                 {/* THẺ 1: THÔNG TIN CÁ NHÂN & TÀI KHOẢN ĐỊNH DANH */}
-                <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-xs space-y-4">
-                  <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                    <User className="w-4.5 h-4.5 text-indigo-600" />
-                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                      1. Thông tin Cá nhân & Tài khoản Định danh
-                    </h4>
+                <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-5">
+                  <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-100">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
+                      <User className="w-4.5 h-4.5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                        1. Thông tin Cá nhân & Tài khoản Định danh
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        Thông tin hồ sơ pháp lý, tài khoản đăng nhập và liên lạc công vụ
+                      </p>
+                    </div>
                   </div>
 
-                  {/* Họ tên & Loại người dùng */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  {/* Họ tên (col-span-2) & Loại người dùng (col-span-1) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div className="lg:col-span-2">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Họ và tên cán bộ <span className="text-rose-500">*</span>
                       </label>
                       <input
@@ -1828,47 +1856,59 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                         required
                         value={formData.full_name}
                         onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-semibold"
-                        placeholder="vd: Nguyễn Tiến Vinh"
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-semibold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition shadow-2xs"
+                        placeholder="vd: Nguyễn Thị Hồng Cúc"
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Phân loại đối tượng <span className="text-rose-500">*</span>
+                    <div className="lg:col-span-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                        <span>Phân loại đối tượng <span className="text-rose-500">*</span></span>
+                        <span className="text-[11px] font-normal text-slate-400">(Xếp loại Mẫu 02)</span>
                       </label>
                       <select
                         value={formData.employee_type || 'vien_chuc'}
                         onChange={(e) => setFormData({ ...formData, employee_type: e.target.value })}
-                        className="w-full px-3 py-2 border border-emerald-300 bg-emerald-50/40 rounded-lg text-xs font-bold text-emerald-950 focus:ring-2 focus:ring-emerald-500"
+                        className="w-full px-3.5 py-2.5 border border-emerald-300 bg-emerald-50/50 rounded-xl text-xs font-bold text-emerald-950 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition shadow-2xs cursor-pointer"
                       >
                         <option value="vien_chuc">🎓 Viên chức (Đơn vị sự nghiệp)</option>
                         <option value="cong_chuc">🏛️ Công chức (Cơ quan Nhà nước)</option>
                         <option value="nguoi_lao_dong">👷 Người lao động (Hợp đồng LĐ)</option>
                       </select>
-                      <span className="text-[10px] text-slate-400 block mt-0.5">Dùng để phân nhóm & tính tỷ lệ Mẫu 02</span>
                     </div>
                   </div>
 
                   {/* Tên đăng nhập & Mật khẩu */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Tên đăng nhập <span className="text-rose-500">*</span>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                        <span>Tên đăng nhập <span className="text-rose-500">*</span></span>
+                        {editingUser && <span className="text-[11px] font-normal text-slate-400">Không thể đổi username</span>}
                       </label>
-                      <input
-                        type="text"
-                        required
-                        disabled={Boolean(editingUser)}
-                        value={formData.username}
-                        onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                        className={`w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-medium ${editingUser ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`}
-                        placeholder="vd: vinhnt"
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          required
+                          disabled={Boolean(editingUser)}
+                          value={formData.username}
+                          onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                          className={`w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-sm font-semibold transition shadow-2xs ${
+                            editingUser 
+                              ? 'bg-slate-100/80 text-slate-600 cursor-not-allowed border-slate-200' 
+                              : 'bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600'
+                          }`}
+                          placeholder="vd: nthcuc.andong"
+                        />
+                        {editingUser && (
+                          <div className="absolute right-3.5 top-3 text-slate-400" title="Tên đăng nhập cố định">
+                            <Lock className="w-4 h-4" />
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Mật khẩu {editingUser ? <span className="text-slate-400 font-normal">(để trống nếu không đổi)</span> : <span className="text-rose-500">*</span>}
                       </label>
                       <input
@@ -1876,34 +1916,34 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                         required={!editingUser}
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                        placeholder={editingUser ? '••••••••' : 'Nhập mật khẩu (tối thiểu 6 ký tự)'}
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition shadow-2xs"
+                        placeholder={editingUser ? '•••••••• (Giữ nguyên mật khẩu hiện tại)' : 'Nhập mật khẩu khởi tạo (tối thiểu 6 ký tự)'}
                       />
                     </div>
                   </div>
 
                   {/* Ngày sinh, Giới tính, SĐT, Email */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Ngày sinh
                       </label>
                       <input
                         type="date"
                         value={formData.birth_date}
                         onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
-                        className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition shadow-2xs"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Giới tính
                       </label>
                       <select
                         value={formData.gender}
                         onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                        className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-white"
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition shadow-2xs cursor-pointer"
                       >
                         <option value="Nam">Nam</option>
                         <option value="Nữ">Nữ</option>
@@ -1911,27 +1951,27 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Số điện thoại
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Số điện thoại liên hệ
                       </label>
                       <input
                         type="text"
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
-                        placeholder="0912345678"
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition shadow-2xs"
+                        placeholder="0908405992"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Email công vụ
                       </label>
                       <input
                         type="email"
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition shadow-2xs"
                         placeholder="canbo@hcm.gov.vn"
                       />
                     </div>
@@ -1939,60 +1979,71 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                 </div>
 
                 {/* THẺ 2: VỊ TRÍ CÔNG TÁC & CHỨC VỤ (ĐA CHỨC VỤ / KIÊM NHIỆM) */}
-                <div className="bg-white rounded-xl p-5 border border-indigo-200 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-indigo-100">
-                    <div className="flex items-center gap-2">
-                      <Briefcase className="w-4.5 h-4.5 text-indigo-600" />
-                      <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-                        2. Chức vụ / Vị trí việc làm & Đơn vị công tác
-                      </h4>
+                <div className="bg-white rounded-2xl p-6 border border-indigo-200/90 shadow-xs space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 border-b border-indigo-100">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0">
+                        <Briefcase className="w-4.5 h-4.5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide flex items-center gap-2">
+                          <span>2. Chức vụ / Vị trí việc làm & Đơn vị công tác</span>
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-100 text-indigo-800">
+                            {formData.positions?.length || 0} vị trí
+                          </span>
+                        </h4>
+                        <p className="text-xs text-slate-500">
+                          Hỗ trợ cán bộ kiêm nhiệm nhiều vị trí công tác tại một hoặc nhiều đơn vị khác nhau
+                        </p>
+                      </div>
                     </div>
                     <button
                       type="button"
                       onClick={handleAddPositionRow}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition border border-indigo-200 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer active:scale-95 shrink-0 self-start sm:self-auto"
                     >
-                      <Plus className="w-3.5 h-3.5" />
+                      <Plus className="w-4 h-4" />
                       <span>+ Thêm chức vụ kiêm nhiệm</span>
                     </button>
                   </div>
 
-                  <p className="text-xs text-slate-500">
-                    Mỗi cán bộ có thể đảm nhiệm một hoặc nhiều chức vụ / vị trí việc làm. Chọn <b>"Là chức vụ mặc định"</b> tại vị trí công tác chính.
-                  </p>
-
                   {/* Danh sách các vị trí / chức vụ */}
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {formData.positions.map((pos, idx) => (
                       <div 
                         key={pos.id || idx} 
-                        className={`p-4 rounded-xl border transition-all ${
+                        className={`rounded-2xl border transition-all overflow-hidden ${
                           pos.is_primary === 1 
-                            ? 'bg-indigo-50/40 border-indigo-300 ring-1 ring-indigo-200' 
+                            ? 'bg-indigo-50/30 border-indigo-300 ring-1 ring-indigo-200/70 shadow-xs' 
                             : 'bg-slate-50/70 border-slate-200 hover:border-slate-300'
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                        {/* Position Header Bar */}
+                        <div className={`px-5 py-3 border-b flex flex-wrap items-center justify-between gap-3 ${
+                          pos.is_primary === 1 
+                            ? 'bg-indigo-100/60 border-indigo-200' 
+                            : 'bg-slate-100/80 border-slate-200'
+                        }`}>
+                          <div className="flex items-center gap-2.5">
+                            <span className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-2xs ${
                               pos.is_primary === 1 
                                 ? 'bg-indigo-600 text-white' 
                                 : 'bg-slate-200 text-slate-700'
                             }`}>
-                              {pos.is_primary === 1 ? '👑 Vị trí việc làm chính (Mặc định)' : `Chức vụ kiêm nhiệm #${idx}`}
+                              {pos.is_primary === 1 ? '👑 Vị trí việc làm chính (Mặc định)' : `🏢 Vị trí kiêm nhiệm #${idx}`}
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-3">
-                            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 cursor-pointer">
+                          <div className="flex items-center gap-4">
+                            <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer select-none">
                               <input
                                 type="radio"
                                 name="primary_position_selector"
                                 checked={pos.is_primary === 1}
                                 onChange={() => handleSetPrimaryPosition(idx)}
-                                className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                className="w-4.5 h-4.5 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                               />
-                              <span className={pos.is_primary === 1 ? 'text-indigo-900 font-bold' : ''}>
+                              <span className={pos.is_primary === 1 ? 'text-indigo-950 font-bold' : 'text-slate-600'}>
                                 Là chức vụ mặc định
                               </span>
                             </label>
@@ -2001,91 +2052,119 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                               <button
                                 type="button"
                                 onClick={() => handleRemovePositionRow(idx)}
-                                className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded transition"
+                                className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-100/60 rounded-lg transition cursor-pointer"
                                 title="Xóa chức vụ này"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             )}
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">
-                              Đơn vị công tác <span className="text-rose-500">*</span>
-                            </label>
-                            <select
-                              value={pos.dept_id}
-                              onChange={(e) => handlePositionChange(idx, 'dept_id', e.target.value)}
-                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 bg-white"
-                            >
-                              {localDepts.map(d => (
-                                <option key={d.id} value={d.id}>
-                                  {d.name} {d.code ? `[${d.code}]` : ''} {d.parent_name ? `(thuộc ${d.parent_name})` : ''}
-                                </option>
-                              ))}
-                            </select>
+                        {/* Position Fields */}
+                        <div className="p-5 space-y-4">
+                          {/* Row 1: Đơn vị công tác & Tên chức vụ */}
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                Đơn vị công tác <span className="text-rose-500">*</span>
+                              </label>
+                              <select
+                                value={pos.dept_id}
+                                onChange={(e) => handlePositionChange(idx, 'dept_id', e.target.value)}
+                                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white transition shadow-2xs"
+                              >
+                                {localDepts.map(d => (
+                                  <option key={d.id} value={d.id}>
+                                    {d.name} {d.code ? `[${d.code}]` : ''} {d.parent_name ? `(thuộc ${d.parent_name})` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                Chức vụ / Vị trí việc làm cụ thể <span className="text-rose-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                required
+                                value={pos.position_title}
+                                onChange={(e) => {
+                                  handlePositionChange(idx, 'position_title', e.target.value);
+                                  if (pos.is_primary === 1) {
+                                    setFormData(prev => ({ ...prev, gov_title: e.target.value }));
+                                  }
+                                }}
+                                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white transition shadow-2xs"
+                                placeholder="vd: Hiệu trưởng, Phó Hiệu trưởng, Giáo viên, Chuyên viên..."
+                              />
+                            </div>
                           </div>
 
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">
-                              Chức vụ / Vị trí việc làm <span className="text-rose-500">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              value={pos.position_title}
-                              onChange={(e) => {
-                                handlePositionChange(idx, 'position_title', e.target.value);
-                                if (pos.is_primary === 1) {
-                                  setFormData(prev => ({ ...prev, gov_title: e.target.value }));
-                                }
-                              }}
-                              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-indigo-500 bg-white"
-                              placeholder="vd: Hiệu trưởng, Phó Hiệu trưởng, Giáo viên, Chuyên viên..."
-                            />
-                          </div>
-                        </div>
+                          {/* Row 2: Phân loại & Cấp bậc & Ghi chú (3 columns: 1 - 1 - 1) */}
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                Phân loại chức vụ
+                              </label>
+                              <select
+                                value={pos.position_type || 'chinh_quyen'}
+                                onChange={(e) => handlePositionChange(idx, 'position_type', e.target.value)}
+                                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white transition shadow-2xs"
+                              >
+                                <option value="chinh_quyen">🏛️ Vị trí việc làm / Chức vụ</option>
+                                <option value="dang">🚩 Đảng</option>
+                                <option value="doan_the">⭐ Đoàn thể</option>
+                                <option value="khac">Khác</option>
+                              </select>
+                            </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">
-                              Phân loại chức vụ
-                            </label>
-                            <select
-                              value={pos.position_type || 'chinh_quyen'}
-                              onChange={(e) => handlePositionChange(idx, 'position_type', e.target.value)}
-                              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-white"
-                            >
-                              <option value="chinh_quyen">🏛️ Vị trí việc làm / Chức vụ</option>
-                              <option value="dang">🚩 Đảng</option>
-                              <option value="doan_the">⭐ Đoàn thể</option>
-                              <option value="khac">Khác</option>
-                            </select>
-                          </div>
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                Cấp bậc quản lý
+                              </label>
+                              <select
+                                value={pos.management_role || 'nhan_vien'}
+                                onChange={(e) => handlePositionChange(idx, 'management_role', e.target.value)}
+                                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white transition shadow-2xs"
+                              >
+                                <option value="lanh_dao">👑 Lãnh đạo (Người đứng đầu)</option>
+                                <option value="quan_ly">⭐ Quản lý (Cấp phó đơn vị)</option>
+                                <option value="to_truong">🏷️ Tổ trưởng chuyên môn</option>
+                                <option value="nhan_vien">👤 Cán bộ, Giáo viên, Nhân viên</option>
+                              </select>
+                            </div>
 
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">
-                              Cấp bậc quản lý
-                            </label>
-                            <select
-                              value={pos.management_role || 'nhan_vien'}
-                              onChange={(e) => handlePositionChange(idx, 'management_role', e.target.value)}
-                              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-white font-medium"
-                            >
-                              <option value="lanh_dao">👑 Lãnh đạo (Người đứng đầu)</option>
-                              <option value="quan_ly">⭐ Quản lý (Cấp phó đơn vị)</option>
-                              <option value="to_truong">🏷️ Tổ trưởng chuyên môn</option>
-                              <option value="nhan_vien">👤 Cán bộ, Giáo viên, Nhân viên</option>
-                            </select>
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                Ghi chú phân công / Quyết định
+                              </label>
+                              <input
+                                type="text"
+                                value={pos.notes || ''}
+                                onChange={(e) => handlePositionChange(idx, 'notes', e.target.value)}
+                                className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white transition shadow-2xs"
+                                placeholder="vd: QĐ bổ nhiệm số 123/QĐ..."
+                              />
+                            </div>
                           </div>
 
-                          <div>
-                            <label className="block text-xs font-semibold text-indigo-900 mb-1 flex items-center justify-between">
-                              <span>LĐ trực tiếp vị trí này</span>
-                              {pos.is_primary === 1 && <span className="text-[10px] text-indigo-600 font-bold">(Chính)</span>}
-                            </label>
+                          {/* Row 3: Lãnh đạo trực tiếp vị trí này (Full width to avoid any truncation) */}
+                          <div className="bg-indigo-50/50 rounded-xl p-4 border border-indigo-100">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
+                              <label className="text-xs font-bold text-indigo-950 flex items-center gap-2">
+                                <span>👑 Cán bộ Lãnh đạo trực tiếp quản lý / giao việc vị trí này</span>
+                                {pos.is_primary === 1 && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-600 text-white">
+                                    Vị trí chính
+                                  </span>
+                                )}
+                              </label>
+                              <span className="text-[11px] text-indigo-700">
+                                Lãnh đạo này sẽ trực tiếp giao việc và chấm điểm nhiệm vụ của vị trí này
+                              </span>
+                            </div>
                             <select
                               value={pos.manager_id || ''}
                               onChange={(e) => {
@@ -2094,9 +2173,9 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                                   setFormData(prev => ({ ...prev, manager_id: e.target.value }));
                                 }
                               }}
-                              className="w-full px-2.5 py-1.5 border border-indigo-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 bg-indigo-50/30 text-slate-800 font-medium"
+                              className="w-full px-3.5 py-2.5 border border-indigo-300 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white transition shadow-2xs"
                             >
-                              <option value="">-- Mặc định theo đơn vị --</option>
+                              <option value="">-- Mặc định theo phân cấp của đơn vị --</option>
                               {(() => {
                                 const deptLeaders = getDeptLeaders(pos.dept_id, editingUser?.id);
                                 const optionsList = [...deptLeaders];
@@ -2107,30 +2186,17 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
 
                                 if (optionsList.length === 0 && pos.dept_id) {
                                   return (
-                                    <option value="" disabled>-- Đơn vị chưa có cán bộ lãnh đạo --</option>
+                                    <option value="" disabled>-- Đơn vị chưa có cán bộ lãnh đạo phụ trách --</option>
                                   );
                                 }
 
                                 return optionsList.map(u => (
                                   <option key={u.id} value={u.id}>
-                                    {u.management_role === 'lanh_dao' ? '👑 [Lãnh đạo]' : u.management_role === 'quan_ly' ? '⭐ [Cấp phó]' : u.management_role === 'to_truong' ? '🏷️ [Tổ trưởng]' : '👔'} {u.full_name} ({u.gov_title || u.role})
+                                    {u.management_role === 'lanh_dao' ? '👑 [Lãnh đạo đứng đầu]' : u.management_role === 'quan_ly' ? '⭐ [Cấp phó đơn vị]' : u.management_role === 'to_truong' ? '🏷️ [Tổ trưởng chuyên môn]' : '👔'} {u.full_name} ({u.gov_title || u.role})
                                   </option>
                                 ));
                               })()}
                             </select>
-                          </div>
-
-                          <div>
-                            <label className="block text-xs font-semibold text-slate-700 mb-1">
-                              Ghi chú phân công
-                            </label>
-                            <input
-                              type="text"
-                              value={pos.notes || ''}
-                              onChange={(e) => handlePositionChange(idx, 'notes', e.target.value)}
-                              className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500"
-                              placeholder="vd: QĐ bổ nhiệm, kiêm nhiệm..."
-                            />
                           </div>
                         </div>
                       </div>
@@ -2139,95 +2205,111 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                 </div>
 
                 {/* THẺ 3: TỔ CHỨC ĐẢNG & ĐOÀN THỂ */}
-                <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-xs space-y-4">
-                  <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                    <Shield className="w-4.5 h-4.5 text-red-600" />
-                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                      3. Tổ chức Đảng & Đoàn thể
-                    </h4>
+                <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-5">
+                  <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-100">
+                    <div className="w-8 h-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                      <Shield className="w-4.5 h-4.5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                        3. Tổ chức Đảng & Đoàn thể
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        Phục vụ công tác xếp loại đánh giá theo Quy định 366 và Nghị quyết 98 TP.HCM
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {/* KHỐI ĐẢNG CỘNG SẢN VIỆT NAM */}
-                    <div className={`p-4 rounded-xl border transition-colors space-y-3 ${
-                      formData.is_party_member ? 'bg-red-50/70 border-red-200' : 'bg-slate-50 border-slate-200'
+                    <div className={`p-5 rounded-2xl border transition-all space-y-3.5 ${
+                      formData.is_party_member ? 'bg-red-50/60 border-red-200 ring-1 ring-red-200/50' : 'bg-slate-50/80 border-slate-200'
                     }`}>
-                      <div className="flex items-center justify-between">
-                        <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(formData.is_party_member)}
-                            onChange={(e) => setFormData({ 
-                              ...formData, 
-                              is_party_member: e.target.checked,
-                              party_title: e.target.checked ? (formData.party_title || 'Đảng viên') : ''
-                            })}
-                            className="w-4.5 h-4.5 text-red-600 rounded border-slate-300 focus:ring-red-500 cursor-pointer"
-                          />
-                          <span className="text-xs font-bold text-red-950 flex items-center gap-1">
-                            🚩 Là Đảng viên Đảng Cộng sản Việt Nam
-                          </span>
-                        </label>
-                      </div>
-
-                      {formData.is_party_member ? (
+                      <label className="flex items-center gap-3 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(formData.is_party_member)}
+                          onChange={(e) => setFormData({ 
+                            ...formData, 
+                            is_party_member: e.target.checked,
+                            party_title: e.target.checked ? (formData.party_title || 'Đảng viên') : ''
+                          })}
+                          className="w-5 h-5 text-red-600 rounded-md border-slate-300 focus:ring-red-500 cursor-pointer"
+                        />
                         <div>
-                          <label className="block text-xs font-semibold text-red-900 mb-1">
-                            Chức danh Đảng:
+                          <span className="text-sm font-bold text-red-950 flex items-center gap-1.5">
+                            🚩 Cán bộ là Đảng viên ĐCSVN
+                          </span>
+                          <span className="text-[11px] text-slate-500 block">
+                            Đảng viên chính thức hoặc dự bị của Đảng Cộng sản Việt Nam
+                          </span>
+                        </div>
+                      </label>
+
+                      {formData.is_party_member && (
+                        <div className="pt-2 border-t border-red-100">
+                          <label className="block text-xs font-bold text-red-950 mb-1.5">
+                            Chức danh Đảng cụ thể:
                           </label>
                           <input
                             type="text"
                             value={formData.party_title}
                             onChange={(e) => setFormData({ ...formData, party_title: e.target.value })}
-                            className="w-full px-3 py-2 border border-red-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-red-500 bg-white"
+                            className="w-full px-3.5 py-2.5 bg-white border border-red-300 rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-red-500/20 focus:border-red-600 transition shadow-2xs"
                             placeholder="vd: Bí thư Chi bộ, Phó Bí thư, Chi ủy viên, Đảng viên..."
                           />
                         </div>
-                      ) : (
-                        <p className="text-xs text-slate-400 italic">
-                          Tích chọn nếu cán bộ là Đảng viên chính thức hoặc dự bị của ĐCSVN
-                        </p>
                       )}
                     </div>
 
-                    {/* KHỐI ĐOÀN THỂ (CÔNG ĐOÀN, ĐOÀN THANH NIÊN, BAN TTND) */}
-                    <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
-                      <label className="block text-xs font-bold text-slate-800">
-                        ⭐ Chức danh Đoàn thể (nếu có)
-                      </label>
+                    {/* KHỐI ĐOÀN THỂ */}
+                    <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50/80 space-y-3.5">
+                      <div>
+                        <label className="block text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                          ⭐ Chức danh Đoàn thể & Xã hội (nếu có)
+                        </label>
+                        <span className="text-[11px] text-slate-500 block mt-0.5">
+                          Công đoàn, Đoàn Thanh niên, Ban Thanh tra Nhân dân... (để trống nếu không kiêm nhiệm)
+                        </span>
+                      </div>
+
                       <input
                         type="text"
                         value={formData.union_title || ''}
                         onChange={(e) => setFormData({ ...formData, union_title: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-medium focus:ring-2 focus:ring-indigo-500 bg-white"
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition shadow-2xs"
                         placeholder="vd: Chủ tịch Công đoàn, Bí thư Chi đoàn, Trưởng Ban TTND..."
                       />
-                      <span className="text-[10px] text-slate-400 block">
-                        Các chức danh Công đoàn, Đoàn TNCS HCM, Ban Thanh tra Nhân dân... (để trống nếu không kiêm nhiệm)
-                      </span>
                     </div>
                   </div>
                 </div>
 
                 {/* THẺ 4: PHÂN QUYỀN HỆ THỐNG & TUYẾN PHÊ DUYỆT ĐÁNH GIÁ */}
-                <div className="bg-white rounded-xl p-5 border border-slate-200/90 shadow-xs space-y-4">
-                  <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                    <Building2 className="w-4.5 h-4.5 text-blue-600" />
-                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                      4. Phân quyền Hệ thống & Tuyến Phê duyệt Đánh giá
-                    </h4>
+                <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-5">
+                  <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-100">
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                      <Building2 className="w-4.5 h-4.5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                        4. Phân quyền Hệ thống & Tuyến Phê duyệt Đánh giá
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        Xác định thẩm quyền truy cập dữ liệu, bộ tiêu chí đánh giá KPI và cấp phê duyệt hồ sơ
+                      </p>
+                    </div>
                   </div>
 
                   {/* Vai trò & Mẫu ĐG */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Vai trò hệ thống & Quyền hạn dữ liệu <span className="text-rose-500">*</span>
                       </label>
                       <select
                         value={formData.role_id}
                         onChange={(e) => handleRoleChange(e.target.value)}
-                        className="w-full px-3.5 py-2 border border-indigo-200 bg-indigo-50/20 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-semibold text-slate-800"
+                        className="w-full px-3.5 py-2.5 border border-indigo-200 bg-indigo-50/20 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition shadow-2xs cursor-pointer"
                       >
                         {roles.map((r) => (
                           <option key={r.id} value={r.id}>
@@ -2238,19 +2320,19 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Mẫu đánh giá KPI áp dụng
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        Mẫu tiêu chí đánh giá KPI áp dụng
                       </label>
                       {isSelectedRoleExempt ? (
-                        <div className="px-3.5 py-2 border border-purple-200 bg-purple-50 text-purple-800 rounded-lg text-xs font-bold flex items-center gap-1.5 h-[38px]">
+                        <div className="px-3.5 py-2.5 border border-purple-200 bg-purple-50 text-purple-800 rounded-xl text-xs font-bold flex items-center gap-2">
                           <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
-                          <span>⚙️ Miễn đánh giá (Tài khoản chức năng)</span>
+                          <span>⚙️ Miễn đánh giá (Tài khoản chức năng / Hệ thống)</span>
                         </div>
                       ) : (
                         <select
                           value={formData.target_role}
                           onChange={(e) => setFormData({ ...formData, target_role: e.target.value })}
-                          className="w-full px-3.5 py-2 border border-amber-200 bg-amber-50/50 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-semibold text-amber-900"
+                          className="w-full px-3.5 py-2.5 border border-amber-200 bg-amber-50/50 rounded-xl text-xs font-bold text-amber-950 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600 transition shadow-2xs cursor-pointer"
                         >
                           <option value="cbnv">Mẫu 01-B: CBNV / Giáo viên / Nhân viên (16 tiêu chí)</option>
                           <option value="cbql">Mẫu 01-A: Lãnh đạo / Cán bộ quản lý (17 tiêu chí)</option>
@@ -2262,7 +2344,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                   {/* Tuyến duyệt Bước 3 & Bước 5 */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Cán bộ Quản lý trực tiếp (Chấm điểm Bước 3)
                       </label>
                       <select
@@ -2276,7 +2358,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                             return { ...prev, manager_id: val, positions: updatedPositions };
                           });
                         }}
-                        className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 bg-slate-50 text-slate-800"
+                        className="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-slate-50 transition shadow-2xs cursor-pointer"
                       >
                         <option value="">-- Trực thuộc Lãnh đạo Cơ quan / Mặc định --</option>
                         {(() => {
@@ -2296,13 +2378,13 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
                         Người đánh giá cuối cùng (Ký duyệt kết luận Bước 5)
                       </label>
                       <select
                         value={formData.final_evaluator_id}
                         onChange={(e) => setFormData({ ...formData, final_evaluator_id: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-blue-200 bg-blue-50/40 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-medium text-slate-800"
+                        className="w-full px-3.5 py-2.5 border border-blue-200 bg-blue-50/40 rounded-xl text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition shadow-2xs cursor-pointer"
                       >
                         <option value="">-- Mặc định (Theo phân cấp Người đứng đầu) --</option>
                         {users
@@ -2318,13 +2400,13 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
 
                   {/* Trạng thái hoạt động tài khoản */}
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
                       Trạng thái hoạt động tài khoản
                     </label>
                     <select
                       value={formData.is_active}
                       onChange={(e) => setFormData({ ...formData, is_active: parseInt(e.target.value) })}
-                      className="w-full px-3.5 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                      className="w-full sm:w-1/2 px-3.5 py-2.5 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white transition shadow-2xs cursor-pointer"
                     >
                       <option value={1}>✅ Đang hoạt động bình thường</option>
                       <option value={0}>⛔ Tạm khóa / Vô hiệu hóa tài khoản</option>
@@ -2334,20 +2416,27 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
               </div>
 
               {/* Modal Footer */}
-              <div className="px-6 py-4 bg-white border-t border-slate-200 flex items-center justify-end gap-3 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-slate-300 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-100 transition cursor-pointer"
-                >
-                  Hủy bỏ
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold shadow-md hover:shadow-lg transition cursor-pointer"
-                >
-                  {editingUser ? 'Lưu thay đổi' : 'Tạo cán bộ mới'}
-                </button>
+              <div className="px-6 py-4 bg-white border-t border-slate-200 flex items-center justify-between gap-3 shrink-0 shadow-xs">
+                <div className="text-xs text-slate-500 hidden sm:block">
+                  <span className="text-rose-500 font-bold">*</span> Dấu sao đỏ là các trường thông tin bắt buộc
+                </div>
+
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="px-5 py-2.5 border border-slate-300 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-100 transition cursor-pointer active:scale-95"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-7 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-md hover:shadow-lg transition cursor-pointer active:scale-95 flex items-center gap-2"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{editingUser ? 'Lưu thay đổi' : 'Tạo cán bộ mới'}</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -2877,7 +2966,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
               </button>
             </div>
 
-            <form onSubmit={handleResetPasswordSubmit} className="pt-4 space-y-4">
+            <form onSubmit={handleConfirmResetPassword} className="pt-4 space-y-4">
               {resetErrorMessage && (
                 <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-xs text-rose-700">
                   <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />

@@ -63,7 +63,7 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization', 'x-viewer-id', 'x-user-id', 'x-requested-with', 'Accept', 'Origin']
 };
 app.use(cors(corsOptions));
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '50mb', strict: false }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Continuous Live Sync Middleware:
@@ -1824,8 +1824,13 @@ app.put('/api/admin/users/:id/status', requireCanManageUsers, async (req, res) =
 // Admin / Unit Admin: Reset / Re-issue user password
 app.post('/api/admin/users/:id/reset-password', requireCanManageUsers, async (req, res) => {
   const { id } = req.params;
-  const { new_password } = req.body || {};
-  const passwordToSet = new_password && new_password.trim() ? new_password.trim() : '123456';
+  let rawPass = '';
+  if (typeof req.body === 'string') {
+    rawPass = req.body;
+  } else if (req.body && typeof req.body === 'object') {
+    rawPass = req.body.new_password || req.body.password || '';
+  }
+  const passwordToSet = rawPass && typeof rawPass === 'string' && rawPass.trim() ? rawPass.trim() : '123456';
 
   if (passwordToSet.length < 6) {
     return res.status(400).json({ success: false, message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
@@ -2235,6 +2240,30 @@ app.post('/api/standard-tasks/propose', (req, res) => {
 
   triggerBackgroundSupabaseSync();
 
+  // Tự động gửi thông báo hệ thống tới Lãnh đạo phụ trách / CBQL
+  try {
+    const user = db.prepare('SELECT dept_id, manager_id FROM users WHERE id = ?').get(viewerId);
+    let leaderId = user?.manager_id;
+    if (!leaderId && user?.dept_id) {
+      leaderId = db.prepare('SELECT leader_id FROM departments WHERE id = ?').get(user.dept_id)?.leader_id;
+    }
+    if (!leaderId) {
+      leaderId = db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get()?.id;
+    }
+    if (leaderId && leaderId !== viewerId) {
+      createNotification({
+        userId: leaderId,
+        title: proposal_type === 'edit' ? '📝 Đề xuất sửa đổi công việc chuẩn' : '✨ Đề xuất công việc chuẩn mới',
+        message: `${proposerName} đã gửi đề xuất ${proposal_type === 'edit' ? 'sửa đổi' : 'thêm mới'} công việc "${task_name.trim()}". Vui lòng xem xét phê duyệt.`,
+        type: 'task_assigned',
+        taskId: id,
+        tab: 'standard'
+      });
+    }
+  } catch (notifErr) {
+    console.error('[Standard Task Proposal Notification Error]:', notifErr.message);
+  }
+
   res.json({
     success: true,
     id,
@@ -2298,6 +2327,22 @@ app.put('/api/standard-tasks/:id/approve-proposal', requireManagerOrAdmin, (req,
     `).run(viewerId, id);
   }
 
+  // Gửi thông báo đến cán bộ đề xuất (nếu có)
+  try {
+    if (proposal.proposed_by) {
+      createNotification({
+        userId: proposal.proposed_by,
+        title: '✅ Đề xuất công việc chuẩn đã được phê duyệt',
+        message: `Lãnh đạo đã phê duyệt đề xuất "${proposal.task_name}". Công việc đã được cập nhật vào Danh mục chuẩn chung của đơn vị.`,
+        type: 'task_approved',
+        taskId: proposal.original_task_id || id,
+        tab: 'standard'
+      });
+    }
+  } catch (notifErr) {
+    console.error('[Standard Task Approve Notification Error]:', notifErr.message);
+  }
+
   triggerBackgroundSupabaseSync();
 
   res.json({ success: true, message: 'Đã phê duyệt đề xuất thành công! Công việc đã được cập nhật vào Danh mục chuẩn chung.' });
@@ -2306,7 +2351,9 @@ app.put('/api/standard-tasks/:id/approve-proposal', requireManagerOrAdmin, (req,
 // Lãnh đạo từ chối đề xuất
 app.put('/api/standard-tasks/:id/reject-proposal', requireManagerOrAdmin, (req, res) => {
   const { id } = req.params;
-  const { rejection_reason } = req.body;
+  const rejection_reason = typeof req.body === 'string'
+    ? req.body
+    : (req.body?.rejection_reason || (typeof req.body === 'object' && req.body?.reason) || '');
   const viewer = getViewer(req);
   const viewerId = viewer?.id || getViewerId(req);
 
@@ -2315,6 +2362,8 @@ app.put('/api/standard-tasks/:id/reject-proposal', requireManagerOrAdmin, (req, 
     return res.status(404).json({ success: false, message: 'Không tìm thấy đề xuất' });
   }
 
+  const finalReason = rejection_reason || 'Không phù hợp với tiêu chuẩn chung của đơn vị';
+
   db.prepare(`
     UPDATE standard_tasks
     SET status = 'rejected',
@@ -2322,7 +2371,23 @@ app.put('/api/standard-tasks/:id/reject-proposal', requireManagerOrAdmin, (req, 
         approved_by = ?,
         approved_at = CURRENT_TIMESTAMP
     WHERE id = ?
-  `).run(rejection_reason || 'Không phù hợp với tiêu chuẩn chung của đơn vị', viewerId, id);
+  `).run(finalReason, viewerId, id);
+
+  // Gửi thông báo đến cán bộ đề xuất (nếu có)
+  try {
+    if (proposal.proposed_by) {
+      createNotification({
+        userId: proposal.proposed_by,
+        title: '❌ Đề xuất công việc chuẩn bị từ chối',
+        message: `Lãnh đạo đã từ chối đề xuất "${proposal.task_name}". Lý do: ${finalReason}`,
+        type: 'extension_rejected',
+        taskId: proposal.original_task_id || id,
+        tab: 'standard'
+      });
+    }
+  } catch (notifErr) {
+    console.error('[Standard Task Reject Notification Error]:', notifErr.message);
+  }
 
   triggerBackgroundSupabaseSync();
 
@@ -2655,7 +2720,7 @@ function resolveTaskEvaluator(task, db) {
 }
 
 app.get('/api/assigned-tasks', (req, res) => {
-  const { period_id, user_id, status, axis_code, origin, assigned_by, evaluator_id } = req.query;
+  const { period_id, user_id, status, axis_code, origin, assigned_by, evaluator_id, exclude_rejected } = req.query;
   const viewerId = getViewerId(req);
   const accessibleUserIds = getAccessibleUserIds(viewerId);
 
@@ -2726,6 +2791,9 @@ app.get('/api/assigned-tasks', (req, res) => {
   if (status) {
     query += ' AND t.status = ?';
     params.push(status);
+  }
+  if (exclude_rejected === 'true' || exclude_rejected === '1') {
+    query += " AND t.status NOT IN ('rejected', 'cancelled')";
   }
   if (axis_code) {
     query += ' AND t.axis_code = ?';
@@ -4308,6 +4376,10 @@ app.post('/api/assigned-tasks/:id/request-extension', (req, res) => {
       return res.status(400).json({ success: false, message: 'Nhiệm vụ đã được chấm điểm phê duyệt, không thể xin gia hạn!' });
     }
 
+    if (task.status === 'rejected') {
+      return res.status(400).json({ success: false, message: 'Nhiệm vụ đã bị từ chối tiếp nhận, không thể xin gia hạn!' });
+    }
+
     // Kiểm tra quyền: Chỉ người được giao nhiệm vụ hoặc Admin mới được xin gia hạn
     if (viewerId && task.user_id !== viewerId) {
       const viewer = db.prepare('SELECT * FROM users WHERE id = ?').get(viewerId);
@@ -4401,6 +4473,10 @@ app.put('/api/assigned-tasks/:id/review-extension', requireManagerOrAdmin, (req,
       return res.status(404).json({ success: false, message: 'Không tìm thấy nhiệm vụ!' });
     }
 
+    if (task.status === 'rejected') {
+      return res.status(400).json({ success: false, message: 'Nhiệm vụ đã bị từ chối tiếp nhận, không thể gia hạn!' });
+    }
+
     if (task.extension_status !== 'pending') {
       return res.status(400).json({ success: false, message: 'Nhiệm vụ này hiện không có yêu cầu gia hạn nào đang chờ duyệt!' });
     }
@@ -4492,6 +4568,10 @@ app.put('/api/assigned-tasks/:id/extend-deadline', requireManagerOrAdmin, (req, 
 
     if (!task) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy nhiệm vụ!' });
+    }
+
+    if (task.status === 'rejected') {
+      return res.status(400).json({ success: false, message: 'Nhiệm vụ đã bị từ chối tiếp nhận, không thể gia hạn!' });
     }
 
     const originalDeadline = task.original_deadline || task.deadline;
@@ -4850,7 +4930,7 @@ app.get('/api/evaluations', (req, res) => {
   const axes = db.prepare('SELECT * FROM axes ORDER BY code ASC').all();
   const allUserTasks = db.prepare(`
     SELECT * FROM assigned_tasks 
-    WHERE period_id = ? AND user_id = ? AND status != 'rejected'
+    WHERE period_id = ? AND user_id = ? AND status NOT IN ('rejected', 'cancelled')
   `).all(period_id, user_id);
 
   const approvedTasks = allUserTasks.filter(t => t.status === 'approved');
@@ -5242,7 +5322,7 @@ app.get('/api/reports/mau-02', (req, res) => {
            CASE WHEN e.status IN ('submitted', 'approved') THEN e.total_score ELSE 0 END as total_score,
            CASE WHEN e.status IN ('submitted', 'approved') THEN e.rank_proposed ELSE 'Chưa tự đánh giá' END as rank_proposed,
            e.superior_rank, e.summary_reason, e.cadre_proposal_note, e.superior_comment,
-           (SELECT COUNT(*) FROM assigned_tasks t WHERE t.user_id = u.id AND t.period_id = ? AND t.status != 'rejected') as total_tasks,
+           (SELECT COUNT(*) FROM assigned_tasks t WHERE t.user_id = u.id AND t.period_id = ? AND t.status NOT IN ('rejected', 'cancelled')) as total_tasks,
            (SELECT COUNT(*) FROM assigned_tasks t WHERE t.user_id = u.id AND t.period_id = ? AND t.status = 'approved') as approved_tasks,
            (SELECT COUNT(*) FROM assigned_tasks t WHERE t.user_id = u.id AND t.period_id = ? AND t.status = 'approved' AND ((t.progress_pct = 1.0 AND t.actual_finish_date < t.deadline) OR t.bonus_score > 0)) as ahead_tasks
     FROM users u
@@ -5489,7 +5569,7 @@ app.get('/api/stats/dashboard', (req, res) => {
     paramsEvals.push(...accessibleUserIds);
   }
 
-  const totalTasks = db.prepare(`SELECT COUNT(*) as count FROM assigned_tasks WHERE period_id = ? ${userFilterClause}`).get(...paramsTasks).count;
+  const totalTasks = db.prepare(`SELECT COUNT(*) as count FROM assigned_tasks WHERE period_id = ? AND status NOT IN ('rejected', 'cancelled') ${userFilterClause}`).get(...paramsTasks).count;
   const approvedTasks = db.prepare(`SELECT COUNT(*) as count FROM assigned_tasks WHERE period_id = ? AND status = 'approved' ${userFilterClause}`).get(...paramsTasks).count;
   const submittedTasks = db.prepare(`SELECT COUNT(*) as count FROM assigned_tasks WHERE period_id = ? AND status = 'submitted' ${userFilterClause}`).get(...paramsTasks).count;
   const inProgressTasks = db.prepare(`SELECT COUNT(*) as count FROM assigned_tasks WHERE period_id = ? AND status = 'in_progress' ${userFilterClause}`).get(...paramsTasks).count;
@@ -5540,7 +5620,7 @@ app.get('/api/advisory-summary', (req, res) => {
            e.rank_proposed, e.superior_rank, e.superior_comment, e.status as eval_status,
            e.advisory_rank, e.advisory_comment, e.is_advisory_submitted, e.advisory_submitted_at,
            adv_user.full_name as advisory_by_name,
-           (SELECT COUNT(*) FROM assigned_tasks t WHERE t.user_id = u.id AND t.period_id = ? AND t.status != 'rejected') as total_tasks,
+           (SELECT COUNT(*) FROM assigned_tasks t WHERE t.user_id = u.id AND t.period_id = ? AND t.status NOT IN ('rejected', 'cancelled')) as total_tasks,
            (SELECT COUNT(*) FROM assigned_tasks t WHERE t.user_id = u.id AND t.period_id = ? AND t.evaluation_feedback IS NOT NULL AND t.evaluation_feedback != '') as task_feedback_count
     FROM users u
     LEFT JOIN departments d ON u.dept_id = d.id
@@ -5883,14 +5963,14 @@ app.get('/api/stats/charts', (req, res) => {
            COALESCE(AVG(t.progress_pct), 0) as avg_progress,
            COALESCE(AVG(t.quality_pct), 0) as avg_quality
     FROM axes a
-    LEFT JOIN assigned_tasks t ON t.axis_code = a.code AND t.period_id = ? ${userFilterClause}
+    LEFT JOIN assigned_tasks t ON t.axis_code = a.code AND t.period_id = ? AND t.status NOT IN ('rejected', 'cancelled') ${userFilterClause}
     GROUP BY a.code, a.name
     ORDER BY a.code ASC
   `).all(...paramsTasks);
 
   // 2. On-Time vs Late
-  const totalCompleted = db.prepare(`SELECT COUNT(*) as count FROM assigned_tasks WHERE period_id = ? AND actual_finish_date IS NOT NULL ${userFilterClause}`).get(...paramsTasks).count;
-  const onTime = db.prepare(`SELECT COUNT(*) as count FROM assigned_tasks WHERE period_id = ? AND actual_finish_date IS NOT NULL AND actual_finish_date <= deadline ${userFilterClause}`).get(...paramsTasks).count;
+  const totalCompleted = db.prepare(`SELECT COUNT(*) as count FROM assigned_tasks WHERE period_id = ? AND actual_finish_date IS NOT NULL AND status NOT IN ('rejected', 'cancelled') ${userFilterClause}`).get(...paramsTasks).count;
+  const onTime = db.prepare(`SELECT COUNT(*) as count FROM assigned_tasks WHERE period_id = ? AND actual_finish_date IS NOT NULL AND actual_finish_date <= deadline AND status NOT IN ('rejected', 'cancelled') ${userFilterClause}`).get(...paramsTasks).count;
   const late = totalCompleted - onTime;
 
   // 3. Score ranges (chỉ tính cán bộ đã nộp tự đánh giá hoặc đã được thẩm định chấm điểm)

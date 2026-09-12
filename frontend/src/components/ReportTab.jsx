@@ -106,7 +106,7 @@ export default function ReportTab({
         api.getAdminConfigs().catch(() => ({}))
       ]);
       setEvalData(evalRes);
-      setUserTasks(tasksRes);
+      setUserTasks((tasksRes || []).filter(t => t.status !== 'rejected' && t.status !== 'cancelled'));
       if (cfgRes) setConfigs(cfgRes);
     } catch (err) {
       console.error('Error loading report preview:', err);

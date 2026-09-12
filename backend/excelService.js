@@ -1177,7 +1177,7 @@ async function exportCBQLWorkbook(periodId, userId) {
   // Fetch assigned tasks for user in this period
   const tasks = db.prepare(`
     SELECT * FROM assigned_tasks 
-    WHERE period_id = ? AND user_id = ?
+    WHERE period_id = ? AND user_id = ? AND status NOT IN ('rejected', 'cancelled')
   `).all(periodId, userId);
 
   // Fetch axes
@@ -1639,7 +1639,7 @@ async function exportCBQLWorkbook(periodId, userId) {
     SELECT t.*, assigner.full_name as assigner_name
     FROM assigned_tasks t
     LEFT JOIN users assigner ON t.assigned_by = assigner.id
-    WHERE t.period_id = ? AND t.user_id = ?
+    WHERE t.period_id = ? AND t.user_id = ? AND t.status NOT IN ('rejected', 'cancelled')
     ORDER BY t.axis_code ASC, t.deadline ASC
   `).all(periodId, userId);
 
