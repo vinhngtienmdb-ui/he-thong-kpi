@@ -235,7 +235,8 @@ export default function ReportTab({
 
   const handlePrint = () => {
     setShowExportMenu(false);
-    const isLandscape = (canViewAllReports && activeReportView === 'mau_02') || activeReportView === 'execution_report';
+    // Khổ A4 ngang tiêu chuẩn cho tất cả các mẫu báo cáo (Mẫu 01-A, Mẫu 01-B, Mẫu 02, Báo cáo công việc)
+    const isLandscape = true;
     let styleEl = document.getElementById('dynamic-print-landscape-style');
     if (!styleEl) {
       styleEl = document.createElement('style');
@@ -243,9 +244,7 @@ export default function ReportTab({
       document.head.appendChild(styleEl);
     }
     // Strict W3C standard: Do not use !important inside @page declarations
-    styleEl.innerHTML = isLandscape
-      ? '@page { size: A4 landscape; margin: 8mm 8mm 8mm 8mm; }'
-      : '@page { size: A4 portrait; margin: 15mm 15mm 15mm 20mm; }';
+    styleEl.innerHTML = '@page { size: A4 landscape; margin: 8mm 8mm 8mm 8mm; }';
     setTimeout(() => {
       window.print();
     }, 100);
@@ -273,7 +272,8 @@ export default function ReportTab({
         ? `Bao_cao_cong_viec_${cleanTargetName}_${activePeriodId}.pdf`
         : `Bao_cao_danh_gia_${cleanTargetName}_${activePeriodId}.pdf`);
 
-    const isLandscape = isMau02 || activeReportView === 'execution_report';
+    // Tất cả báo cáo xuất ra PDF đều dùng chuẩn A4 ngang (Landscape)
+    const isLandscape = true;
 
     try {
       // 1. Gửi HTML lên máy chủ để render file PDF chuẩn vector bằng Chromium engine
@@ -310,11 +310,11 @@ export default function ReportTab({
         const html2pdf = html2pdfModule.default || html2pdfModule;
 
         const opt = {
-          margin: isLandscape ? [8, 8, 8, 8] : [15, 15, 15, 20],
+          margin: [8, 8, 8, 8],
           filename: filename,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { scale: 2, useCORS: true, logging: false },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: isLandscape ? 'landscape' : 'portrait' },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
           pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
         };
 
@@ -553,8 +553,8 @@ export default function ReportTab({
                           {canViewAllReports && activeReportView === 'mau_02' 
                             ? 'Tải file Word Mẫu 02 (Toàn cơ quan, A4 ngang)' 
                             : activeReportView === 'execution_report'
-                            ? 'Tải file Word Báo cáo công việc (Khổ A4)'
-                            : `Tải file Word (${isCbnv ? 'Mẫu 01-B' : 'Mẫu 01-A'} & Công việc)`}
+                            ? 'Tải file Word Báo cáo công việc (A4 ngang)'
+                            : `Tải file Word (${isCbnv ? 'Mẫu 01-B' : 'Mẫu 01-A'}, A4 ngang)`}
                         </div>
                       </div>
                     </a>
@@ -961,7 +961,7 @@ export default function ReportTab({
         {isCbnv ? (
           /* MẪU 01-B: CÓ 3 BÊN KÝ (Cá nhân, Người quản lý đơn vị / CBQL, Thủ trưởng cơ quan) */
           <div className="space-y-8 pt-4">
-            <div className="grid grid-cols-2 text-center text-[14pt]">
+            <div className="grid grid-cols-2 text-center text-[14pt] signature-block">
               {/* Bên trái: Cá nhân tự đánh giá */}
               <div className="space-y-20">
                 <div>
@@ -990,7 +990,7 @@ export default function ReportTab({
             </div>
 
             {/* III. Nhận xét, đánh giá của cấp có thẩm quyền (Thủ trưởng cơ quan) */}
-            <div className="text-[14pt] space-y-2 pt-6 border-t border-black/20 text-black">
+            <div className="text-[14pt] space-y-2 pt-6 border-t border-black/20 text-black signature-block">
               <p className="font-bold">
                 III. Nhận xét, đánh giá của cấp có thẩm quyền
               </p>
@@ -1006,7 +1006,7 @@ export default function ReportTab({
                 </p>
               )}
 
-              <div className="grid grid-cols-2 text-center pt-6 text-[14pt]">
+              <div className="grid grid-cols-2 text-center pt-6 text-[14pt] signature-block">
                 <div></div>
                 <div className="space-y-20">
                   <div>
@@ -1031,7 +1031,7 @@ export default function ReportTab({
         ) : (
           /* MẪU 01-A (CBQL): 2 BÊN KÝ (Cá nhân lãnh đạo tự đánh giá, và Xác nhận của Ban Thường vụ / Tập thể lãnh đạo) */
           <div className="space-y-8 pt-4">
-            <div className="grid grid-cols-2 text-center text-[14pt]">
+            <div className="grid grid-cols-2 text-center text-[14pt] signature-block">
               <div></div>
               <div className="space-y-20">
                 <div>
@@ -1045,7 +1045,7 @@ export default function ReportTab({
             </div>
 
             {/* III. Nhận xét, đánh giá của cấp có thẩm quyền */}
-            <div className="text-[14pt] space-y-2 pt-6 border-t border-black/20 text-black">
+            <div className="text-[14pt] space-y-2 pt-6 border-t border-black/20 text-black signature-block">
               <p className="font-bold">
                 III. Nhận xét, đánh giá của cấp có thẩm quyền
               </p>
@@ -1061,7 +1061,7 @@ export default function ReportTab({
                 </p>
               )}
 
-              <div className="grid grid-cols-2 text-center pt-6 text-[14pt]">
+              <div className="grid grid-cols-2 text-center pt-6 text-[14pt] signature-block">
                 <div></div>
                 <div className="space-y-20">
                   <div>

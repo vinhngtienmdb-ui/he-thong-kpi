@@ -957,38 +957,19 @@ async function exportCBQLDocx(periodId, userId) {
   );
 
   // 11. Signatures
-  const signTable = new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    borders: transparentBorders,
-    rows: [
+  let signRows = [];
+  if (isCbnv) {
+    // Mẫu 01-B (CBNV): 3 cột ký trên khổ A4 ngang
+    signRows = [
       new TableRow({
         children: [
           new TableCell({
             borders: transparentBorders,
-            width: { size: 50, type: WidthType.PERCENTAGE },
+            width: { size: 33, type: WidthType.PERCENTAGE },
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: leaderTitle.toUpperCase(), bold: true, size: 28, font: 'Times New Roman' })]
-              }),
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: '(Ký, ghi rõ họ tên)', italics: true, size: 28, font: 'Times New Roman' })]
-              }),
-              new Paragraph({ spacing: { before: 1200 } }),
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: leaderName || '', bold: true, size: 28, font: 'Times New Roman' })]
-              })
-            ]
-          }),
-          new TableCell({
-            borders: transparentBorders,
-            width: { size: 50, type: WidthType.PERCENTAGE },
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: 'NGƯỜI TỰ ĐÁNH GIÁ', bold: true, size: 28, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'CÁ NHÂN TỰ ĐÁNH GIÁ', bold: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
@@ -1000,10 +981,100 @@ async function exportCBQLDocx(periodId, userId) {
                 children: [new TextRun({ text: user.full_name || '', bold: true, size: 28, font: 'Times New Roman' })]
               })
             ]
+          }),
+          new TableCell({
+            borders: transparentBorders,
+            width: { size: 33, type: WidthType.PERCENTAGE },
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: 'LÃNH ĐẠO TRỰC TIẾP', bold: true, size: 28, font: 'Times New Roman' })]
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: '(Ký, ghi rõ họ tên)', italics: true, size: 28, font: 'Times New Roman' })]
+              }),
+              new Paragraph({ spacing: { before: 1200 } }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: user.manager_title || 'TRƯỞNG ĐƠN VỊ', bold: true, size: 28, font: 'Times New Roman' })]
+              })
+            ]
+          }),
+          new TableCell({
+            borders: transparentBorders,
+            width: { size: 34, type: WidthType.PERCENTAGE },
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: leaderTitle.toUpperCase(), bold: true, size: 28, font: 'Times New Roman' })]
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: '(Ký, đóng dấu, ghi rõ họ tên)', italics: true, size: 28, font: 'Times New Roman' })]
+              }),
+              new Paragraph({ spacing: { before: 1200 } }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: leaderName || '', bold: true, size: 28, font: 'Times New Roman' })]
+              })
+            ]
           })
         ]
       })
-    ]
+    ];
+  } else {
+    // Mẫu 01-A (CBQL): 2 cột ký trên khổ A4 ngang
+    signRows = [
+      new TableRow({
+        children: [
+          new TableCell({
+            borders: transparentBorders,
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: 'CÁ NHÂN TỰ ĐÁNH GIÁ', bold: true, size: 28, font: 'Times New Roman' })]
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: '(Ký, ghi rõ họ tên)', italics: true, size: 28, font: 'Times New Roman' })]
+              }),
+              new Paragraph({ spacing: { before: 1200 } }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: user.full_name || '', bold: true, size: 28, font: 'Times New Roman' })]
+              })
+            ]
+          }),
+          new TableCell({
+            borders: transparentBorders,
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            children: [
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: (leaderTitle || 'THỦ TRƯỞNG ĐƠN VỊ').toUpperCase(), bold: true, size: 28, font: 'Times New Roman' })]
+              }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: '(Ký, đóng dấu, ghi rõ họ tên)', italics: true, size: 28, font: 'Times New Roman' })]
+              }),
+              new Paragraph({ spacing: { before: 1200 } }),
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: leaderName || '', bold: true, size: 28, font: 'Times New Roman' })]
+              })
+            ]
+          })
+        ]
+      })
+    ];
+  }
+
+  const signTable = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: transparentBorders,
+    rows: signRows
   });
   children.push(signTable);
 
@@ -1025,8 +1096,8 @@ async function exportCBQLDocx(periodId, userId) {
     sections: [{
       properties: {
         page: {
-          size: { orientation: PageOrientation.PORTRAIT },
-          margin: { top: 1134, bottom: 1134, left: 1440, right: 1134 } // A4 standard margins
+          size: { orientation: PageOrientation.LANDSCAPE },
+          margin: { top: 567, bottom: 567, left: 567, right: 567 } // 10mm margins for A4 landscape
         }
       },
       children
@@ -1443,8 +1514,8 @@ async function exportTasksDocx(periodId, userId) {
     sections: [{
       properties: {
         page: {
-          size: { orientation: PageOrientation.PORTRAIT },
-          margin: { top: 1134, bottom: 1134, left: 1440, right: 1134 }
+          size: { orientation: PageOrientation.LANDSCAPE },
+          margin: { top: 567, bottom: 567, left: 567, right: 567 }
         }
       },
       children
