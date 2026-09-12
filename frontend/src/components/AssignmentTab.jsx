@@ -47,6 +47,8 @@ export default function AssignmentTab({
   clearPrefillTask,
   focusExtensionTaskId,
   clearFocusExtensionTaskId,
+  focusApprovalTaskId,
+  clearFocusApprovalTaskId,
   setCurrentTab
 }) {
   const [standardTasks, setStandardTasks] = useState([]);
@@ -781,6 +783,32 @@ export default function AssignmentTab({
         });
     }
   }, [focusExtensionTaskId, assignedTasks]);
+
+  // Lắng nghe yêu cầu mở modal phê duyệt đăng ký công việc từ popup thông báo (focusApprovalTaskId)
+  useEffect(() => {
+    if (!focusApprovalTaskId) return;
+
+    const taskId = String(focusApprovalTaskId);
+    setStatusFilter('pending_approval');
+    const found = assignedTasks.find(t => String(t.id) === taskId);
+    if (found) {
+      openApprovalModal(found);
+      if (clearFocusApprovalTaskId) clearFocusApprovalTaskId();
+    } else {
+      api.getAssignedTaskById(taskId)
+        .then(res => {
+          if (res && res.data) {
+            openApprovalModal(res.data);
+          }
+        })
+        .catch(err => {
+          console.error('Error fetching task for approval review:', err);
+        })
+        .finally(() => {
+          if (clearFocusApprovalTaskId) clearFocusApprovalTaskId();
+        });
+    }
+  }, [focusApprovalTaskId, assignedTasks]);
 
   // 2. Lãnh đạo phê duyệt hoặc từ chối yêu cầu gia hạn
   async function handleReviewExtension(action) {

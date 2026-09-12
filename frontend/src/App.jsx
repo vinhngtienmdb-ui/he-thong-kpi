@@ -78,14 +78,28 @@ export default function App() {
 
   // Focus specific task for extension review when clicking notification
   const [focusExtensionTaskId, setFocusExtensionTaskId] = useState(null);
+  // Focus specific task for approval review (self-registered tasks)
+  const [focusApprovalTaskId, setFocusApprovalTaskId] = useState(null);
+  // Focus specific standard task proposal for review
+  const [focusProposalTaskId, setFocusProposalTaskId] = useState(null);
 
   const handleNotificationClick = (notif) => {
+    const taskId = notif.task_id || notif.taskId;
     if (notif.type === 'extension_requested') {
-      const taskId = notif.task_id || notif.taskId;
       if (taskId) {
         setFocusExtensionTaskId(taskId);
       }
       setCurrentTab('assignment');
+    } else if (notif.type === 'task_registered') {
+      if (taskId) {
+        setFocusApprovalTaskId(taskId);
+      }
+      setCurrentTab('assignment');
+    } else if (notif.type === 'standard_task_proposal' || notif.type === 'proposal') {
+      if (taskId) {
+        setFocusProposalTaskId(taskId);
+      }
+      setCurrentTab('standard');
     } else if (notif.tab) {
       setCurrentTab(notif.tab);
     }
@@ -486,6 +500,8 @@ export default function App() {
               departments={departments}
               onAssignTask={handleAssignTaskFromCatalog}
               setCurrentTab={setCurrentTab}
+              focusProposalTaskId={focusProposalTaskId}
+              clearFocusProposalTaskId={() => setFocusProposalTaskId(null)}
             />
           )}
 
@@ -511,6 +527,8 @@ export default function App() {
               clearPrefillTask={() => setPrefillTask(null)}
               focusExtensionTaskId={focusExtensionTaskId}
               clearFocusExtensionTaskId={() => setFocusExtensionTaskId(null)}
+              focusApprovalTaskId={focusApprovalTaskId}
+              clearFocusApprovalTaskId={() => setFocusApprovalTaskId(null)}
               setCurrentTab={setCurrentTab}
             />
           )}

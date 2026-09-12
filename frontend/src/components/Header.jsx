@@ -86,14 +86,31 @@ export default function Header({
   // Notifications State & Realtime Fetch
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [activeToastNotif, setActiveToastNotif] = useState(null);
+  const shownToastNotifIdsRef = useRef(new Set());
 
   const fetchNotifications = async () => {
     if (!currentUser?.id) return;
     try {
       const res = await api.getNotifications({ user_id: currentUser.id, limit: 50 });
       if (res && res.success) {
-        setNotifications(res.data || []);
+        const list = res.data || [];
+        setNotifications(list);
         setUnreadCount(res.unread_count || 0);
+
+        // Phát hiện thông báo cần phê duyệt/xử lý gửi tới Lãnh đạo / CBQL
+        const pendingActionNotifs = list.filter(n => 
+          (!n.is_read && !n.read) && 
+          ['standard_task_proposal', 'task_registered', 'extension_requested'].includes(n.type)
+        );
+
+        if (pendingActionNotifs.length > 0) {
+          const newestToPop = pendingActionNotifs.find(n => !shownToastNotifIdsRef.current.has(n.id));
+          if (newestToPop) {
+            shownToastNotifIdsRef.current.add(newestToPop.id);
+            setActiveToastNotif(newestToPop);
+          }
+        }
       }
     } catch (e) {
       console.warn('Error fetching notifications:', e);
@@ -102,9 +119,17 @@ export default function Header({
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 60000); // Polling every minute
+    const interval = setInterval(fetchNotifications, 10000); // Polling mỗi 10 giây để nhận thông báo tức thời
     return () => clearInterval(interval);
   }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!activeToastNotif) return;
+    const timer = setTimeout(() => {
+      setActiveToastNotif(null);
+    }, 15000); // Tự động đóng sau 15s nếu không click
+    return () => clearTimeout(timer);
+  }, [activeToastNotif]);
 
   // Realtime Clock & Date
   useEffect(() => {
@@ -206,6 +231,17 @@ export default function Header({
     } else if (notif.tab && setCurrentTab) {
       setCurrentTab(notif.tab);
     }
+  };
+
+  const handleToastAction = () => {
+    if (!activeToastNotif) return;
+    const targetNotif = activeToastNotif;
+    setActiveToastNotif(null);
+    handleNotificationClick(targetNotif);
+  };
+
+  const handleCloseToast = () => {
+    setActiveToastNotif(null);
   };
 
   const formatMessageDates = (text) => {
@@ -554,6 +590,8 @@ export default function Header({
                           }`}
                         >
                           <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 shadow-2xs ${
+                            notif.type === 'standard_task_proposal' ? 'bg-amber-100 text-amber-800' :
+                            notif.type === 'task_registered' ? 'bg-blue-100 text-blue-800' :
                             notif.type === 'task_assigned' ? 'bg-indigo-100 text-indigo-700' :
                             notif.type === 'task_approved' ? 'bg-emerald-100 text-emerald-700' :
                             notif.type === 'extension_approved' ? 'bg-emerald-100 text-emerald-700' :
@@ -563,7 +601,9 @@ export default function Header({
                             notif.type === 'voting_result' ? 'bg-purple-100 text-purple-700' :
                             'bg-slate-100 text-slate-700'
                           }`}>
-                            {notif.type === 'task_assigned' ? <Layers className="w-4 h-4" /> :
+                            {notif.type === 'standard_task_proposal' ? <BookOpen className="w-4 h-4 text-amber-700" /> :
+                             notif.type === 'task_registered' ? <ClipboardList className="w-4 h-4 text-blue-700" /> :
+                             notif.type === 'task_assigned' ? <Layers className="w-4 h-4" /> :
                              notif.type === 'task_approved' ? <FileCheck2 className="w-4 h-4" /> :
                              notif.type === 'extension_approved' ? <CheckCircle2 className="w-4 h-4" /> :
                              notif.type === 'extension_requested' ? <Clock className="w-4 h-4" /> :
@@ -2501,6 +2541,73 @@ export default function Header({
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* 8. REALTIME FLOATING POPUP NOTIFICATION FOR CBQL / LÃNH ĐẠO    */}
+      {/* ============================================================== */}
+      {activeToastNotif && (
+        <div className="fixed top-20 right-4 sm:right-6 z-50 max-w-md w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 border-2 border-red-500 rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-top-4 duration-300">
+          <div className="bg-gradient-to-r from-red-700 via-red-800 to-slate-900 text-white px-4 py-2.5 flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-300 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+              </span>
+              <span className="text-xs font-bold uppercase tracking-wider">
+                🔔 Thông báo gửi tới Lãnh đạo / CBQL
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleCloseToast}
+              className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
+              title="Đóng thông báo nổi"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300 flex items-center justify-center shrink-0 shadow-xs font-bold text-base">
+                {activeToastNotif.type === 'standard_task_proposal' ? '✨' : 
+                 activeToastNotif.type === 'task_registered' ? '📋' : '⏳'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white leading-snug">
+                  {activeToastNotif.title}
+                </h4>
+                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 leading-relaxed line-clamp-3">
+                  {formatMessageDates(activeToastNotif.message)}
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+              <span className="text-[11px] text-slate-400">
+                {activeToastNotif.time || formatNotifTime(activeToastNotif.created_at)}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCloseToast}
+                  className="px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
+                >
+                  Để sau
+                </button>
+                <button
+                  type="button"
+                  onClick={handleToastAction}
+                  className="px-4 py-1.5 text-xs font-bold bg-red-700 hover:bg-red-800 text-white rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer animate-pulse"
+                >
+                  <span>Xem & Phê duyệt ngay</span>
+                  <span>→</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

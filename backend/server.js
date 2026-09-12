@@ -2242,20 +2242,13 @@ app.post('/api/standard-tasks/propose', (req, res) => {
 
   // Tự động gửi thông báo hệ thống tới Lãnh đạo phụ trách / CBQL
   try {
-    const user = db.prepare('SELECT dept_id, manager_id FROM users WHERE id = ?').get(viewerId);
-    let leaderId = user?.manager_id;
-    if (!leaderId && user?.dept_id) {
-      leaderId = db.prepare('SELECT leader_id FROM departments WHERE id = ?').get(user.dept_id)?.leader_id;
-    }
-    if (!leaderId) {
-      leaderId = db.prepare("SELECT id FROM users WHERE role = 'admin' LIMIT 1").get()?.id;
-    }
+    const leaderId = findDirectLeaderId(viewerId);
     if (leaderId && leaderId !== viewerId) {
       createNotification({
         userId: leaderId,
         title: proposal_type === 'edit' ? '📝 Đề xuất sửa đổi công việc chuẩn' : '✨ Đề xuất công việc chuẩn mới',
         message: `${proposerName} đã gửi đề xuất ${proposal_type === 'edit' ? 'sửa đổi' : 'thêm mới'} công việc "${task_name.trim()}". Vui lòng xem xét phê duyệt.`,
-        type: 'task_assigned',
+        type: 'standard_task_proposal',
         taskId: id,
         tab: 'standard'
       });
@@ -3374,6 +3367,26 @@ app.post('/api/assigned-tasks/register', (req, res) => {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'registered', 'pending_approval')
   `).run(id, period_id, user_id, standard_task_id || null, task_name, output_result, deadline, task_type, stdScore, diffWeight, maxConv, axis_code);
 
+  triggerBackgroundSupabaseSync();
+
+  // Tự động gửi thông báo hệ thống tới Lãnh đạo phụ trách / CBQL
+  try {
+    const leaderId = findDirectLeaderId(user_id);
+    if (leaderId && leaderId !== user_id) {
+      const u = db.prepare('SELECT full_name FROM users WHERE id = ?').get(user_id);
+      createNotification({
+        userId: leaderId,
+        title: '📋 Đăng ký công việc mới chờ phê duyệt',
+        message: `Cán bộ ${u?.full_name || 'Cán bộ'} đã đăng ký công việc mới: "${task_name.trim()}". Vui lòng xem xét phê duyệt.`,
+        type: 'task_registered',
+        taskId: id,
+        tab: 'assignment'
+      });
+    }
+  } catch (notifErr) {
+    console.error('[Task Registration Notification Error]:', notifErr.message);
+  }
+
   res.json({ success: true, id, message: 'Đã đăng ký công việc, chờ CBQL phê duyệt' });
 });
 
@@ -3435,6 +3448,26 @@ app.put('/api/assigned-tasks/:id/approve', requireManagerOrAdmin, (req, res) => 
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(newStatus, cbql_comment || null, diffWeight, maxConv, newStandardTaskId, id);
+
+  triggerBackgroundSupabaseSync();
+
+  // Gửi thông báo kết quả phê duyệt cho cán bộ tự đăng ký
+  try {
+    if (task.user_id) {
+      createNotification({
+        userId: task.user_id,
+        title: isApproved ? '✅ Công việc tự đăng ký đã được phê duyệt' : '❌ Công việc tự đăng ký đã bị từ chối',
+        message: isApproved 
+          ? `Lãnh đạo/CBQL đã phê duyệt công việc tự đăng ký "${task.task_name}".`
+          : `Lãnh đạo/CBQL đã từ chối công việc tự đăng ký "${task.task_name}".${cbql_comment ? ` Ghi chú: ${cbql_comment}` : ''}`,
+        type: isApproved ? 'task_approved' : 'task_rejected',
+        taskId: id,
+        tab: 'execution'
+      });
+    }
+  } catch (notifErr) {
+    console.error('[Task Approval Notification Error]:', notifErr.message);
+  }
 
   res.json({ 
     success: true, 
@@ -4328,6 +4361,39 @@ app.put('/api/assigned-tasks/:id/evaluation-feedback', (req, res) => {
 // =============================================================
 // THÔNG BÁO HỆ THỐNG & GIA HẠN THỜI HẠN NHIỆM VỤ (V4.1)
 // =============================================================
+
+function findDirectLeaderId(userId) {
+  if (!userId) return null;
+  try {
+    // 1. Ưu tiên manager_id từ vị trí chính (is_primary = 1) trong user_positions
+    const primaryPos = db.prepare('SELECT manager_id FROM user_positions WHERE user_id = ? AND is_primary = 1').get(userId);
+    if (primaryPos?.manager_id && primaryPos.manager_id !== userId) return primaryPos.manager_id;
+
+    // 2. Kiểm tra manager_id trong bảng users
+    const user = db.prepare('SELECT dept_id, manager_id FROM users WHERE id = ?').get(userId);
+    if (user?.manager_id && user.manager_id !== userId) return user.manager_id;
+
+    // 3. Kiểm tra bất kỳ vị trí công tác nào có manager_id
+    const anyPos = db.prepare('SELECT manager_id FROM user_positions WHERE user_id = ? AND manager_id IS NOT NULL AND manager_id != ?').get(userId, userId);
+    if (anyPos?.manager_id) return anyPos.manager_id;
+
+    // 4. Lãnh đạo phụ trách phòng ban trong bảng departments
+    if (user?.dept_id) {
+      const dept = db.prepare('SELECT leader_id FROM departments WHERE id = ?').get(user.dept_id);
+      if (dept?.leader_id && dept.leader_id !== userId) return dept.leader_id;
+    }
+
+    // 5. Tìm Lãnh đạo đơn vị (management_role = 'lanh_dao') hoặc Quản trị viên (role = 'admin')
+    const leader = db.prepare("SELECT id FROM users WHERE management_role = 'lanh_dao' AND id != ? AND is_active = 1 LIMIT 1").get(userId);
+    if (leader?.id) return leader.id;
+
+    const admin = db.prepare("SELECT id FROM users WHERE role = 'admin' AND id != ? AND is_active = 1 LIMIT 1").get(userId);
+    return admin?.id || null;
+  } catch (err) {
+    console.error('[findDirectLeaderId] Error:', err);
+    return null;
+  }
+}
 
 function createNotification({ userId, title, message, type = 'system', taskId = null, tab = 'assignment' }) {
   if (!userId || !title || !message) return null;
