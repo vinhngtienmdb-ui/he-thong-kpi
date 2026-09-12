@@ -375,6 +375,21 @@ function initDatabase() {
       FOREIGN KEY(dept_id) REFERENCES departments(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS system_logs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      username TEXT,
+      full_name TEXT,
+      action TEXT NOT NULL,
+      entity_type TEXT,
+      entity_id TEXT,
+      description TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      details TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_user_positions_user ON user_positions(user_id);
     CREATE INDEX IF NOT EXISTS idx_user_positions_dept ON user_positions(dept_id);
     CREATE INDEX IF NOT EXISTS idx_skip_level_mgr ON skip_level_authorizations(manager_id);
@@ -384,6 +399,9 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_std_tasks_dept ON standard_tasks(dept_code);
     CREATE INDEX IF NOT EXISTS idx_assigned_tasks_user_period ON assigned_tasks(user_id, period_id);
     CREATE INDEX IF NOT EXISTS idx_assigned_tasks_period ON assigned_tasks(period_id);
+    CREATE INDEX IF NOT EXISTS idx_system_logs_created_at ON system_logs(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_system_logs_action ON system_logs(action);
+    CREATE INDEX IF NOT EXISTS idx_system_logs_user_id ON system_logs(user_id);
   `);
 
   const migrations = [

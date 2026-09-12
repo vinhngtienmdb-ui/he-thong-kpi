@@ -342,4 +342,24 @@ CREATE INDEX IF NOT EXISTS idx_documents_date ON documents(doc_date);
 CREATE INDEX IF NOT EXISTS idx_doc_dispatches_user ON document_dispatches(assigned_to_user_id);
 CREATE INDEX IF NOT EXISTS idx_doc_dispatches_doc ON document_dispatches(document_id);
 
+-- 18. System Logs (Nhat ky he thong hoat dong realtime)
+CREATE TABLE IF NOT EXISTS system_logs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    username TEXT,
+    full_name TEXT,
+    action TEXT NOT NULL,
+    entity_type TEXT,
+    entity_id TEXT,
+    description TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    details TEXT,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_system_logs_created_at ON system_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_system_logs_action ON system_logs(action);
+CREATE INDEX IF NOT EXISTS idx_system_logs_user_id ON system_logs(user_id);
+
 ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS detailed_result_note TEXT;

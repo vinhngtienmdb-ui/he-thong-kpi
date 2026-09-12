@@ -1247,12 +1247,53 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 5.2 */}
+              {/* Version 5.3 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 5.2</span>
-                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 00:20 (Bản phát hành mới nhất - Hoàn thành Văn bản, Gán Quyền Văn thư, Khắc phục Quyền Động CBQL, Chuẩn hóa Danh mục theo Quý & Cây Đơn vị Thứ bậc)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 5.3</span>
+                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 08:50 (Bản phát hành mới nhất - Xuất Excel Người dùng, Gộp Nút Báo cáo & Khổ A4 14pt, Đổi tên Cấu hình & Nhật ký Hoạt động Realtime)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Xuất File Excel Danh Sách Người Dùng, Tối Ưu Nút Báo Cáo & Định Dạng Khổ Giấy A4 Times New Roman 14pt, Chuẩn Hóa Tên Chức Năng Cấu Hình & Hệ Thống Nhật Ký Hoạt Động Realtime
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Xuất file Excel danh sách người dùng & cán bộ nhân viên:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Bổ sung nút <strong>"Xuất file Excel"</strong> tại phân hệ Quản lý người dùng, hỗ trợ xuất đầy đủ 14 cột tiêu chuẩn thông tin cán bộ theo đúng các bộ lọc đang chọn (Đơn vị, Chức vụ, Trạng thái, Loại cán bộ).</li>
+                      <li>File Excel được định dạng chuẩn font <em>Times New Roman</em>, bao gồm cả Chức vụ chính quyền, Chức danh Đảng, Đoàn thể, và toàn bộ <em>Chức vụ kiêm nhiệm</em> của cán bộ.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Gộp tính năng Báo cáo & Chuẩn hóa Định dạng Khổ giấy A4 14pt:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Gộp các nút In báo cáo / Xuất PDF / Tải Excel rời rạc thành 1 nút duy nhất <strong>"🖨️ In & Xuất Báo cáo ▾"</strong> với menu xổ xuống 3 tùy chọn: <em>🖨️ In báo cáo, 📄 Xuất PDF, 📊 Xuất Excel</em>.</li>
+                      <li>Các mẫu biểu Báo cáo được cấu hình định dạng in ấn chuyên nghiệp: dàn đều 100% theo hàng ngang trên khổ giấy <strong>A4</strong> (hỗ trợ in nhiều trang liên tục mà không bị cắt mép hoặc tràn lề), sử dụng font chữ <strong>Times New Roman</strong>, kích cỡ chữ <strong>14pt</strong> đúng quy chuẩn thể thức văn bản quản lý nhà nước.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Chuẩn hóa Tên gọi Chức năng trong Module Cấu hình:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Đổi tên <em>Đơn vị và Phòng ban đa cấp</em> &rarr; <strong>Quản lý đơn vị</strong>.</li>
+                      <li>Đổi tên <em>Vai trò & Phân quyền dữ liệu</em> &rarr; <strong>Quản lý phân quyền</strong>.</li>
+                      <li>Đổi tên <em>Trọng số HD.06 & Chu kỳ quý</em> &rarr; <strong>Quản lý chu kỳ đánh giá</strong>.</li>
+                      <li>Đổi tên <em>Sao lưu & Phục hồi CSDL</em> &rarr; <strong>Backup</strong>.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Phát triển Chức năng Ghi Log Hệ thống Hoạt động Realtime:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Bổ sung phân hệ <strong>5. Nhật ký hoạt động</strong> trong module Cấu hình với chế độ <code>● LIVE (3s)</code> tự động cập nhật thời gian thực, có nút chuyển đổi Bật/Tạm dừng Live và Làm mới tức thì.</li>
+                      <li>Ghi nhận kiểm toán tự động mọi thao tác trọng yếu: Đăng nhập/Đăng xuất, Đổi mật khẩu, Thêm/Sửa/Xóa/Khóa/Mở khóa/Cấp lại mật khẩu/Xuất Excel người dùng, Quản lý đơn vị & phân quyền, Giao việc & Chấm điểm KPI, Trình & Hoàn thành văn bản, Sao lưu & Phục hồi CSDL.</li>
+                      <li>Tích hợp bộ lọc đa tiêu chí (theo Loại thao tác, Người thực hiện, Nội dung, Địa chỉ IP, Ngày thực hiện), modal xem chi tiết payload kỹ thuật và công cụ dọn dẹp nhật ký cũ tối ưu hiệu năng.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 5.2 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-400 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 5.2</span>
+                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 00:20 (Hoàn thành Văn bản, Gán Quyền Văn thư, Khắc phục Quyền Động CBQL, Chuẩn hóa Danh mục theo Quý & Cây Đơn vị Thứ bậc)</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Cập Nhật Trạng Thái Hoàn Thành Sau Khi Xử Lý Văn Bản, Cơ Chế Phân Quyền Văn Thư Trình Lãnh Đạo, Khắc Phục Triệt Để Lỗi Phân Quyền Động CBQL, Chuẩn Hóa Danh Mục Theo Quý & Sắp Xếp Cây Đơn Vị Thứ Bậc

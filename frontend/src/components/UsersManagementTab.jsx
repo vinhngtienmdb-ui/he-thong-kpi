@@ -1050,6 +1050,22 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
             <span>Nhập từ Excel</span>
           </button>
 
+          <a
+            href={api.getUsersExportUrl({
+              dept_id: selectedDeptId,
+              include_children: includeChildren,
+              role: filterRole,
+              status: filterStatus,
+              employee_type: filterEmployeeType
+            })}
+            download="Danh_sach_can_bo_KPI.xlsx"
+            className="inline-flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-2 rounded-xl border border-blue-200 transition shadow-2xs cursor-pointer"
+            title="Xuất file Excel danh sách cán bộ theo bộ lọc hiện tại"
+          >
+            <Download className="w-4 h-4 text-blue-700" />
+            <span>Xuất file Excel</span>
+          </a>
+
           <button
             type="button"
             onClick={() => setIsGroupModalOpen(true)}

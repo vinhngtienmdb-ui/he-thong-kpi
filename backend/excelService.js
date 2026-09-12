@@ -2133,6 +2133,162 @@ async function exportDirectoryWorkbook(users, options = {}) {
   return workbook;
 }
 
+// Export users list for User Management Tab
+async function exportUsersWorkbook(usersList = [], options = {}) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Hệ thống Đánh giá KPI';
+  workbook.created = new Date();
+
+  const ws = workbook.addWorksheet('Danh sách cán bộ', {
+    views: [{ showGridLines: true }]
+  });
+
+  // Title
+  ws.mergeCells('A1:N1');
+  const titleCell = ws.getCell('A1');
+  titleCell.value = 'DANH SÁCH CÁN BỘ, CÔNG CHỨC, VIÊN CHỨC VÀ NGƯỜI LAO ĐỘNG';
+  titleCell.font = { name: 'Times New Roman', size: 15, bold: true, color: { argb: 'FF991B1B' } };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 30;
+
+  ws.mergeCells('A2:N2');
+  const subCell = ws.getCell('A2');
+  const dateStr = new Date().toLocaleDateString('vi-VN');
+  subCell.value = `Thời điểm xuất danh sách: ${dateStr} - Tổng số cán bộ: ${usersList.length}`;
+  subCell.font = { name: 'Times New Roman', size: 11, italic: true, color: { argb: 'FF475569' } };
+  subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(2).height = 20;
+
+  ws.addRow([]); // Blank row
+
+  const headers = [
+    'STT',
+    'Họ và tên',
+    'Tên đăng nhập',
+    'Phân loại đối tượng',
+    'Đơn vị / Phòng ban',
+    'Chức vụ / Vị trí việc làm',
+    'Chức danh Đảng',
+    'Chức danh Đoàn thể',
+    'Vai trò hệ thống',
+    'Cấp bậc quản lý',
+    'Chức vụ kiêm nhiệm',
+    'Lãnh đạo / CBQL trực tiếp',
+    'Trạng thái tài khoản',
+    'Số điện thoại / Email'
+  ];
+
+  const headerRow = ws.addRow(headers);
+  headerRow.height = 28;
+  headerRow.font = { name: 'Times New Roman', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+  headerRow.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  headerRow.eachCell((cell) => {
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF991B1B' } // Red header
+    };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+    };
+  });
+
+  const empTypeLabels = {
+    cong_chuc: 'Công chức',
+    vien_chuc: 'Viên chức',
+    nguoi_lao_dong: 'Người lao động'
+  };
+
+  const mgmtRoleLabels = {
+    lanh_dao: 'Lãnh đạo đơn vị',
+    quan_ly: 'Cán bộ quản lý (Phó)',
+    to_truong: 'Tổ trưởng / Trưởng bộ phận',
+    nhan_vien: 'Cán bộ nhân viên'
+  };
+
+  usersList.forEach((u, idx) => {
+    const empType = empTypeLabels[u.employee_type] || (u.employee_type === 'cong_chuc' ? 'Công chức' : 'Viên chức');
+    const mgmtRole = mgmtRoleLabels[u.management_role] || 'Cán bộ nhân viên';
+    const status = (u.is_active === 0 || u.is_active === false) ? 'Tạm khóa' : 'Hoạt động';
+
+    let secTitles = '';
+    if (Array.isArray(u.positions)) {
+      const secs = u.positions.filter(p => !p.is_primary);
+      secTitles = secs.map(p => `${p.position_title || 'Cán bộ'} (${p.department_name || p.dept_name || 'Đơn vị khác'})`).join('; ');
+    } else if (u.secondary_titles) {
+      secTitles = u.secondary_titles;
+    }
+
+    const contact = [u.phone, u.email].filter(Boolean).join(' - ');
+
+    const row = ws.addRow([
+      idx + 1,
+      u.full_name || '',
+      u.username || '',
+      empType,
+      u.dept_name || u.department_name || '',
+      u.gov_title || u.position_title || 'Cán bộ',
+      u.party_title || '',
+      u.union_title || '',
+      u.role_name || (u.role === 'admin' ? 'Quản trị viên' : (u.role === 'cbql' ? 'Cán bộ quản lý' : 'Cán bộ nhân viên')),
+      mgmtRole,
+      secTitles,
+      u.manager_name || '',
+      status,
+      contact
+    ]);
+
+    row.height = 22;
+    row.font = { name: 'Times New Roman', size: 11 };
+    row.alignment = { vertical: 'middle' };
+
+    row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell(3).alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell(4).alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell(10).alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell(13).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const isEven = idx % 2 === 0;
+    row.eachCell((cell) => {
+      if (isEven) {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFF8FAFC' }
+        };
+      }
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+      };
+    });
+  });
+
+  ws.columns = [
+    { width: 6 },   // STT
+    { width: 26 },  // Họ tên
+    { width: 16 },  // Username
+    { width: 18 },  // Phân loại
+    { width: 28 },  // Đơn vị
+    { width: 24 },  // Chức vụ chính
+    { width: 20 },  // Chức danh Đảng
+    { width: 20 },  // Chức danh Đoàn thể
+    { width: 20 },  // Vai trò hệ thống
+    { width: 24 },  // Cấp bậc quản lý
+    { width: 30 },  // Kiêm nhiệm
+    { width: 24 },  // Quản lý
+    { width: 16 },  // Trạng thái
+    { width: 26 }   // Liên hệ
+  ];
+
+  return workbook;
+}
+
 module.exports = {
   importStandardTasksFromExcel,
   importStandardTasksFromData,
@@ -2140,6 +2296,7 @@ module.exports = {
   importUsersFromExcel,
   exportCBQLWorkbook,
   exportMau02Workbook,
-  exportDirectoryWorkbook
+  exportDirectoryWorkbook,
+  exportUsersWorkbook
 };
 

@@ -59,6 +59,7 @@ export default function ReportTab({
   const [originFilter, setOriginFilter] = useState('all'); // 'all', 'assigned', 'registered'
   const [axisFilter, setAxisFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
@@ -361,39 +362,90 @@ export default function ReportTab({
               </div>
             )}
 
-            {/* Print / Export PDF Button */}
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="flex items-center space-x-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm transition-colors cursor-pointer"
-              title="In trực tiếp hoặc Lưu dưới dạng PDF chuẩn Nghị định 30/2020/NĐ-CP (Font Times New Roman 14pt)"
-            >
-              <Printer className="w-4 h-4 text-slate-200" />
-              <span>In báo cáo / Xuất PDF</span>
-            </button>
+            {/* Unified Export & Print Button (Gộp In báo cáo / Xuất PDF / Tải Excel) */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowExportMenu(prev => !prev)}
+                className="flex items-center space-x-2 bg-slate-900 hover:bg-black text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm transition-colors cursor-pointer"
+                title="In báo cáo, Xuất file PDF khổ A4 hoặc Tải file Excel"
+              >
+                <Printer className="w-4 h-4 text-slate-200" />
+                <span>In & Xuất Báo cáo</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-300 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
+              </button>
 
-            {/* Download Buttons */}
-            {canViewAllReports && activeReportView === 'mau_02' ? (
-              <a
-                href={exportMau02Url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center space-x-2 bg-red-700 hover:bg-red-800 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm transition-colors"
-              >
-                <Download className="w-4 h-4" />
-                <span>Tải Excel Mẫu 02 (Toàn cơ quan)</span>
-              </a>
-            ) : (
-              <a
-                href={exportUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center space-x-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm transition-colors"
-              >
-                <Download className="w-4 h-4" />
-                <span>Tải Excel ({isCbnv ? 'Mẫu 01-B' : 'Mẫu 01-A'} & Công việc)</span>
-              </a>
-            )}
+              {showExportMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-20" 
+                    onClick={() => setShowExportMenu(false)} 
+                  />
+                  <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30 text-xs animate-in fade-in zoom-in duration-150">
+                    <div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                      Tùy chọn In & Xuất file
+                    </div>
+
+                    {/* 1. In báo cáo */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowExportMenu(false);
+                        window.print();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-slate-700 hover:bg-slate-100 font-semibold text-left transition cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700">
+                        <Printer className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-900">In báo cáo</div>
+                        <div className="text-[11px] text-slate-500 font-normal">In trực tiếp ra máy in khổ giấy A4</div>
+                      </div>
+                    </button>
+
+                    {/* 2. Xuất PDF */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowExportMenu(false);
+                        window.print();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-slate-700 hover:bg-slate-100 font-semibold text-left transition cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center text-red-700">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-900">Xuất PDF</div>
+                        <div className="text-[11px] text-slate-500 font-normal">Lưu file PDF khổ A4 (Times New Roman 14pt)</div>
+                      </div>
+                    </button>
+
+                    {/* 3. Xuất Excel */}
+                    <a
+                      href={canViewAllReports && activeReportView === 'mau_02' ? exportMau02Url : exportUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => setShowExportMenu(false)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-slate-700 hover:bg-slate-100 font-semibold text-left transition cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700">
+                        <FileSpreadsheet className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-900">Xuất Excel</div>
+                        <div className="text-[11px] text-slate-500 font-normal">
+                          {canViewAllReports && activeReportView === 'mau_02' 
+                            ? 'Tải file Excel Mẫu 02 (Toàn cơ quan)' 
+                            : `Tải file Excel (${isCbnv ? 'Mẫu 01-B' : 'Mẫu 01-A'} & Công việc)`}
+                        </div>
+                      </div>
+                    </a>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 

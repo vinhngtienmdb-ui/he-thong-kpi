@@ -513,6 +513,13 @@ export const api = {
     const viewerId = getViewerId();
     return `${BASE_URL}/admin/users/template${viewerId ? `?viewer_id=${encodeURIComponent(viewerId)}` : ''}`;
   },
+  getUsersExportUrl: (params = {}) => {
+    const viewerId = getViewerId();
+    const queryObj = { ...params };
+    if (viewerId) queryObj.viewer_id = viewerId;
+    const query = new URLSearchParams(queryObj).toString();
+    return `${BASE_URL}/admin/users/export${query ? `?${query}` : ''}`;
+  },
   importAdminUsers: async (formData) => {
     const headers = { ...getAuthHeaders() };
     const viewerId = getViewerId();
@@ -804,4 +811,15 @@ export const api = {
     const query = new URLSearchParams(params).toString();
     return fetchApi(`/reports/nq98-summary${query ? `?${query}` : ''}`);
   },
+
+  // Realtime System Logs
+  getSystemLogs: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return fetchApi(`/system-logs${query ? `?${query}` : ''}`);
+  },
+  clearSystemLogs: (data = {}) => fetchApi('/system-logs/clear', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }),
 };

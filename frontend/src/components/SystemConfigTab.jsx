@@ -30,7 +30,13 @@ import {
   UploadCloud,
   RefreshCw,
   HardDrive,
-  FileText
+  FileText,
+  Activity,
+  Pause,
+  Play,
+  Eye,
+  Filter,
+  RotateCcw
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate } from '../constants';
@@ -121,6 +127,127 @@ export default function SystemConfigTab({
       loadSupabaseStatus();
     }
   }, [activeSubTab]);
+
+  // Realtime System Logs State
+  const [logs, setLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsTotal, setLogsTotal] = useState(0);
+  const [logPage, setLogPage] = useState(1);
+  const [logActionFilter, setLogActionFilter] = useState('ALL');
+  const [logSearch, setLogSearch] = useState('');
+  const [logFromDate, setLogFromDate] = useState('');
+  const [logToDate, setLogToDate] = useState('');
+  const [isLiveActive, setIsLiveActive] = useState(true);
+  const [selectedLogDetail, setSelectedLogDetail] = useState(null);
+  const [cleaningLogs, setCleaningLogs] = useState(false);
+
+  const loadLogs = async (isSilent = false) => {
+    try {
+      if (!isSilent) setLogsLoading(true);
+      const params = {
+        limit: 50,
+        offset: (logPage - 1) * 50
+      };
+      if (logActionFilter && logActionFilter !== 'ALL') params.action = logActionFilter;
+      if (logSearch.trim()) params.search = logSearch.trim();
+      if (logFromDate) params.from_date = logFromDate;
+      if (logToDate) params.to_date = logToDate;
+
+      const res = await api.getSystemLogs(params);
+      if (res && res.success) {
+        setLogs(res.logs || []);
+        setLogsTotal(res.total || 0);
+      }
+    } catch (err) {
+      console.error('Error loading system logs:', err);
+    } finally {
+      if (!isSilent) setLogsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSubTab === 'logs') {
+      loadLogs();
+      if (!isLiveActive) return;
+      const interval = setInterval(() => {
+        loadLogs(true);
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [activeSubTab, logPage, logActionFilter, logSearch, logFromDate, logToDate, isLiveActive]);
+
+  const handleClearLogs = async () => {
+    const confirmMsg = 'XÁC NHẬN DỌN DẸP NHẬT KÝ HỆ THỐNG:\n\nBạn có chắc chắn muốn dọn dẹp các bản ghi nhật ký hoạt động cũ hơn 30 ngày?';
+    if (!window.confirm(confirmMsg)) return;
+    try {
+      setCleaningLogs(true);
+      const res = await api.clearSystemLogs({ keep_days: 30 });
+      setMessage({ text: res.message || 'Đã dọn dẹp nhật ký thành công', type: 'success' });
+      loadLogs();
+    } catch (err) {
+      setMessage({ text: err.message || 'Lỗi khi dọn dẹp nhật ký', type: 'error' });
+    } finally {
+      setCleaningLogs(false);
+    }
+  };
+
+  const getActionBadge = (action) => {
+    switch (action) {
+      case 'LOGIN':
+        return { label: 'Đăng nhập', bg: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
+      case 'LOGIN_FAILED':
+        return { label: 'Đăng nhập sai', bg: 'bg-rose-50 text-rose-700 border-rose-200' };
+      case 'LOGIN_BLOCKED':
+        return { label: 'Tài khoản khóa', bg: 'bg-rose-50 text-rose-700 border-rose-200' };
+      case 'LOGOUT':
+        return { label: 'Đăng xuất', bg: 'bg-slate-100 text-slate-700 border-slate-200' };
+      case 'CHANGE_PASSWORD':
+        return { label: 'Đổi mật khẩu', bg: 'bg-purple-50 text-purple-700 border-purple-200' };
+      case 'USER_CREATE':
+        return { label: 'Tạo người dùng', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      case 'USER_UPDATE':
+        return { label: 'Sửa người dùng', bg: 'bg-blue-50 text-blue-700 border-blue-200' };
+      case 'USER_DELETE':
+      case 'USER_DELETE_PERMANENT':
+        return { label: 'Xóa người dùng', bg: 'bg-rose-50 text-rose-700 border-rose-200' };
+      case 'USER_ACTIVATE':
+        return { label: 'Kích hoạt TK', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      case 'USER_DEACTIVATE':
+        return { label: 'Khóa tài khoản', bg: 'bg-amber-50 text-amber-700 border-amber-200' };
+      case 'USER_RESET_PASSWORD':
+        return { label: 'Reset mật khẩu', bg: 'bg-purple-50 text-purple-700 border-purple-200' };
+      case 'USER_EXPORT':
+        return { label: 'Xuất Excel NV', bg: 'bg-teal-50 text-teal-700 border-teal-200' };
+      case 'DEPT_CREATE':
+        return { label: 'Tạo đơn vị', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      case 'DEPT_UPDATE':
+        return { label: 'Sửa đơn vị', bg: 'bg-blue-50 text-blue-700 border-blue-200' };
+      case 'DEPT_DELETE':
+        return { label: 'Xóa đơn vị', bg: 'bg-rose-50 text-rose-700 border-rose-200' };
+      case 'ROLE_CREATE':
+        return { label: 'Tạo vai trò', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      case 'ROLE_UPDATE':
+        return { label: 'Sửa vai trò', bg: 'bg-blue-50 text-blue-700 border-blue-200' };
+      case 'ROLE_DELETE':
+        return { label: 'Xóa vai trò', bg: 'bg-rose-50 text-rose-700 border-rose-200' };
+      case 'TASK_ASSIGN':
+        return { label: 'Giao việc KPI', bg: 'bg-amber-50 text-amber-800 border-amber-200' };
+      case 'TASK_GRADE':
+        return { label: 'Chấm điểm KPI', bg: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+      case 'DOC_SUBMIT_LEADER':
+        return { label: 'Trình văn bản', bg: 'bg-blue-50 text-blue-800 border-blue-200' };
+      case 'DOC_COMPLETE':
+        return { label: 'Hoàn thành VB', bg: 'bg-emerald-50 text-emerald-800 border-emerald-200' };
+      case 'BACKUP_CREATE':
+        return { label: 'Tạo backup', bg: 'bg-cyan-50 text-cyan-700 border-cyan-200' };
+      case 'BACKUP_RESTORE':
+        return { label: 'Phục hồi CSDL', bg: 'bg-amber-50 text-amber-700 border-amber-200' };
+      case 'LOG_CLEANUP':
+        return { label: 'Dọn dẹp log', bg: 'bg-slate-100 text-slate-700 border-slate-200' };
+      default:
+        return { label: action || 'Hoạt động', bg: 'bg-slate-100 text-slate-700 border-slate-200' };
+    }
+  };
 
   const handlePushToSupabase = async () => {
     const confirmMsg = `XÁC NHẬN ĐỒNG BỘ LÊN SUPABASE CLOUD:\n\n` +
@@ -587,7 +714,7 @@ export default function SystemConfigTab({
             Cấu hình Hệ thống & Chu kỳ KPI
           </h2>
           <p className="text-slate-500 text-xs mt-1">
-            Thiết lập danh mục Đơn vị/Phòng ban đa cấp (quản lý trực tiếp & gián tiếp), Vai trò động và trọng số đánh giá theo Hướng dẫn số 06-HD/BTCTU
+            Quản lý đơn vị, Quản lý phân quyền, Quản lý chu kỳ đánh giá, Backup CSDL và Nhật ký hoạt động realtime
           </p>
         </div>
 
@@ -620,54 +747,96 @@ export default function SystemConfigTab({
               Tạo Vai trò Mới
             </button>
           )}
+          {activeSubTab === 'logs' && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsLiveActive(!isLiveActive)}
+                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition border ${
+                  isLiveActive
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100'
+                    : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
+                }`}
+              >
+                {isLiveActive ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                <span>{isLiveActive ? 'Tạm dừng Live' : 'Bật Live'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => loadLogs()}
+                disabled={logsLoading}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 transition"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${logsLoading ? 'animate-spin' : ''}`} />
+                <span>Làm mới</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Sub-Tabs Switcher */}
-      <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-1.5 flex gap-2">
+      <div className="bg-white rounded-xl shadow-xs border border-slate-200 p-1.5 flex flex-wrap sm:flex-nowrap gap-2">
         <button
           onClick={() => setActiveSubTab('departments')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-xs font-bold transition ${
+          className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs font-bold transition ${
             activeSubTab === 'departments'
               ? 'bg-red-700 text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Building2 className="w-4 h-4" />
-          <span>1. Đơn vị & Phòng ban Đa cấp ({localDepts.length})</span>
+          <Building2 className="w-4 h-4 shrink-0" />
+          <span>1. Quản lý đơn vị ({localDepts.length})</span>
         </button>
         <button
           onClick={() => setActiveSubTab('roles')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-xs font-bold transition ${
+          className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs font-bold transition ${
             activeSubTab === 'roles'
               ? 'bg-red-700 text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <ShieldCheck className="w-4 h-4" />
-          <span>2. Vai trò & Phân quyền Dữ liệu ({roles.length})</span>
+          <ShieldCheck className="w-4 h-4 shrink-0" />
+          <span>2. Quản lý phân quyền ({roles.length})</span>
         </button>
         <button
           onClick={() => setActiveSubTab('general')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-xs font-bold transition ${
+          className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs font-bold transition ${
             activeSubTab === 'general'
               ? 'bg-red-700 text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Sliders className="w-4 h-4" />
-          <span>3. Trọng số HD.06 & Chu kỳ Quý</span>
+          <Sliders className="w-4 h-4 shrink-0" />
+          <span>3. Quản lý chu kỳ đánh giá</span>
         </button>
         <button
           onClick={() => setActiveSubTab('database')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg text-xs font-bold transition ${
+          className={`flex-1 min-w-[110px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs font-bold transition ${
             activeSubTab === 'database'
               ? 'bg-red-700 text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
-          <Database className="w-4 h-4" />
-          <span>4. Sao lưu & Phục hồi CSDL</span>
+          <Database className="w-4 h-4 shrink-0" />
+          <span>4. Backup</span>
+        </button>
+        <button
+          onClick={() => setActiveSubTab('logs')}
+          className={`flex-1 min-w-[150px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs font-bold transition ${
+            activeSubTab === 'logs'
+              ? 'bg-red-700 text-white shadow-sm'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Activity className="w-4 h-4 shrink-0" />
+          <span className="flex items-center gap-1.5">
+            5. Nhật ký hoạt động
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+          </span>
         </button>
       </div>
 
@@ -1591,6 +1760,414 @@ export default function SystemConfigTab({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* 5. SUB-TAB: NHẬT KÝ HOẠT ĐỘNG REALTIME */}
+      {activeSubTab === 'logs' && (
+        <div className="space-y-6">
+          {/* Header Card with Realtime Status & Live Controls */}
+          <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-red-50 text-red-700 border border-red-100">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <h3 className="text-base font-bold text-slate-900">Nhật ký Hoạt động Hệ thống Realtime</h3>
+                    {isLiveActive ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        LIVE (3s)
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                        <Pause className="w-3 h-3" />
+                        Tạm dừng Live
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Theo dõi trực tiếp và kiểm toán minh bạch mọi thao tác của người dùng trên toàn hệ thống (Đăng nhập, Quản lý tài khoản, Giao việc, Chấm điểm, Văn bản, Backup).
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setIsLiveActive(!isLiveActive)}
+                  className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${
+                    isLiveActive
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                      : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                  }`}
+                  title={isLiveActive ? 'Nhấn để tạm dừng tự động cập nhật' : 'Nhấn để bật tự động cập nhật mỗi 3s'}
+                >
+                  {isLiveActive ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                  <span>{isLiveActive ? 'Đang Live' : 'Bật Live'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => loadLogs()}
+                  disabled={logsLoading}
+                  className="px-3 py-2 rounded-xl text-xs font-bold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                  title="Tải lại danh sách nhật ký ngay"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${logsLoading ? 'animate-spin' : ''}`} />
+                  <span>Làm mới</span>
+                </button>
+
+                {userPerms.canManageSystem && (
+                  <button
+                    type="button"
+                    onClick={handleClearLogs}
+                    disabled={cleaningLogs}
+                    className="px-3 py-2 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    title="Dọn dẹp nhật ký cũ hơn 30 ngày để tối ưu dung lượng CSDL"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Dọn dẹp log cũ</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-4">
+              {/* Search input */}
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Tìm theo người dùng, nội dung, IP..."
+                  value={logSearch}
+                  onChange={(e) => {
+                    setLogSearch(e.target.value);
+                    setLogPage(1);
+                  }}
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-600 transition"
+                />
+              </div>
+
+              {/* Action type dropdown */}
+              <div>
+                <select
+                  value={logActionFilter}
+                  onChange={(e) => {
+                    setLogActionFilter(e.target.value);
+                    setLogPage(1);
+                  }}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-600 transition"
+                >
+                  <option value="ALL">-- Tất cả hoạt động ({logsTotal}) --</option>
+                  <optgroup label="Phiên đăng nhập & Bảo mật">
+                    <option value="LOGIN">Đăng nhập thành công</option>
+                    <option value="LOGIN_FAILED">Đăng nhập thất bại</option>
+                    <option value="LOGIN_BLOCKED">Đăng nhập bị từ chối</option>
+                    <option value="LOGOUT">Đăng xuất hệ thống</option>
+                    <option value="CHANGE_PASSWORD">Đổi mật khẩu</option>
+                  </optgroup>
+                  <optgroup label="Quản lý Người dùng">
+                    <option value="USER_CREATE">Thêm cán bộ / người dùng</option>
+                    <option value="USER_UPDATE">Cập nhật cán bộ</option>
+                    <option value="USER_DELETE">Xóa / Vô hiệu hóa cán bộ</option>
+                    <option value="USER_ACTIVATE">Kích hoạt tài khoản</option>
+                    <option value="USER_DEACTIVATE">Khóa tài khoản</option>
+                    <option value="USER_RESET_PASSWORD">Cấp lại mật khẩu</option>
+                    <option value="USER_EXPORT">Xuất Excel cán bộ</option>
+                  </optgroup>
+                  <optgroup label="Đơn vị & Phân quyền">
+                    <option value="DEPT_CREATE">Thêm mới đơn vị</option>
+                    <option value="DEPT_UPDATE">Cập nhật đơn vị</option>
+                    <option value="DEPT_DELETE">Xóa đơn vị</option>
+                    <option value="ROLE_CREATE">Tạo vai trò mới</option>
+                    <option value="ROLE_UPDATE">Cập nhật vai trò</option>
+                    <option value="ROLE_DELETE">Xóa vai trò</option>
+                  </optgroup>
+                  <optgroup label="KPI & Đánh giá">
+                    <option value="TASK_ASSIGN">Giao việc KPI</option>
+                    <option value="TASK_GRADE">Chấm điểm kết quả KPI</option>
+                  </optgroup>
+                  <optgroup label="Quản lý Văn bản">
+                    <option value="DOC_SUBMIT_LEADER">Trình văn bản lên Lãnh đạo</option>
+                    <option value="DOC_COMPLETE">Xác nhận hoàn thành văn bản</option>
+                  </optgroup>
+                  <optgroup label="Backup & CSDL">
+                    <option value="BACKUP_CREATE">Tạo bản sao lưu</option>
+                    <option value="BACKUP_RESTORE">Phục hồi cơ sở dữ liệu</option>
+                    <option value="LOG_CLEANUP">Dọn dẹp nhật ký</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              {/* Date Filters */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={logFromDate}
+                  onChange={(e) => {
+                    setLogFromDate(e.target.value);
+                    setLogPage(1);
+                  }}
+                  className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-600 transition"
+                  title="Từ ngày"
+                />
+                <span className="text-slate-400 text-xs">-</span>
+                <input
+                  type="date"
+                  value={logToDate}
+                  onChange={(e) => {
+                    setLogToDate(e.target.value);
+                    setLogPage(1);
+                  }}
+                  className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-red-600 transition"
+                  title="Đến ngày"
+                />
+              </div>
+
+              {/* Reset filter button */}
+              <div className="flex items-center gap-2">
+                {(logSearch || logActionFilter !== 'ALL' || logFromDate || logToDate) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLogSearch('');
+                      setLogActionFilter('ALL');
+                      setLogFromDate('');
+                      setLogToDate('');
+                      setLogPage(1);
+                    }}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Đặt lại</span>
+                  </button>
+                )}
+                <div className="ml-auto text-[11px] text-slate-500 font-semibold">
+                  Tổng: <span className="font-bold text-slate-800">{logsTotal}</span> bản ghi
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Logs Table */}
+          <div className="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[11px]">
+                    <th className="py-3 px-4 w-40">Thời gian</th>
+                    <th className="py-3 px-4 w-48">Người thực hiện</th>
+                    <th className="py-3 px-4 w-36">Thao tác</th>
+                    <th className="py-3 px-4">Nội dung hoạt động</th>
+                    <th className="py-3 px-4 w-36">Địa chỉ IP</th>
+                    <th className="py-3 px-4 w-20 text-center">Chi tiết</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {logsLoading && logs.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-slate-400 text-xs">
+                        <RefreshCw className="w-5 h-5 animate-spin mx-auto text-slate-400 mb-2" />
+                        Đang tải nhật ký hoạt động realtime...
+                      </td>
+                    </tr>
+                  ) : logs.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-slate-500 text-xs">
+                        <Activity className="w-6 h-6 mx-auto text-slate-300 mb-2" />
+                        Chưa có bản ghi hoạt động nào phù hợp với bộ lọc hiện tại.
+                      </td>
+                    </tr>
+                  ) : (
+                    logs.map((log) => {
+                      const badge = getActionBadge(log.action);
+                      return (
+                        <tr key={log.id} className="hover:bg-slate-50/75 transition">
+                          {/* Thời gian */}
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <div className="font-mono text-slate-800 font-semibold">
+                              {new Date(log.created_at).toLocaleTimeString('vi-VN', { hour12: false })}
+                            </div>
+                            <div className="text-[10px] text-slate-400">
+                              {new Date(log.created_at).toLocaleDateString('vi-VN')}
+                            </div>
+                          </td>
+
+                          {/* Người thực hiện */}
+                          <td className="py-3 px-4">
+                            <div className="font-bold text-slate-900 leading-tight">
+                              {log.full_name || 'Hệ thống'}
+                            </div>
+                            <div className="text-[11px] font-mono text-slate-500">
+                              @{log.username || 'system'}
+                            </div>
+                          </td>
+
+                          {/* Thao tác */}
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <span className={`inline-block px-2.5 py-1 rounded-md text-[11px] font-bold border ${badge.bg}`}>
+                              {badge.label}
+                            </span>
+                          </td>
+
+                          {/* Nội dung */}
+                          <td className="py-3 px-4">
+                            <div className="text-slate-700 font-medium leading-relaxed">
+                              {log.description}
+                            </div>
+                          </td>
+
+                          {/* Địa chỉ IP */}
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <div className="font-mono text-[11px] text-slate-600">
+                              {log.ip_address || '127.0.0.1'}
+                            </div>
+                          </td>
+
+                          {/* Nút xem chi tiết */}
+                          <td className="py-3 px-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedLogDetail(log)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-red-700 hover:bg-red-50 transition cursor-pointer"
+                              title="Xem chi tiết kỹ thuật của bản ghi log này"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {logsTotal > 50 && (
+              <div className="p-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 bg-slate-50/50">
+                <div>
+                  Hiển thị <span className="font-bold text-slate-800">{(logPage - 1) * 50 + 1}</span> - <span className="font-bold text-slate-800">{Math.min(logPage * 50, logsTotal)}</span> trong tổng số <span className="font-bold text-slate-800">{logsTotal}</span> bản ghi
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={logPage <= 1}
+                    onClick={() => setLogPage(p => Math.max(1, p - 1))}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold disabled:opacity-40 hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    Trang trước
+                  </button>
+                  <span className="font-bold px-2">
+                    {logPage} / {Math.ceil(logsTotal / 50)}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={logPage >= Math.ceil(logsTotal / 50)}
+                    onClick={() => setLogPage(p => p + 1)}
+                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-semibold disabled:opacity-40 hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    Trang sau
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* MODAL: XEM CHI TIẾT LOG RECORD */}
+          {selectedLogDetail && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 overflow-y-auto">
+              <div className="bg-white rounded-2xl w-full max-w-2xl p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between border-b pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg bg-red-100 text-red-700">
+                      <Activity className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900">Chi tiết Hoạt động Hệ thống</h3>
+                      <p className="text-xs text-slate-500">Mã log: <span className="font-mono">{selectedLogDetail.id}</span></p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSelectedLogDetail(null)}
+                    className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Thời gian thực hiện:</span>
+                      <span className="font-bold text-slate-800">{new Date(selectedLogDetail.created_at).toLocaleString('vi-VN')}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Người thực hiện:</span>
+                      <span className="font-bold text-slate-800">{selectedLogDetail.full_name} (@{selectedLogDetail.username})</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Hành động:</span>
+                      <span className="font-mono font-bold text-red-700">{selectedLogDetail.action}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[11px]">Địa chỉ IP:</span>
+                      <span className="font-mono text-slate-800">{selectedLogDetail.ip_address || '127.0.0.1'}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-500 font-bold block mb-1">Mô tả tóm tắt:</span>
+                    <p className="p-3 bg-white border border-slate-200 rounded-xl text-slate-800 leading-relaxed font-medium">
+                      {selectedLogDetail.description}
+                    </p>
+                  </div>
+
+                  {selectedLogDetail.user_agent && (
+                    <div>
+                      <span className="text-slate-500 font-bold block mb-1">Thiết bị / Trình duyệt (User Agent):</span>
+                      <p className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-[11px] text-slate-600 break-all">
+                        {selectedLogDetail.user_agent}
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedLogDetail.details && (
+                    <div>
+                      <span className="text-slate-500 font-bold block mb-1">Dữ liệu chi tiết (Payload / Context):</span>
+                      <pre className="p-3 bg-slate-900 text-emerald-400 rounded-xl font-mono text-[11px] overflow-x-auto max-h-60 leading-relaxed">
+                        {(() => {
+                          try {
+                            const parsed = JSON.parse(selectedLogDetail.details);
+                            return JSON.stringify(parsed, null, 2);
+                          } catch (e) {
+                            return selectedLogDetail.details;
+                          }
+                        })()}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-3 border-t flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedLogDetail(null)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition cursor-pointer"
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

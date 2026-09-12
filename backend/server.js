@@ -22,7 +22,8 @@ const {
   importUsersFromExcel,
   exportCBQLWorkbook, 
   exportMau02Workbook,
-  exportDirectoryWorkbook
+  exportDirectoryWorkbook,
+  exportUsersWorkbook
 } = require('./excelService');
 const { compareUsersByPositionAndName } = require('./userSorting');
 const { 
@@ -210,6 +211,32 @@ function checkCanManageUsers(viewer) {
     return perms.can_manage_users === true || perms.can_manage_system === true;
   } catch (e) {
     return false;
+  }
+}
+
+// Helper ghi nhật ký hoạt động hệ thống realtime
+function logSystemActivity(req, { action, entity_type, entity_id, description, details, user }) {
+  try {
+    const activeUser = user || (req ? getViewer(req) : null);
+    const userId = activeUser ? activeUser.id : null;
+    const username = activeUser ? activeUser.username : (req?.body?.username || 'Hệ thống');
+    const fullName = activeUser ? activeUser.full_name : (req?.body?.username ? `Tài khoản: ${req.body.username}` : 'Hệ thống');
+
+    let ipAddress = req?.headers ? (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '') : '';
+    if (ipAddress && ipAddress.includes(',')) {
+      ipAddress = ipAddress.split(',')[0].trim();
+    }
+    const userAgent = req?.headers ? (req.headers['user-agent'] || '') : '';
+
+    const logId = `log-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const detailsStr = details ? (typeof details === 'object' ? JSON.stringify(details) : String(details)) : null;
+
+    db.prepare(`
+      INSERT INTO system_logs (id, user_id, username, full_name, action, entity_type, entity_id, description, ip_address, user_agent, details, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `).run(logId, userId, username, fullName, action, entity_type || null, entity_id ? String(entity_id) : null, description, ipAddress, userAgent, detailsStr);
+  } catch (err) {
+    console.error('[System Log Error]', err.message);
   }
 }
 
@@ -472,22 +499,60 @@ app.post('/api/auth/login', (req, res) => {
   `).get(username);
 
   if (!user) {
+    logSystemActivity(req, {
+      action: 'LOGIN_FAILED',
+      entity_type: 'users',
+      description: `Đăng nhập thất bại (không tồn tại tài khoản: "${username}")`,
+      details: { username }
+    });
     return res.status(401).json({ success: false, message: 'Tên đăng nhập hoặc mật khẩu không chính xác' });
   }
 
   if (user.password !== password) {
+    logSystemActivity(req, {
+      action: 'LOGIN_FAILED',
+      entity_type: 'users',
+      entity_id: user.id,
+      description: `Đăng nhập thất bại (sai mật khẩu tài khoản: "${username}")`,
+      details: { username }
+    });
     return res.status(401).json({ success: false, message: 'Tên đăng nhập hoặc mật khẩu không chính xác' });
   }
 
   if (user.is_active === 0) {
+    logSystemActivity(req, {
+      action: 'LOGIN_BLOCKED',
+      entity_type: 'users',
+      entity_id: user.id,
+      description: `Đăng nhập bị từ chối do tài khoản đã bị khóa (${username})`,
+      user
+    });
     return res.status(403).json({ success: false, message: 'Tài khoản này đã bị khóa hoặc ngưng hoạt động. Vui lòng liên hệ Quản trị viên.' });
   }
+
+  logSystemActivity(req, {
+    action: 'LOGIN',
+    entity_type: 'users',
+    entity_id: user.id,
+    description: `Đăng nhập thành công vào hệ thống (${user.full_name})`,
+    user
+  });
 
   const { password: _, ...safeUser } = user;
   res.json({ success: true, user: safeUser, message: 'Đăng nhập thành công' });
 });
 
 app.post('/api/auth/logout', (req, res) => {
+  const viewer = getViewer(req);
+  if (viewer) {
+    logSystemActivity(req, {
+      action: 'LOGOUT',
+      entity_type: 'users',
+      entity_id: viewer.id,
+      description: `Đăng xuất khỏi hệ thống (${viewer.full_name})`,
+      user: viewer
+    });
+  }
   res.json({ success: true, message: 'Đã đăng xuất phiên làm việc an toàn' });
 });
 
@@ -541,6 +606,15 @@ app.post('/api/auth/change-password', (req, res) => {
   }
 
   db.prepare('UPDATE users SET password = ? WHERE id = ?').run(new_password, viewerId);
+
+  logSystemActivity(req, {
+    action: 'CHANGE_PASSWORD',
+    entity_type: 'users',
+    entity_id: user.id,
+    description: `Đổi mật khẩu tài khoản thành công`,
+    user
+  });
+
   res.json({ success: true, message: 'Đổi mật khẩu thành công! Hãy sử dụng mật khẩu mới trong các lần đăng nhập tiếp theo.' });
 });
 
@@ -629,6 +703,14 @@ app.post('/api/departments', requireCanManageUsers, (req, res) => {
     leader_title || 'THỦ TRƯỞNG ĐƠN VỊ'
   );
 
+  logSystemActivity(req, {
+    action: 'DEPT_CREATE',
+    entity_type: 'departments',
+    entity_id: id,
+    description: `Thêm mới đơn vị/phòng ban "${name}" (mã: ${code})`,
+    details: { id, code, name, parent_id, leader_id }
+  });
+
   triggerBackgroundSupabaseSync(300);
   res.json({ success: true, id, message: 'Đã tạo đơn vị/phòng ban mới thành công' });
 });
@@ -673,6 +755,14 @@ app.put('/api/departments/:id', requireCanManageUsers, (req, res) => {
     id
   );
 
+  logSystemActivity(req, {
+    action: 'DEPT_UPDATE',
+    entity_type: 'departments',
+    entity_id: id,
+    description: `Cập nhật thông tin đơn vị/phòng ban "${name || dept.name}"`,
+    details: req.body
+  });
+
   triggerBackgroundSupabaseSync(300);
   res.json({ success: true, message: 'Đã cập nhật thông tin phòng ban thành công' });
 });
@@ -680,6 +770,9 @@ app.put('/api/departments/:id', requireCanManageUsers, (req, res) => {
 // Admin / Manager: Delete department
 app.delete('/api/departments/:id', requireCanManageUsers, (req, res) => {
   const { id } = req.params;
+  const dept = db.prepare('SELECT * FROM departments WHERE id = ?').get(id);
+  if (!dept) return res.status(404).json({ success: false, message: 'Không tìm thấy đơn vị' });
+
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users WHERE dept_id = ? AND (is_active IS NULL OR is_active = 1)').get(id).count;
   if (userCount > 0) {
     return res.status(400).json({ success: false, message: `Không thể xóa vì đơn vị đang có ${userCount} cán bộ nhân viên` });
@@ -690,6 +783,14 @@ app.delete('/api/departments/:id', requireCanManageUsers, (req, res) => {
   }
 
   db.prepare('DELETE FROM departments WHERE id = ?').run(id);
+
+  logSystemActivity(req, {
+    action: 'DEPT_DELETE',
+    entity_type: 'departments',
+    entity_id: id,
+    description: `Xóa đơn vị/phòng ban "${dept.name}" (${dept.code})`
+  });
+
   triggerBackgroundSupabaseSync(300);
   res.json({ success: true, message: 'Đã xóa đơn vị thành công' });
 });
@@ -796,6 +897,14 @@ app.post('/api/roles', requireAdmin, async (req, res) => {
   const createdRole = db.prepare('SELECT * FROM roles WHERE id = ?').get(id);
   await syncDirectRoleToSupabase(createdRole);
 
+  logSystemActivity(req, {
+    action: 'ROLE_CREATE',
+    entity_type: 'roles',
+    entity_id: id,
+    description: `Tạo vai trò mới "${name}" (mã: ${code}, phạm vi: ${data_scope || 'personal'})`,
+    details: { id, code, name, data_scope }
+  });
+
   res.json({ success: true, id, message: 'Đã tạo vai trò mới thành công' });
 });
 
@@ -822,6 +931,14 @@ app.put('/api/roles/:id', requireAdmin, async (req, res) => {
   const updatedRole = db.prepare('SELECT * FROM roles WHERE id = ?').get(id);
   await syncDirectRoleToSupabase(updatedRole);
 
+  logSystemActivity(req, {
+    action: 'ROLE_UPDATE',
+    entity_type: 'roles',
+    entity_id: id,
+    description: `Cập nhật vai trò "${name || role.name}" (${code || role.code})`,
+    details: req.body
+  });
+
   res.json({ success: true, message: 'Đã cập nhật vai trò thành công' });
 });
 
@@ -838,6 +955,14 @@ app.delete('/api/roles/:id', requireAdmin, (req, res) => {
   }
 
   db.prepare('DELETE FROM roles WHERE id = ?').run(id);
+
+  logSystemActivity(req, {
+    action: 'ROLE_DELETE',
+    entity_type: 'roles',
+    entity_id: id,
+    description: `Xóa vai trò "${role.name}" (${role.code})`
+  });
+
   res.json({ success: true, message: 'Đã xóa vai trò thành công' });
 });
 
@@ -1285,6 +1410,14 @@ app.post('/api/admin/users', requireCanManageUsers, async (req, res) => {
 
   await syncDirectUserToSupabase(newUser);
 
+  logSystemActivity(req, {
+    action: 'USER_CREATE',
+    entity_type: 'users',
+    entity_id: id,
+    description: `Thêm mới cán bộ/nhân viên "${full_name}" (${username})`,
+    details: { id, username, full_name, role: effectiveRole, dept_id }
+  });
+
   res.json({ success: true, id, message: 'Đã thêm cán bộ nhân viên thành công' });
   triggerBackgroundSupabaseSync(300);
 });
@@ -1445,6 +1578,14 @@ app.put('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
   const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   await syncDirectUserToSupabase(updatedUser);
 
+  logSystemActivity(req, {
+    action: 'USER_UPDATE',
+    entity_type: 'users',
+    entity_id: id,
+    description: `Cập nhật thông tin cán bộ/nhân viên "${updatedUser?.full_name || user.full_name}" (${user.username})`,
+    details: req.body
+  });
+
   res.json({ success: true, message: 'Đã cập nhật thông tin cán bộ và chức vụ thành công' });
   triggerBackgroundSupabaseSync(300);
 });
@@ -1589,6 +1730,11 @@ app.delete('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
     return res.status(403).json({ success: false, message: 'Bạn không có quyền thao tác trên tài khoản cán bộ ngoài đơn vị quản lý.' });
   }
 
+  const targetUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (!targetUser) {
+    return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản cán bộ' });
+  }
+
   const isPermanent = req.query.permanent === 'true' || req.body?.permanent === true;
 
   if (isPermanent) {
@@ -1608,6 +1754,13 @@ app.delete('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
     // Xoá đồng bộ tức thì trên Supabase Cloud
     await deleteUserFromSupabase(id);
 
+    logSystemActivity(req, {
+      action: 'USER_DELETE_PERMANENT',
+      entity_type: 'users',
+      entity_id: id,
+      description: `Xóa vĩnh viễn tài khoản cán bộ "${targetUser.full_name}" (${targetUser.username})`
+    });
+
     return res.json({ success: true, message: 'Đã xóa vĩnh viễn tài khoản cán bộ và dọn dẹp các dữ liệu liên quan thành công.' });
   }
 
@@ -1615,6 +1768,13 @@ app.delete('/api/admin/users/:id', requireCanManageUsers, async (req, res) => {
   db.prepare('UPDATE users SET is_active = 0 WHERE id = ?').run(id);
   const deactivatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (deactivatedUser) await syncDirectUserToSupabase(deactivatedUser);
+
+  logSystemActivity(req, {
+    action: 'USER_DEACTIVATE',
+    entity_type: 'users',
+    entity_id: id,
+    description: `Ngừng kích hoạt (khóa) tài khoản cán bộ "${targetUser.full_name}" (${targetUser.username})`
+  });
 
   res.json({ success: true, message: 'Đã ngừng kích hoạt tài khoản cán bộ' });
   triggerBackgroundSupabaseSync(300);
@@ -1636,10 +1796,22 @@ app.put('/api/admin/users/:id/status', requireCanManageUsers, async (req, res) =
     return res.status(403).json({ success: false, message: 'Bạn không có quyền thao tác trên tài khoản cán bộ ngoài đơn vị quản lý.' });
   }
 
+  const targetUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (!targetUser) {
+    return res.status(404).json({ success: false, message: 'Không tìm thấy thông tin cán bộ' });
+  }
+
   const newStatus = is_active ? 1 : 0;
   db.prepare('UPDATE users SET is_active = ? WHERE id = ?').run(newStatus, id);
   const updatedUser = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (updatedUser) await syncDirectUserToSupabase(updatedUser);
+
+  logSystemActivity(req, {
+    action: newStatus === 1 ? 'USER_ACTIVATE' : 'USER_DEACTIVATE',
+    entity_type: 'users',
+    entity_id: id,
+    description: `${newStatus === 1 ? 'Mở khóa / Kích hoạt' : 'Khóa'} tài khoản cán bộ "${targetUser.full_name}" (${targetUser.username})`
+  });
 
   res.json({ 
     success: true, 
@@ -1676,6 +1848,13 @@ app.post('/api/admin/users/:id/reset-password', requireCanManageUsers, async (re
   const updatedUserWithPass = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   if (updatedUserWithPass) await syncDirectUserToSupabase(updatedUserWithPass);
 
+  logSystemActivity(req, {
+    action: 'USER_RESET_PASSWORD',
+    entity_type: 'users',
+    entity_id: id,
+    description: `Cấp lại mật khẩu cho cán bộ "${user.full_name}" (${user.username})`
+  });
+
   res.json({ 
     success: true, 
     message: `Đã cấp lại mật khẩu cho cán bộ "${user.full_name}" thành công!`, 
@@ -1695,6 +1874,109 @@ app.get('/api/admin/users/template', async (req, res) => {
   } catch (err) {
     console.error('Error generating user template:', err);
     res.status(500).json({ success: false, message: 'Lỗi tạo file mẫu: ' + err.message });
+  }
+});
+
+// Admin / Unit Admin: Export users list to Excel
+app.get('/api/admin/users/export', async (req, res) => {
+  try {
+    const { dept_id, role, status, employee_type, include_children } = req.query;
+    const viewer = getViewer(req);
+    const isSysAdmin = checkIsAdmin(viewer);
+    const accessibleUserIds = getAccessibleUserIds(viewer?.id);
+
+    let query = `
+      SELECT u.id, u.username, u.full_name, u.role, u.target_role, u.role_id,
+             u.party_title, u.gov_title, u.union_title, u.dept_id,
+             u.birth_date, u.gender, u.phone, u.email, u.is_active, u.is_party_member,
+             u.employee_type, u.manager_id, u.management_role,
+             d.name as dept_name, d.code as dept_code,
+             r.name as role_name,
+             mgr.full_name as manager_name
+      FROM users u
+      LEFT JOIN departments d ON u.dept_id = d.id
+      LEFT JOIN roles r ON u.role_id = r.id
+      LEFT JOIN users mgr ON u.manager_id = mgr.id
+      WHERE 1=1
+    `;
+    const params = [];
+
+    if (!isSysAdmin && accessibleUserIds !== null) {
+      if (accessibleUserIds.length === 0) {
+        query += ' AND 1=0';
+      } else {
+        const placeholders = accessibleUserIds.map(() => '?').join(',');
+        query += ` AND u.id IN (${placeholders})`;
+        params.push(...accessibleUserIds);
+      }
+    }
+
+    if (dept_id && dept_id !== 'ALL') {
+      if (include_children === 'true' || include_children === true || include_children === '1') {
+        const descendantIds = getDepartmentDescendantIds(dept_id);
+        const placeholders = descendantIds.map(() => '?').join(',');
+        query += ` AND u.dept_id IN (${placeholders})`;
+        params.push(...descendantIds);
+      } else {
+        query += ' AND u.dept_id = ?';
+        params.push(dept_id);
+      }
+    }
+
+    if (role && role !== 'ALL') {
+      query += ' AND (u.role = ? OR u.role_id = ?)';
+      params.push(role, role);
+    }
+
+    if (status && status !== 'ALL') {
+      const activeVal = status === 'active' || status === '1' ? 1 : 0;
+      query += ' AND (u.is_active = ? OR (u.is_active IS NULL AND ? = 1))';
+      params.push(activeVal, activeVal);
+    }
+
+    if (employee_type && employee_type !== 'ALL') {
+      query += ' AND u.employee_type = ?';
+      params.push(employee_type);
+    }
+
+    let usersList = db.prepare(query).all(...params);
+
+    // Populate user positions for secondary titles
+    const allPositions = db.prepare(`
+      SELECT p.*, d.name as dept_name, d.code as dept_code
+      FROM user_positions p
+      LEFT JOIN departments d ON p.dept_id = d.id
+    `).all();
+
+    const positionsByUser = {};
+    for (const pos of allPositions) {
+      if (!positionsByUser[pos.user_id]) positionsByUser[pos.user_id] = [];
+      positionsByUser[pos.user_id].push(pos);
+    }
+
+    usersList = usersList.map(u => ({
+      ...u,
+      positions: positionsByUser[u.id] || []
+    }));
+
+    usersList.sort(compareUsersByPositionAndName);
+
+    const workbook = await exportUsersWorkbook(usersList);
+
+    logSystemActivity(req, {
+      action: 'USER_EXPORT',
+      entity_type: 'users',
+      description: `Xuất file Excel danh sách cán bộ, nhân viên (${usersList.length} cán bộ)`,
+      user: viewer
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="Danh_sach_can_bo_KPI.xlsx"');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Error exporting users:', err);
+    res.status(500).json({ success: false, message: 'Lỗi xuất file Excel danh sách cán bộ: ' + err.message });
   }
 });
 
@@ -2732,6 +3014,15 @@ app.post('/api/assigned-tasks/assign', requireManagerOrAdmin, (req, res) => {
   }
 
   const count = targetUserIds.length;
+
+  logSystemActivity(req, {
+    action: 'TASK_ASSIGN',
+    entity_type: 'assigned_tasks',
+    entity_id: createdTasks[0]?.id,
+    description: `Giao nhiệm vụ "${task_name}" cho ${count} cán bộ/nhân viên (Hạn: ${deadline})`,
+    details: { task_name, deadline, task_type, targetUserIds, is_skip_level: skipLevelFlag }
+  });
+
   res.json({
     success: true,
     ids: createdTasks.map(t => t.id),
@@ -3614,6 +3905,14 @@ app.put('/api/assigned-tasks/:id/grade', requireManagerOrAdmin, (req, res) => {
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(qPct, progPct, diffWeight, scores.executionScore, scores.convertedScore, scores.bonusScore, cbql_comment || '', id);
+
+  logSystemActivity(req, {
+    action: 'TASK_GRADE',
+    entity_type: 'assigned_tasks',
+    entity_id: id,
+    description: `Chấm điểm hoàn thành nhiệm vụ "${task.task_name}" (Điểm thực hiện: ${scores.executionScore}, quy đổi: ${scores.convertedScore})`,
+    details: { id, task_name: task.task_name, ...scores }
+  });
 
   res.json({ success: true, message: 'Đã chấm điểm công việc thành công', ...scores });
 });
@@ -6267,6 +6566,15 @@ app.post('/api/documents/:id/submit-to-leader', (req, res) => {
       message: `Đã trình văn bản lên Lãnh đạo (${updatedDoc.leader_name || 'Lãnh đạo'}) thành công!`,
       document: updatedDoc
     });
+
+    logSystemActivity(req, {
+      action: 'DOC_SUBMIT_LEADER',
+      entity_type: 'documents',
+      entity_id: id,
+      description: `Trình văn bản số "${doc.doc_number}" lên Lãnh đạo (${updatedDoc.leader_name || 'Lãnh đạo'})`,
+      details: { id, doc_number: doc.doc_number, leader_id }
+    });
+
     triggerBackgroundSupabaseSync();
   } catch (err) {
     console.error('Error submitting document to leader:', err);
@@ -6313,9 +6621,17 @@ app.post('/api/documents/:id/complete', (req, res) => {
       WHERE d.id = ?
     `).get(id);
 
+    logSystemActivity(req, {
+      action: 'DOC_COMPLETE',
+      entity_type: 'documents',
+      entity_id: id,
+      description: `Xác nhận hoàn thành xử lý văn bản số "${doc.doc_number}"`,
+      details: { id, doc_number: doc.doc_number, completion_note }
+    });
+
     res.json({
       success: true,
-      message: 'Đã cập nhật trạng thái văn bản thành Hoàn thành!',
+      message: `Đã xác nhận hoàn thành xử lý văn bản số ${doc.doc_number} thành công!`,
       document: updatedDoc
     });
   } catch (err) {
@@ -6675,6 +6991,14 @@ app.post('/api/system/backup/create', (req, res) => {
       return res.status(500).json({ error: 'Không thể tạo bản sao lưu' });
     }
     const filename = path.basename(backupFile);
+
+    logSystemActivity(req, {
+      action: 'BACKUP_CREATE',
+      entity_type: 'system',
+      description: `Tạo bản sao lưu CSDL thành công: ${filename}`,
+      details: { filename }
+    });
+
     res.json({ success: true, message: `Đã tạo bản sao lưu thành công: ${filename}`, filename });
   } catch (err) {
     console.error('Error creating manual backup:', err);
@@ -6712,6 +7036,12 @@ app.post('/api/system/backup/restore', upload.single('backup_file'), (req, res) 
 
     // 4. Re-run initDatabase to guarantee any newer migration columns exist
     initDatabase();
+
+    logSystemActivity(req, {
+      action: 'BACKUP_RESTORE',
+      entity_type: 'system',
+      description: `Phục hồi cơ sở dữ liệu từ bản sao lưu thành công`
+    });
 
     res.json({
       success: true,
@@ -6757,6 +7087,118 @@ app.post('/api/system/supabase/pull', async (req, res) => {
   } catch (err) {
     console.error('Error pulling from Supabase:', err);
     res.status(500).json({ error: 'Lỗi khôi phục từ Supabase: ' + err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// 11. Realtime System Activity Logging API
+// -------------------------------------------------------------
+app.get('/api/system-logs', (req, res) => {
+  try {
+    const viewer = getViewer(req);
+    if (!viewer) return res.status(401).json({ success: false, message: 'Chưa đăng nhập' });
+    if (!checkCanManageUsers(viewer) && !checkIsAdmin(viewer)) {
+      return res.status(403).json({ success: false, message: 'Không có quyền truy cập nhật ký hệ thống' });
+    }
+
+    const {
+      limit = 50,
+      offset = 0,
+      action,
+      search,
+      from_date,
+      to_date,
+      since_time
+    } = req.query;
+
+    const parsedLimit = Math.min(Math.max(parseInt(limit) || 50, 1), 200);
+    const parsedOffset = Math.max(parseInt(offset) || 0, 0);
+
+    const conditions = [];
+    const params = [];
+
+    if (action && action !== 'ALL') {
+      conditions.push('action = ?');
+      params.push(action);
+    }
+
+    if (since_time) {
+      conditions.push('created_at > ?');
+      params.push(since_time);
+    }
+
+    if (from_date) {
+      conditions.push('date(created_at) >= date(?)');
+      params.push(from_date);
+    }
+
+    if (to_date) {
+      conditions.push('date(created_at) <= date(?)');
+      params.push(to_date);
+    }
+
+    if (search && search.trim()) {
+      const term = `%${search.trim().toLowerCase()}%`;
+      conditions.push('(LOWER(username) LIKE ? OR LOWER(full_name) LIKE ? OR LOWER(description) LIKE ? OR LOWER(details) LIKE ? OR LOWER(ip_address) LIKE ?)');
+      params.push(term, term, term, term, term);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const totalRow = db.prepare(`SELECT COUNT(*) as count FROM system_logs ${whereClause}`).get(...params);
+    const total = totalRow ? totalRow.count : 0;
+
+    const logs = db.prepare(`
+      SELECT * FROM system_logs
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `).all(...params, parsedLimit, parsedOffset);
+
+    res.json({
+      success: true,
+      logs,
+      total,
+      limit: parsedLimit,
+      offset: parsedOffset
+    });
+  } catch (err) {
+    console.error('Error fetching system logs:', err);
+    res.status(500).json({ success: false, message: 'Lỗi tải nhật ký hệ thống: ' + err.message });
+  }
+});
+
+app.post('/api/system-logs/clear', (req, res) => {
+  try {
+    const viewer = getViewer(req);
+    if (!viewer) return res.status(401).json({ success: false, message: 'Chưa đăng nhập' });
+    if (!checkIsAdmin(viewer)) {
+      return res.status(403).json({ success: false, message: 'Chỉ Quản trị viên tối cao mới có quyền dọn dẹp nhật ký hệ thống' });
+    }
+
+    const { keep_days = 30 } = req.body;
+    const days = parseInt(keep_days) || 30;
+
+    const info = db.prepare(`
+      DELETE FROM system_logs 
+      WHERE created_at < datetime('now', '-' || ? || ' days')
+    `).run(days);
+
+    logSystemActivity(req, {
+      action: 'LOG_CLEANUP',
+      entity_type: 'system_logs',
+      description: `Dọn dẹp ${info.changes} bản ghi nhật ký hệ thống cũ hơn ${days} ngày`,
+      user: viewer
+    });
+
+    res.json({
+      success: true,
+      message: `Đã dọn dẹp ${info.changes} bản ghi nhật ký cũ hơn ${days} ngày`,
+      deletedCount: info.changes
+    });
+  } catch (err) {
+    console.error('Error cleaning system logs:', err);
+    res.status(500).json({ success: false, message: 'Lỗi dọn dẹp nhật ký: ' + err.message });
   }
 });
 
