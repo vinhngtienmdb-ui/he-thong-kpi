@@ -30,6 +30,7 @@ const {
   exportTasksDocx,
   exportMau02Docx
 } = require('./docxService');
+const { renderHtmlToPdf } = require('./pdfService');
 const { compareUsersByPositionAndName } = require('./userSorting');
 const { 
   getSupabaseStatus, 
@@ -6063,6 +6064,31 @@ const handleExportDocxMau02 = async (req, res) => {
 app.get('/api/reports/export-docx-mau-02', handleExportDocxMau02);
 app.get('/api/reports/export-docx-mau-02/:periodId', handleExportDocxMau02);
 app.get('/api/reports/export-docx-mau02', handleExportDocxMau02);
+
+// ============================================================================
+// NATIVE PDF EXPORT ENDPOINTS (TẢI FILE PDF TRỰC TIẾP VỀ MÁY TÍNH)
+// ============================================================================
+app.post('/api/reports/render-pdf', async (req, res) => {
+  try {
+    const { html, isLandscape, filename } = req.body;
+    if (!html) {
+      return res.status(400).json({ error: 'Thiếu nội dung HTML để kết xuất PDF' });
+    }
+
+    const pdfBuffer = await renderHtmlToPdf(html, { isLandscape });
+    const downloadName = filename || (isLandscape ? 'Bao_cao_A4_ngang.pdf' : 'Bao_cao_A4_doc.pdf');
+    const asciiName = downloadName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^a-zA-Z0-9._-]/g, '_');
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Lỗi khi render PDF từ máy chủ:', error);
+    res.status(500).json({ error: 'Lỗi xuất file PDF: ' + error.message });
+  }
+});
 
 
 // ============================================================================

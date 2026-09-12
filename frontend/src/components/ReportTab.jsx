@@ -255,42 +255,74 @@ export default function ReportTab({
     setShowExportMenu(false);
     const element = document.getElementById('report-print-content') || document.querySelector('.print-document');
     if (!element) {
-      handlePrint();
+      alert('Không tìm thấy nội dung báo cáo để xuất PDF');
       return;
     }
 
     setIsExportingPdf(true);
-    setPdfProgressMsg('Đang xuất dữ liệu ra file PDF...');
+    setPdfProgressMsg('Đang tạo và tải file PDF về máy tính...');
+
+    const isMau02 = canViewAllReports && activeReportView === 'mau_02';
+    const cleanTargetName = targetUser?.full_name 
+      ? targetUser.full_name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^a-zA-Z0-9]/g, '_') 
+      : 'CanBo';
+
+    const filename = isMau02
+      ? `Mau_02_Tong_hop_xep_loai_${activePeriodId}.pdf`
+      : (activeReportView === 'execution_report'
+        ? `Bao_cao_cong_viec_${cleanTargetName}_${activePeriodId}.pdf`
+        : `Bao_cao_danh_gia_${cleanTargetName}_${activePeriodId}.pdf`);
+
+    const isLandscape = isMau02 || activeReportView === 'execution_report';
 
     try {
-      const html2pdfModule = await import('html2pdf.js');
-      const html2pdf = html2pdfModule.default || html2pdfModule;
+      // 1. Gửi HTML lên máy chủ để render file PDF chuẩn vector bằng Chromium engine
+      const res = await fetch('/api/reports/render-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          html: element.outerHTML,
+          isLandscape,
+          filename
+        })
+      });
 
-      const isMau02 = canViewAllReports && activeReportView === 'mau_02';
-      const cleanTargetName = targetUser?.full_name 
-        ? targetUser.full_name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^a-zA-Z0-9]/g, '_') 
-        : 'CanBo';
+      if (res.ok) {
+        const blob = await res.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+        return;
+      }
 
-      const filename = isMau02
-        ? `Mau_02_Tong_hop_xep_loai_${activePeriodId}.pdf`
-        : (activeReportView === 'execution_report'
-          ? `Bao_cao_cong_viec_${cleanTargetName}_${activePeriodId}.pdf`
-          : `Bao_cao_danh_gia_${cleanTargetName}_${activePeriodId}.pdf`);
+      throw new Error(`Server PDF status: ${res.status}`);
+    } catch (serverErr) {
+      console.warn('Server PDF render không thành công, chuyển sang xuất phía client:', serverErr);
 
-      const isLandscape = isMau02 || activeReportView === 'execution_report';
-      const opt = {
-        margin: isLandscape ? [8, 8, 8, 8] : [15, 15, 15, 20],
-        filename: filename,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false, letterRendering: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: isLandscape ? 'landscape' : 'portrait' },
-        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-      };
+      try {
+        // 2. Dự phòng phía client: Tải trực tiếp file PDF qua html2pdf.js (không gọi lệnh in)
+        const html2pdfModule = await import('html2pdf.js');
+        const html2pdf = html2pdfModule.default || html2pdfModule;
 
-      await html2pdf().set(opt).from(element).save();
-    } catch (err) {
-      console.error('Lỗi khi xuất PDF:', err);
-      handlePrint();
+        const opt = {
+          margin: isLandscape ? [8, 8, 8, 8] : [15, 15, 15, 20],
+          filename: filename,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, logging: false },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: isLandscape ? 'landscape' : 'portrait' },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        };
+
+        await html2pdf().set(opt).from(element).save();
+      } catch (clientErr) {
+        console.error('Lỗi khi xuất PDF phía client:', clientErr);
+        alert('Không thể tạo file PDF. Quý người dùng có thể sử dụng nút "In báo cáo" và chọn "Lưu dưới dạng PDF" (Save as PDF).');
+      }
     } finally {
       setIsExportingPdf(false);
       setPdfProgressMsg('');

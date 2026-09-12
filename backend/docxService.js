@@ -203,23 +203,17 @@ async function exportCBQLDocx(periodId, userId) {
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 40 },
                 children: [
-                  new TextRun({ text: parentAgency.toUpperCase(), size: 24, font: 'Times New Roman' })
+                  new TextRun({ text: parentAgency.toUpperCase(), size: 28, font: 'Times New Roman' })
                 ]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 60 },
                 children: [
-                  new TextRun({ text: unitName, bold: true, size: 26, font: 'Times New Roman' })
+                  new TextRun({ text: unitName, bold: true, size: 28, font: 'Times New Roman' })
                 ]
               }),
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { after: 120 },
-                children: [
-                  new TextRun({ text: '————————', size: 20, font: 'Times New Roman' })
-                ]
-              })
+              
             ]
           }),
           new TableCell({
@@ -230,14 +224,14 @@ async function exportCBQLDocx(periodId, userId) {
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 40 },
                 children: [
-                  new TextRun({ text: 'ĐẢNG CỘNG SẢN VIỆT NAM', bold: true, size: 26, font: 'Times New Roman' })
+                  new TextRun({ text: 'ĐẢNG CỘNG SẢN VIỆT NAM', bold: true, size: 28, font: 'Times New Roman' })
                 ]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 120 },
                 children: [
-                  new TextRun({ text: formatAdministrativeDate(new Date(), locationName), italics: true, size: 26, font: 'Times New Roman' })
+                  new TextRun({ text: formatAdministrativeDate(new Date(), locationName), italics: true, size: 28, font: 'Times New Roman' })
                 ]
               })
             ]
@@ -254,7 +248,7 @@ async function exportCBQLDocx(periodId, userId) {
       alignment: AlignmentType.CENTER,
       spacing: { before: 180, after: 60 },
       children: [
-        new TextRun({ text: 'BẢN TỰ ĐÁNH GIÁ, XẾP LOẠI CỦA CÁ NHÂN', bold: true, size: 32, font: 'Times New Roman' })
+        new TextRun({ text: 'BẢN TỰ ĐÁNH GIÁ, XẾP LOẠI CỦA CÁ NHÂN', bold: true, size: 28, font: 'Times New Roman' })
       ]
     }),
     new Paragraph({
@@ -267,7 +261,7 @@ async function exportCBQLDocx(periodId, userId) {
             : '(Dành cho cán bộ lãnh đạo, quản lý)', 
           italics: true, 
           bold: true,
-          size: 26, 
+          size: 28, 
           font: 'Times New Roman' 
         })
       ]
@@ -276,7 +270,7 @@ async function exportCBQLDocx(periodId, userId) {
       alignment: AlignmentType.CENTER,
       spacing: { after: 200 },
       children: [
-        new TextRun({ text: period.name || 'Quý III/2026', italics: true, size: 26, font: 'Times New Roman' })
+        new TextRun({ text: period.name || 'Quý III/2026', italics: true, size: 28, font: 'Times New Roman' })
       ]
     })
   );
@@ -402,7 +396,7 @@ async function exportCBQLDocx(periodId, userId) {
         new TextRun({ 
           text: 'Trên cơ sở nhiệm vụ được giao, cá nhân tự đánh giá về kết quả thực hiện nhiệm vụ theo quý như sau:', 
           italics: true, 
-          size: 26, 
+          size: 28, 
           font: 'Times New Roman' 
         })
       ]
@@ -430,7 +424,7 @@ async function exportCBQLDocx(periodId, userId) {
       children: [
         new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text, bold: true, size: 22, font: 'Times New Roman' })]
+          children: [new TextRun({ text, bold: true, size: 28, font: 'Times New Roman' })]
         })
       ]
     });
@@ -463,7 +457,7 @@ async function exportCBQLDocx(periodId, userId) {
             children: [
               new Paragraph({
                 children: [
-                  new TextRun({ text: `${groupIndex}. ${groupTitle}`, bold: true, size: 22, font: 'Times New Roman' })
+                  new TextRun({ text: `${groupIndex}. ${groupTitle}`, bold: true, size: 28, font: 'Times New Roman' })
                 ]
               })
             ]
@@ -484,7 +478,7 @@ async function exportCBQLDocx(periodId, userId) {
               children: [
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
-                  children: [new TextRun({ text: String(idx + 1), size: 22, font: 'Times New Roman' })]
+                  children: [new TextRun({ text: String(idx + 1), size: 28, font: 'Times New Roman' })]
                 })
               ]
             }),
@@ -493,18 +487,7 @@ async function exportCBQLDocx(periodId, userId) {
               margins: cellPadding,
               children: [
                 new Paragraph({
-                  children: [new TextRun({ text: item.name || '', size: 22, font: 'Times New Roman' })]
-                })
-              ]
-            }),
-            new TableCell({
-              borders: cellBorders,
-              margins: cellPadding,
-              verticalAlign: VerticalAlign.CENTER,
-              children: [
-                new Paragraph({
-                  alignment: AlignmentType.CENTER,
-                  children: [new TextRun({ text: isSat ? 'x' : '', bold: true, size: 24, font: 'Times New Roman' })]
+                  children: [new TextRun({ text: item.name || '', size: 28, font: 'Times New Roman' })]
                 })
               ]
             }),
@@ -515,7 +498,7 @@ async function exportCBQLDocx(periodId, userId) {
               children: [
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
-                  children: [new TextRun({ text: !isSat ? 'x' : '', bold: true, size: 24, font: 'Times New Roman' })]
+                  children: [new TextRun({ text: isSat ? 'x' : '', bold: true, size: 28, font: 'Times New Roman' })]
                 })
               ]
             }),
@@ -526,7 +509,7 @@ async function exportCBQLDocx(periodId, userId) {
               children: [
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
-                  children: [new TextRun({ text: String(item.max_score || 0), size: 22, font: 'Times New Roman' })]
+                  children: [new TextRun({ text: !isSat ? 'x' : '', bold: true, size: 28, font: 'Times New Roman' })]
                 })
               ]
             }),
@@ -537,7 +520,7 @@ async function exportCBQLDocx(periodId, userId) {
               children: [
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
-                  children: [new TextRun({ text: String(item.score !== undefined ? item.score : (isSat ? item.max_score : 0)), bold: true, size: 22, font: 'Times New Roman' })]
+                  children: [new TextRun({ text: String(item.max_score || 0), size: 28, font: 'Times New Roman' })]
                 })
               ]
             }),
@@ -548,7 +531,18 @@ async function exportCBQLDocx(periodId, userId) {
               children: [
                 new Paragraph({
                   alignment: AlignmentType.CENTER,
-                  children: [new TextRun({ text: item.note || '', size: 20, font: 'Times New Roman' })]
+                  children: [new TextRun({ text: String(item.score !== undefined ? item.score : (isSat ? item.max_score : 0)), bold: true, size: 28, font: 'Times New Roman' })]
+                })
+              ]
+            }),
+            new TableCell({
+              borders: cellBorders,
+              margins: cellPadding,
+              verticalAlign: VerticalAlign.CENTER,
+              children: [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [new TextRun({ text: item.note || '', size: 28, font: 'Times New Roman' })]
                 })
               ]
             })
@@ -576,7 +570,7 @@ async function exportCBQLDocx(periodId, userId) {
             new Paragraph({
               alignment: AlignmentType.RIGHT,
               children: [
-                new TextRun({ text: 'TỔNG ĐIỂM NHÓM TIÊU CHÍ CHUNG (A):', bold: true, size: 22, font: 'Times New Roman' })
+                new TextRun({ text: 'TỔNG ĐIỂM NHÓM TIÊU CHÍ CHUNG (A):', bold: true, size: 28, font: 'Times New Roman' })
               ]
             })
           ]
@@ -589,7 +583,7 @@ async function exportCBQLDocx(periodId, userId) {
           children: [
             new Paragraph({
               alignment: AlignmentType.CENTER,
-              children: [new TextRun({ text: '30', bold: true, size: 22, font: 'Times New Roman' })]
+              children: [new TextRun({ text: '30', bold: true, size: 28, font: 'Times New Roman' })]
             })
           ]
         }),
@@ -601,7 +595,7 @@ async function exportCBQLDocx(periodId, userId) {
           children: [
             new Paragraph({
               alignment: AlignmentType.CENTER,
-              children: [new TextRun({ text: String(part1Score), bold: true, size: 24, font: 'Times New Roman' })]
+              children: [new TextRun({ text: String(part1Score), bold: true, size: 28, font: 'Times New Roman' })]
             })
           ]
         }),
@@ -646,7 +640,7 @@ async function exportCBQLDocx(periodId, userId) {
             width: { size: 70, type: WidthType.PERCENTAGE },
             children: [
               new Paragraph({
-                children: [new TextRun({ text: 'Chỉ số đánh giá công việc (theo Hướng dẫn 06-HD/BTCTU)', bold: true, size: 22, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'Chỉ số đánh giá công việc (theo Hướng dẫn 06-HD/BTCTU)', bold: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           }),
@@ -658,7 +652,7 @@ async function exportCBQLDocx(periodId, userId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: 'Kết quả đạt được', bold: true, size: 22, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'Kết quả đạt được', bold: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           })
@@ -671,7 +665,7 @@ async function exportCBQLDocx(periodId, userId) {
             margins: cellPadding,
             children: [
               new Paragraph({
-                children: [new TextRun({ text: '1. Tổng điểm công việc theo kế hoạch ban đầu (A):', size: 22, font: 'Times New Roman' })]
+                children: [new TextRun({ text: '1. Tổng điểm công việc theo kế hoạch ban đầu (A):', size: 28, font: 'Times New Roman' })]
               })
             ]
           }),
@@ -681,7 +675,7 @@ async function exportCBQLDocx(periodId, userId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: `${planTotalA.toFixed(2)} điểm`, size: 22, font: 'Times New Roman' })]
+                children: [new TextRun({ text: `${planTotalA.toFixed(2)} điểm`, size: 28, font: 'Times New Roman' })]
               })
             ]
           })
@@ -694,7 +688,7 @@ async function exportCBQLDocx(periodId, userId) {
             margins: cellPadding,
             children: [
               new Paragraph({
-                children: [new TextRun({ text: '2. Tổng điểm thực hiện công việc thực tế đạt được (B):', size: 22, font: 'Times New Roman' })]
+                children: [new TextRun({ text: '2. Tổng điểm thực hiện công việc thực tế đạt được (B):', size: 28, font: 'Times New Roman' })]
               })
             ]
           }),
@@ -704,7 +698,7 @@ async function exportCBQLDocx(periodId, userId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: `${execTotalB.toFixed(2)} điểm`, size: 22, font: 'Times New Roman' })]
+                children: [new TextRun({ text: `${execTotalB.toFixed(2)} điểm`, size: 28, font: 'Times New Roman' })]
               })
             ]
           })
@@ -717,7 +711,7 @@ async function exportCBQLDocx(periodId, userId) {
             margins: cellPadding,
             children: [
               new Paragraph({
-                children: [new TextRun({ text: '3. Điểm quy đổi công việc thực hiện (tối đa 70 điểm):', bold: true, size: 22, font: 'Times New Roman' })]
+                children: [new TextRun({ text: '3. Điểm quy đổi công việc thực hiện (tối đa 70 điểm):', bold: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           }),
@@ -727,7 +721,7 @@ async function exportCBQLDocx(periodId, userId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: `${part2Score.toFixed(2)} / 70 điểm`, bold: true, size: 24, font: 'Times New Roman' })]
+                children: [new TextRun({ text: `${part2Score.toFixed(2)} / 70 điểm`, bold: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           })
@@ -740,7 +734,7 @@ async function exportCBQLDocx(periodId, userId) {
             margins: cellPadding,
             children: [
               new Paragraph({
-                children: [new TextRun({ text: '4. Điểm thưởng hoàn thành vượt tiến độ / chất lượng xuất sắc (+5%):', size: 22, font: 'Times New Roman' })]
+                children: [new TextRun({ text: '4. Điểm thưởng hoàn thành vượt tiến độ / chất lượng xuất sắc (+5%):', size: 28, font: 'Times New Roman' })]
               })
             ]
           }),
@@ -750,7 +744,7 @@ async function exportCBQLDocx(periodId, userId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: `+${bonusScore.toFixed(2)} điểm`, bold: true, size: 22, font: 'Times New Roman' })]
+                children: [new TextRun({ text: `+${bonusScore.toFixed(2)} điểm`, bold: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           })
@@ -764,7 +758,7 @@ async function exportCBQLDocx(periodId, userId) {
             margins: cellPadding,
             children: [
               new Paragraph({
-                children: [new TextRun({ text: 'TỔNG ĐIỂM NHÓM KẾT QUẢ CÔNG VIỆC & THƯỞNG (B):', bold: true, size: 22, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'TỔNG ĐIỂM NHÓM KẾT QUẢ CÔNG VIỆC & THƯỞNG (B):', bold: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           }),
@@ -775,7 +769,7 @@ async function exportCBQLDocx(periodId, userId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: `${(part2Score + bonusScore).toFixed(2)} / 70 điểm`, bold: true, size: 24, font: 'Times New Roman' })]
+                children: [new TextRun({ text: `${(part2Score + bonusScore).toFixed(2)} / 70 điểm`, bold: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           })
@@ -790,7 +784,7 @@ async function exportCBQLDocx(periodId, userId) {
     new Paragraph({
       spacing: { before: 140, after: 80 },
       children: [
-        new TextRun({ text: `* Danh mục nhiệm vụ, sản phẩm công việc thực hiện trong quý (${tasks.length} nhiệm vụ):`, bold: true, italics: true, size: 24, font: 'Times New Roman' })
+        new TextRun({ text: `* Danh mục nhiệm vụ, sản phẩm công việc thực hiện trong quý (${tasks.length} nhiệm vụ):`, bold: true, italics: true, size: 28, font: 'Times New Roman' })
       ]
     })
   );
@@ -822,7 +816,7 @@ async function exportCBQLDocx(periodId, userId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: 'Chưa có nhiệm vụ công việc nào được ghi nhận trong kỳ này.', italics: true, size: 22, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'Chưa có nhiệm vụ công việc nào được ghi nhận trong kỳ này.', italics: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           })
@@ -838,14 +832,14 @@ async function exportCBQLDocx(periodId, userId) {
               borders: cellBorders,
               margins: cellPadding,
               verticalAlign: VerticalAlign.CENTER,
-              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(i + 1), size: 20, font: 'Times New Roman' })] })]
+              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(i + 1), size: 28, font: 'Times New Roman' })] })]
             }),
             new TableCell({
               borders: cellBorders,
               margins: cellPadding,
               children: [
                 new Paragraph({
-                  children: [new TextRun({ text: t.task_name || '', size: 20, font: 'Times New Roman' })]
+                  children: [new TextRun({ text: t.task_name || '', size: 28, font: 'Times New Roman' })]
                 })
               ]
             }),
@@ -853,37 +847,37 @@ async function exportCBQLDocx(periodId, userId) {
               borders: cellBorders,
               margins: cellPadding,
               verticalAlign: VerticalAlign.CENTER,
-              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: t.axis_code || '', size: 18, font: 'Times New Roman' })] })]
+              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: t.axis_code || '', size: 28, font: 'Times New Roman' })] })]
             }),
             new TableCell({
               borders: cellBorders,
               margins: cellPadding,
               verticalAlign: VerticalAlign.CENTER,
-              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(t.difficulty_weight || 1.0), size: 20, font: 'Times New Roman' })] })]
+              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(t.difficulty_weight || 1.0), size: 28, font: 'Times New Roman' })] })]
             }),
             new TableCell({
               borders: cellBorders,
               margins: cellPadding,
               verticalAlign: VerticalAlign.CENTER,
-              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(t.standard_score || 10), size: 20, font: 'Times New Roman' })] })]
+              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(t.standard_score || 10), size: 28, font: 'Times New Roman' })] })]
             }),
             new TableCell({
               borders: cellBorders,
               margins: cellPadding,
               verticalAlign: VerticalAlign.CENTER,
-              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: t.progress_score !== null && t.progress_score !== undefined ? `${t.progress_score}%` : '—', size: 20, font: 'Times New Roman' })] })]
+              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: t.progress_score !== null && t.progress_score !== undefined ? `${t.progress_score}%` : '—', size: 28, font: 'Times New Roman' })] })]
             }),
             new TableCell({
               borders: cellBorders,
               margins: cellPadding,
               verticalAlign: VerticalAlign.CENTER,
-              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: t.quality_score !== null && t.quality_score !== undefined ? `${t.quality_score}%` : '—', size: 20, font: 'Times New Roman' })] })]
+              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: t.quality_score !== null && t.quality_score !== undefined ? `${t.quality_score}%` : '—', size: 28, font: 'Times New Roman' })] })]
             }),
             new TableCell({
               borders: cellBorders,
               margins: cellPadding,
               verticalAlign: VerticalAlign.CENTER,
-              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: Number(t.converted_score || 0).toFixed(2), bold: true, size: 20, font: 'Times New Roman' })] })]
+              children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: Number(t.converted_score || 0).toFixed(2), bold: true, size: 28, font: 'Times New Roman' })] })]
             })
           ]
         })
@@ -910,8 +904,8 @@ async function exportCBQLDocx(periodId, userId) {
       spacing: { after: 60 },
       children: [
         new TextRun({ text: '• Tổng điểm đạt được (A + B): ', bold: true, size: 28, font: 'Times New Roman' }),
-        new TextRun({ text: `${totalScore.toFixed(2)} / 100 điểm `, bold: true, size: 30, font: 'Times New Roman' }),
-        new TextRun({ text: `(Phần A: ${part1Score}đ + Phần B: ${part2Score.toFixed(2)}đ + Thưởng: ${bonusScore.toFixed(2)}đ)`, italics: true, size: 24, font: 'Times New Roman' })
+        new TextRun({ text: `${totalScore.toFixed(2)} / 100 điểm `, bold: true, size: 28, font: 'Times New Roman' }),
+        new TextRun({ text: `(Phần A: ${part1Score}đ + Phần B: ${part2Score.toFixed(2)}đ + Thưởng: ${bonusScore.toFixed(2)}đ)`, italics: true, size: 28, font: 'Times New Roman' })
       ]
     }),
     new Paragraph({
@@ -934,7 +928,7 @@ async function exportCBQLDocx(periodId, userId) {
     new Paragraph({
       spacing: { after: 60 },
       children: [
-        new TextRun({ text: '1. Ý kiến nhận xét của Cấp quản lý trực tiếp:', bold: true, size: 26, font: 'Times New Roman' })
+        new TextRun({ text: '1. Ý kiến nhận xét của Cấp quản lý trực tiếp:', bold: true, size: 28, font: 'Times New Roman' })
       ]
     }),
     new Paragraph({
@@ -943,7 +937,7 @@ async function exportCBQLDocx(periodId, userId) {
         new TextRun({ 
           text: evaluation.superior_comment || 'Ưu điểm: Hoàn thành tốt các nhiệm vụ chuyên môn được giao đúng tiến độ, chất lượng đảm bảo. Chấp hành nghiêm chỉnh nội quy, quy chế cơ quan. Khuyết điểm: Cần tiếp tục chủ động hơn trong công tác tham mưu.', 
           italics: !evaluation.superior_comment, 
-          size: 26, 
+          size: 28, 
           font: 'Times New Roman' 
         })
       ]
@@ -951,7 +945,7 @@ async function exportCBQLDocx(periodId, userId) {
     new Paragraph({
       spacing: { after: 60 },
       children: [
-        new TextRun({ text: '2. Mức xếp loại chất lượng do Thủ trưởng / Cấp quản lý đề xuất:', bold: true, size: 26, font: 'Times New Roman' })
+        new TextRun({ text: '2. Mức xếp loại chất lượng do Thủ trưởng / Cấp quản lý đề xuất:', bold: true, size: 28, font: 'Times New Roman' })
       ]
     }),
     new Paragraph({
@@ -975,16 +969,16 @@ async function exportCBQLDocx(periodId, userId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: leaderTitle.toUpperCase(), bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: leaderTitle.toUpperCase(), bold: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: '(Ký, ghi rõ họ tên)', italics: true, size: 24, font: 'Times New Roman' })]
+                children: [new TextRun({ text: '(Ký, ghi rõ họ tên)', italics: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({ spacing: { before: 1200 } }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: leaderName || '', bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: leaderName || '', bold: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           }),
@@ -994,16 +988,16 @@ async function exportCBQLDocx(periodId, userId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: 'NGƯỜI TỰ ĐÁNH GIÁ', bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'NGƯỜI TỰ ĐÁNH GIÁ', bold: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: '(Ký, ghi rõ họ tên)', italics: true, size: 24, font: 'Times New Roman' })]
+                children: [new TextRun({ text: '(Ký, ghi rõ họ tên)', italics: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({ spacing: { before: 1200 } }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: user.full_name || '', bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: user.full_name || '', bold: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           })
@@ -1094,18 +1088,14 @@ async function exportTasksDocx(periodId, userId) {
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 40 },
-                children: [new TextRun({ text: parentAgency.toUpperCase(), size: 24, font: 'Times New Roman' })]
+                children: [new TextRun({ text: parentAgency.toUpperCase(), size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 60 },
-                children: [new TextRun({ text: unitName, bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: unitName, bold: true, size: 28, font: 'Times New Roman' })]
               }),
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { after: 120 },
-                children: [new TextRun({ text: '————————', size: 20, font: 'Times New Roman' })]
-              })
+              
             ]
           }),
           new TableCell({
@@ -1115,17 +1105,17 @@ async function exportTasksDocx(periodId, userId) {
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 40 },
-                children: [new TextRun({ text: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', bold: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 40 },
-                children: [new TextRun({ text: 'Độc lập - Tự do - Hạnh phúc', bold: true, underline: {}, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'Độc lập - Tự do - Hạnh phúc', bold: true, underline: {}, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 120 },
-                children: [new TextRun({ text: formatAdministrativeDate(new Date(), locationName), italics: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: formatAdministrativeDate(new Date(), locationName), italics: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           })
@@ -1141,14 +1131,14 @@ async function exportTasksDocx(periodId, userId) {
       alignment: AlignmentType.CENTER,
       spacing: { before: 180, after: 60 },
       children: [
-        new TextRun({ text: 'BÁO CÁO KẾT QUẢ THỰC HIỆN NHIỆM VỤ, SẢN PHẨM CÔNG VIỆC', bold: true, size: 30, font: 'Times New Roman' })
+        new TextRun({ text: 'BÁO CÁO KẾT QUẢ THỰC HIỆN NHIỆM VỤ, SẢN PHẨM CÔNG VIỆC', bold: true, size: 28, font: 'Times New Roman' })
       ]
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 180 },
       children: [
-        new TextRun({ text: period.name || 'Quý III/2026', italics: true, size: 26, font: 'Times New Roman' })
+        new TextRun({ text: period.name || 'Quý III/2026', italics: true, size: 28, font: 'Times New Roman' })
       ]
     })
   );
@@ -1224,7 +1214,7 @@ async function exportTasksDocx(periodId, userId) {
       children: [
         new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text, bold: true, size: 22, font: 'Times New Roman' })]
+          children: [new TextRun({ text, bold: true, size: 28, font: 'Times New Roman' })]
         })
       ]
     });
@@ -1264,7 +1254,7 @@ async function exportTasksDocx(periodId, userId) {
               children: [
                 new Paragraph({
                   children: [
-                    new TextRun({ text: `TRỤC ${axIdx + 1}: ${axis.name.toUpperCase()} (${axisTasks.length} nhiệm vụ)`, bold: true, size: 22, font: 'Times New Roman' })
+                    new TextRun({ text: `TRỤC ${axIdx + 1}: ${axis.name.toUpperCase()} (${axisTasks.length} nhiệm vụ)`, bold: true, size: 28, font: 'Times New Roman' })
                   ]
                 })
               ]
@@ -1292,48 +1282,48 @@ async function exportTasksDocx(periodId, userId) {
                 borders: cellBorders,
                 margins: cellPadding,
                 verticalAlign: VerticalAlign.CENTER,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(taskStt), size: 20, font: 'Times New Roman' })] })]
+                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(taskStt), size: 28, font: 'Times New Roman' })] })]
               }),
               new TableCell({
                 borders: cellBorders,
                 margins: cellPadding,
-                children: [new Paragraph({ children: [new TextRun({ text: t.task_name || '', size: 20, font: 'Times New Roman' })] })]
-              }),
-              new TableCell({
-                borders: cellBorders,
-                margins: cellPadding,
-                verticalAlign: VerticalAlign.CENTER,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: t.task_type || 'Thường xuyên', size: 18, font: 'Times New Roman' })] })]
+                children: [new Paragraph({ children: [new TextRun({ text: t.task_name || '', size: 28, font: 'Times New Roman' })] })]
               }),
               new TableCell({
                 borders: cellBorders,
                 margins: cellPadding,
                 verticalAlign: VerticalAlign.CENTER,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: formatDateVN(t.due_date, '—'), size: 18, font: 'Times New Roman' })] })]
+                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: t.task_type || 'Thường xuyên', size: 28, font: 'Times New Roman' })] })]
               }),
               new TableCell({
                 borders: cellBorders,
                 margins: cellPadding,
                 verticalAlign: VerticalAlign.CENTER,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: t.progress_score !== null && t.progress_score !== undefined ? `${t.progress_score}%` : '—', size: 18, font: 'Times New Roman' })] })]
+                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: formatDateVN(t.due_date, '—'), size: 28, font: 'Times New Roman' })] })]
               }),
               new TableCell({
                 borders: cellBorders,
                 margins: cellPadding,
                 verticalAlign: VerticalAlign.CENTER,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: t.quality_score !== null && t.quality_score !== undefined ? `${t.quality_score}%` : '—', size: 18, font: 'Times New Roman' })] })]
+                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: t.progress_score !== null && t.progress_score !== undefined ? `${t.progress_score}%` : '—', size: 28, font: 'Times New Roman' })] })]
               }),
               new TableCell({
                 borders: cellBorders,
                 margins: cellPadding,
                 verticalAlign: VerticalAlign.CENTER,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: Number(t.converted_score || 0).toFixed(2), bold: true, size: 20, font: 'Times New Roman' })] })]
+                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: t.quality_score !== null && t.quality_score !== undefined ? `${t.quality_score}%` : '—', size: 28, font: 'Times New Roman' })] })]
               }),
               new TableCell({
                 borders: cellBorders,
                 margins: cellPadding,
                 verticalAlign: VerticalAlign.CENTER,
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: statusMap[t.status] || t.status || 'Đã nộp', size: 18, font: 'Times New Roman' })] })]
+                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: Number(t.converted_score || 0).toFixed(2), bold: true, size: 28, font: 'Times New Roman' })] })]
+              }),
+              new TableCell({
+                borders: cellBorders,
+                margins: cellPadding,
+                verticalAlign: VerticalAlign.CENTER,
+                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: statusMap[t.status] || t.status || 'Đã nộp', size: 28, font: 'Times New Roman' })] })]
               })
             ]
           })
@@ -1353,7 +1343,7 @@ async function exportTasksDocx(periodId, userId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: 'Không có nhiệm vụ nào trong kỳ này.', italics: true, size: 22, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'Không có nhiệm vụ nào trong kỳ này.', italics: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           })
@@ -1397,16 +1387,16 @@ async function exportTasksDocx(periodId, userId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: leaderTitle.toUpperCase(), bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: leaderTitle.toUpperCase(), bold: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: '(Ký, ghi rõ họ tên)', italics: true, size: 24, font: 'Times New Roman' })]
+                children: [new TextRun({ text: '(Ký, ghi rõ họ tên)', italics: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({ spacing: { before: 1200 } }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: leaderName || '', bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: leaderName || '', bold: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           }),
@@ -1416,16 +1406,16 @@ async function exportTasksDocx(periodId, userId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: 'NGƯỜI BÁO CÁO', bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'NGƯỜI BÁO CÁO', bold: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: '(Ký, ghi rõ họ tên)', italics: true, size: 24, font: 'Times New Roman' })]
+                children: [new TextRun({ text: '(Ký, ghi rõ họ tên)', italics: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({ spacing: { before: 1200 } }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: user.full_name || '', bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: user.full_name || '', bold: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           })
@@ -1562,18 +1552,14 @@ async function exportMau02Docx(periodId) {
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 40 },
-                children: [new TextRun({ text: parentAgency.toUpperCase(), size: 24, font: 'Times New Roman' })]
+                children: [new TextRun({ text: parentAgency.toUpperCase(), size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 60 },
-                children: [new TextRun({ text: unitName, bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: unitName, bold: true, size: 28, font: 'Times New Roman' })]
               }),
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { after: 120 },
-                children: [new TextRun({ text: '————————', size: 20, font: 'Times New Roman' })]
-              })
+              
             ]
           }),
           new TableCell({
@@ -1583,17 +1569,17 @@ async function exportMau02Docx(periodId) {
               new Paragraph({
                 alignment: AlignmentType.RIGHT,
                 spacing: { after: 40 },
-                children: [new TextRun({ text: 'Mẫu 02 (HD 06-HD/BTCTU)', bold: true, size: 24, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'Mẫu 02 (HD 06-HD/BTCTU)', bold: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 40 },
-                children: [new TextRun({ text: 'ĐẢNG CỘNG SẢN VIỆT NAM', bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'ĐẢNG CỘNG SẢN VIỆT NAM', bold: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 spacing: { after: 120 },
-                children: [new TextRun({ text: formatAdministrativeDate(new Date(), locationName), italics: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: formatAdministrativeDate(new Date(), locationName), italics: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           })
@@ -1621,7 +1607,7 @@ async function exportMau02Docx(periodId) {
       alignment: AlignmentType.CENTER,
       spacing: { after: 160 },
       children: [
-        new TextRun({ text: period.name || 'Quý III/2026', italics: true, size: 26, font: 'Times New Roman' })
+        new TextRun({ text: period.name || 'Quý III/2026', italics: true, size: 28, font: 'Times New Roman' })
       ]
     })
   );
@@ -1642,7 +1628,7 @@ async function exportMau02Docx(periodId) {
       children: [
         new Paragraph({
           alignment: AlignmentType.CENTER,
-          children: [new TextRun({ text, bold: true, size: 19, font: 'Times New Roman' })]
+          children: [new TextRun({ text, bold: true, size: 28, font: 'Times New Roman' })]
         })
       ]
     });
@@ -1688,7 +1674,7 @@ async function exportMau02Docx(periodId) {
                   new TextRun({ 
                     text: `${groupTitle} (${items.length} đồng chí — HTXSNV: ${stats.exc}/${stats.total} đạt ${stats.excPercent}%)`, 
                     bold: true, 
-                    size: 20, 
+                    size: 28, 
                     font: 'Times New Roman' 
                   })
                 ]
@@ -1709,19 +1695,19 @@ async function exportMau02Docx(periodId) {
       tableRows.push(
         new TableRow({
           children: [
-            new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(currentStt), size: 18, font: 'Times New Roman' })] })] }),
-            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: r.full_name || '', bold: true, size: 18, font: 'Times New Roman' })] })] }),
-            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: r.gov_title || 'Chuyên viên', size: 18, font: 'Times New Roman' })] })] }),
-            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: r.dept_name || '', size: 18, font: 'Times New Roman' })] })] }),
-            new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: part1, size: 18, font: 'Times New Roman' })] })] }),
-            new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: part2, size: 18, font: 'Times New Roman' })] })] }),
-            new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: bonus, size: 18, font: 'Times New Roman' })] })] }),
-            new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: total, bold: true, size: 19, font: 'Times New Roman' })] })] }),
-            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: r.rank_proposed || 'Chưa tự ĐX', size: 17, font: 'Times New Roman' })] })] }),
-            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: r.superior_rank || r.rank_proposed || 'Chưa có', bold: true, size: 17, font: 'Times New Roman' })] })] }),
-            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: r.summary_reason || '', size: 16, font: 'Times New Roman' })] })] }),
-            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: r.cadre_proposal_note || '', size: 16, font: 'Times New Roman' })] })] }),
-            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: '', size: 16, font: 'Times New Roman' })] })] })
+            new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(currentStt), size: 28, font: 'Times New Roman' })] })] }),
+            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: r.full_name || '', bold: true, size: 28, font: 'Times New Roman' })] })] }),
+            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: r.gov_title || 'Chuyên viên', size: 28, font: 'Times New Roman' })] })] }),
+            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: r.dept_name || '', size: 28, font: 'Times New Roman' })] })] }),
+            new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: part1, size: 28, font: 'Times New Roman' })] })] }),
+            new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: part2, size: 28, font: 'Times New Roman' })] })] }),
+            new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: bonus, size: 28, font: 'Times New Roman' })] })] }),
+            new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: total, bold: true, size: 28, font: 'Times New Roman' })] })] }),
+            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: r.rank_proposed || 'Chưa tự ĐX', size: 28, font: 'Times New Roman' })] })] }),
+            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: r.superior_rank || r.rank_proposed || 'Chưa có', bold: true, size: 28, font: 'Times New Roman' })] })] }),
+            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: r.summary_reason || '', size: 28, font: 'Times New Roman' })] })] }),
+            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: r.cadre_proposal_note || '', size: 28, font: 'Times New Roman' })] })] }),
+            new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: '', size: 28, font: 'Times New Roman' })] })] })
           ]
         })
       );
@@ -1746,7 +1732,7 @@ async function exportMau02Docx(periodId) {
     new Paragraph({
       spacing: { before: 180, after: 80 },
       children: [
-        new TextRun({ text: '* BẢNG TỔNG HỢP TỶ LỆ XẾP LOẠI THEO TỪNG KHỐI ĐỐI TƯỢNG (QUY ĐỊNH HTXSNV ≤ 20%):', bold: true, size: 24, font: 'Times New Roman' })
+        new TextRun({ text: '* BẢNG TỔNG HỢP TỶ LỆ XẾP LOẠI THEO TỪNG KHỐI ĐỐI TƯỢNG (QUY ĐỊNH HTXSNV ≤ 20%):', bold: true, size: 28, font: 'Times New Roman' })
       ]
     })
   );
@@ -1770,13 +1756,13 @@ async function exportMau02Docx(periodId) {
     statTableRows.push(
       new TableRow({
         children: [
-          new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: title, bold: isBold, size: 19, font: 'Times New Roman' })] })] }),
-          new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(stats.total), bold: isBold, size: 19, font: 'Times New Roman' })] })] }),
-          new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(stats.exc), bold: isBold, size: 19, font: 'Times New Roman' })] })] }),
-          new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${stats.excPercent}%`, bold: true, size: 19, font: 'Times New Roman' })] })] }),
-          new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${stats.good} (${stats.goodPercent}%)`, size: 18, font: 'Times New Roman' })] })] }),
-          new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${stats.complete} (${stats.completePercent}%)`, size: 18, font: 'Times New Roman' })] })] }),
-          new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${stats.fail} (${stats.failPercent}%)`, size: 18, font: 'Times New Roman' })] })] })
+          new TableCell({ borders: cellBorders, margins: cellPadding, children: [new Paragraph({ children: [new TextRun({ text: title, bold: isBold, size: 28, font: 'Times New Roman' })] })] }),
+          new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(stats.total), bold: isBold, size: 28, font: 'Times New Roman' })] })] }),
+          new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(stats.exc), bold: isBold, size: 28, font: 'Times New Roman' })] })] }),
+          new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${stats.excPercent}%`, bold: true, size: 28, font: 'Times New Roman' })] })] }),
+          new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${stats.good} (${stats.goodPercent}%)`, size: 28, font: 'Times New Roman' })] })] }),
+          new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${stats.complete} (${stats.completePercent}%)`, size: 28, font: 'Times New Roman' })] })] }),
+          new TableCell({ borders: cellBorders, margins: cellPadding, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: `${stats.fail} (${stats.failPercent}%)`, size: 28, font: 'Times New Roman' })] })] })
         ]
       })
     );
@@ -1808,16 +1794,16 @@ async function exportMau02Docx(periodId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: 'NGƯỜI LẬP BIỂU', bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'NGƯỜI LẬP BIỂU', bold: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: '(Ký, ghi rõ họ tên)', italics: true, size: 24, font: 'Times New Roman' })]
+                children: [new TextRun({ text: '(Ký, ghi rõ họ tên)', italics: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({ spacing: { before: 1400 } }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: '', bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: '', bold: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           }),
@@ -1827,16 +1813,16 @@ async function exportMau02Docx(periodId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: leaderTitle.toUpperCase(), bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: leaderTitle.toUpperCase(), bold: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: '(Ký, đóng dấu, ghi rõ họ tên)', italics: true, size: 24, font: 'Times New Roman' })]
+                children: [new TextRun({ text: '(Ký, đóng dấu, ghi rõ họ tên)', italics: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({ spacing: { before: 1400 } }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: leaderName || '', bold: true, size: 26, font: 'Times New Roman' })]
+                children: [new TextRun({ text: leaderName || '', bold: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           })
@@ -1852,7 +1838,7 @@ async function exportMau02Docx(periodId) {
         document: {
           run: {
             font: 'Times New Roman',
-            size: 26,
+            size: 28,
             color: '000000'
           },
           paragraph: {
