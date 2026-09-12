@@ -1844,11 +1844,29 @@ async function exportMau02Workbook(periodId) {
   }
 
   // Group definitions according to employee_type
-  const groupDefs = [
-    { type: 'cong_chuc', label: 'I. KHỐI CÔNG CHỨC', prefix: 'Công chức' },
-    { type: 'vien_chuc', label: 'II. KHỐI VIÊN CHỨC', prefix: 'Viên chức' },
-    { type: 'nguoi_lao_dong', label: 'III. KHỐI NGƯỜI LAO ĐỘNG', prefix: 'Người lao động' }
+  const rawGroupDefs = [
+    { type: 'cong_chuc', name: 'KHỐI CÔNG CHỨC', prefix: 'Công chức' },
+    { type: 'vien_chuc', name: 'KHỐI VIÊN CHỨC', prefix: 'Viên chức' },
+    { type: 'lao_dong', name: 'KHỐI NGƯỜI LAO ĐỘNG', prefix: 'Người lao động', altType: 'nguoi_lao_dong' }
   ];
+
+  const romanNumerals = ['I', 'II', 'III', 'IV', 'V'];
+  let grpIdx = 0;
+  const groupDefs = [];
+
+  rawGroupDefs.forEach(def => {
+    const matchingRows = rows.filter(r => {
+      const et = r.employee_type || 'vien_chuc';
+      return et === def.type || (def.altType && et === def.altType);
+    });
+    if (matchingRows.length > 0) {
+      groupDefs.push({
+        ...def,
+        label: `${romanNumerals[grpIdx++]}. ${def.name}`,
+        groupRows: matchingRows
+      });
+    }
+  });
 
   let overallExc = 0;
   let overallGood = 0;
@@ -1859,8 +1877,7 @@ async function exportMau02Workbook(periodId) {
   const groupStats = [];
 
   groupDefs.forEach((grp) => {
-    const groupRows = rows.filter(r => (r.employee_type || 'vien_chuc') === grp.type);
-    if (groupRows.length === 0) return;
+    const groupRows = grp.groupRows;
 
     // Group Header Row
     const grpHeader = ws.addRow([`${grp.label} (Tổng số: ${groupRows.length} người)`]);

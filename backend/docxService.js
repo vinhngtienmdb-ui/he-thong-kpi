@@ -1711,9 +1711,11 @@ async function exportMau02Docx(periodId) {
     });
   }
 
-  renderGroupRows('I. KHỐI CÔNG CHỨC', congChucList, congChucStats);
-  renderGroupRows('II. KHỐI VIÊN CHỨC', vienChucList, vienChucStats);
-  renderGroupRows('III. KHỐI NGƯỜI LAO ĐỘNG', laoDongList, laoDongStats);
+  const romanNumerals = ['I', 'II', 'III'];
+  let grpIdx = 0;
+  if (congChucList.length > 0) renderGroupRows(`${romanNumerals[grpIdx++]}. KHỐI CÔNG CHỨC`, congChucList, congChucStats);
+  if (vienChucList.length > 0) renderGroupRows(`${romanNumerals[grpIdx++]}. KHỐI VIÊN CHỨC`, vienChucList, vienChucStats);
+  if (laoDongList.length > 0) renderGroupRows(`${romanNumerals[grpIdx++]}. KHỐI NGƯỜI LAO ĐỘNG`, laoDongList, laoDongStats);
 
   children.push(
     new Table({
@@ -1763,9 +1765,10 @@ async function exportMau02Docx(periodId) {
     );
   }
 
-  addStatRow('1. Khối Công chức', congChucStats);
-  addStatRow('2. Khối Viên chức', vienChucStats);
-  addStatRow('3. Khối Người lao động', laoDongStats);
+  let statIdx = 1;
+  if (congChucStats.total > 0) addStatRow(`${statIdx++}. Khối Công chức`, congChucStats);
+  if (vienChucStats.total > 0) addStatRow(`${statIdx++}. Khối Viên chức`, vienChucStats);
+  if (laoDongStats.total > 0) addStatRow(`${statIdx++}. Khối Người lao động`, laoDongStats);
   addStatRow('TOÀN CƠ QUAN / ĐƠN VỊ', totalStats, true);
 
   children.push(
