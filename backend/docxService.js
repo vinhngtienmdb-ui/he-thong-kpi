@@ -1471,19 +1471,36 @@ async function exportMau02Docx(periodId) {
   const period = db.prepare('SELECT * FROM periods WHERE id = ?').get(periodId) || { name: 'Quý III/2026', id: periodId };
 
   const sysConfigs = getSystemConfigs();
-  const topDept = db.prepare(`
-    SELECT d.parent_agency, d.location_name, d.name, d.leader_title, d.manager_title,
+  // Tìm đơn vị đang được đánh giá (đơn vị có cán bộ nhân viên trong đợt đánh giá)
+  const evalDept = db.prepare(`
+    SELECT d.id, d.parent_id, d.parent_agency, d.location_name, d.name, d.leader_title, d.manager_title,
+           u_leader.full_name as leader_name,
+           count(u.id) as active_user_count
+    FROM departments d
+    JOIN users u ON u.dept_id = d.id AND u.is_active = 1
+    LEFT JOIN users u_leader ON d.leader_id = u_leader.id
+    WHERE d.is_active = 1
+      AND u.role NOT IN ('admin', 'admin_donvi')
+    GROUP BY d.id
+    ORDER BY active_user_count DESC
+    LIMIT 1
+  `).get() || db.prepare(`
+    SELECT d.id, d.parent_id, d.parent_agency, d.location_name, d.name, d.leader_title, d.manager_title,
            u_leader.full_name as leader_name
     FROM departments d
     LEFT JOIN users u_leader ON d.leader_id = u_leader.id
-    WHERE d.is_active = 1 
-    ORDER BY d.parent_id IS NULL DESC, d.code ASC LIMIT 1
+    WHERE d.is_active = 1
+    ORDER BY d.parent_id IS NOT NULL DESC, d.code ASC LIMIT 1
   `).get();
-  const parentAgency = topDept?.parent_agency || sysConfigs.PARENT_AGENCY_NAME || 'THÀNH ỦY THÀNH PHỐ HỒ CHÍ MINH';
-  const unitName = topDept?.name ? topDept.name.toUpperCase() : (sysConfigs.UNIT_NAME || 'BAN TỔ CHỨC THÀNH ỦY TP. HỒ CHÍ MINH');
-  const locationName = topDept?.location_name || sysConfigs.LOCATION_NAME || 'TP. Hồ Chí Minh';
-  const leaderName = topDept?.leader_name || sysConfigs.LEADER_SIGNER_NAME || '';
-  const leaderTitle = topDept?.leader_title || sysConfigs.LEADER_SIGNER_TITLE || 'THỦ TRƯỞNG ĐƠN VỊ';
+
+  const parentDept = evalDept?.parent_id ? db.prepare('SELECT name FROM departments WHERE id = ?').get(evalDept.parent_id) : null;
+  const parentAgency = (evalDept?.parent_agency && evalDept.parent_agency.trim().toLowerCase() !== evalDept.name?.trim().toLowerCase())
+    ? evalDept.parent_agency
+    : (parentDept?.name || sysConfigs.PARENT_AGENCY_NAME || 'ĐẢNG BỘ CẤP TRÊN');
+  const unitName = evalDept?.name ? evalDept.name.toUpperCase() : (sysConfigs.UNIT_NAME || 'ĐƠN VỊ ĐÁNH GIÁ');
+  const locationName = evalDept?.location_name || sysConfigs.LOCATION_NAME || 'TP. Hồ Chí Minh';
+  const leaderName = evalDept?.leader_name || sysConfigs.LEADER_SIGNER_NAME || '';
+  const leaderTitle = evalDept?.leader_title || sysConfigs.LEADER_SIGNER_TITLE || 'THỦ TRƯỞNG ĐƠN VỊ';
 
   const rows = db.prepare(`
     SELECT u.id as user_id, u.full_name, u.role, u.target_role, u.management_role, u.party_title, u.gov_title, u.union_title, d.name as dept_name,

@@ -197,13 +197,23 @@ export default function ReportTab({
     || configs.LEADER_SIGNER_NAME
     || '';
 
-  // For Mẫu 02 (toàn cơ quan)
-  const rootDept = departments.find(d => !d.parent_id) || departments[0] || {};
-  const mau02ParentAgency = rootDept.parent_agency || parentAgency;
-  const mau02LocationName = rootDept.location_name || locationName;
-  const mau02UnitName = rootDept.name || configs.UNIT_NAME || 'BAN TỔ CHỨC THÀNH ỦY TP. HỒ CHÍ MINH';
-  const mau02LeaderSignerName = rootDept.leader_name || leaderSignerName;
-  const mau02LeaderSignerTitle = rootDept.leader_title || leaderSignerTitle;
+  // For Mẫu 02 (đơn vị đang đánh giá)
+  // Lấy chính xác theo đơn vị có cán bộ nhân viên đang được đánh giá
+  const mau02Dept = (mau02List.length > 0 && departments.find(d => d.name === mau02List[0]?.dept_name))
+    || departments.find(d => d.id === targetUser?.department_id || d.name === targetUser?.dept_name)
+    || departments.find(d => d.id === currentUser?.dept_id || d.id === currentUser?.department_id)
+    || departments.find(d => (d.user_count || 0) > 0 && d.parent_id)
+    || departments.find(d => d.parent_id)
+    || departments[0] || {};
+
+  const mau02ParentDept = mau02Dept.parent_id ? departments.find(d => d.id === mau02Dept.parent_id) : null;
+  const mau02ParentAgency = (mau02Dept.parent_agency && mau02Dept.parent_agency.trim().toLowerCase() !== mau02Dept.name?.trim().toLowerCase())
+    ? mau02Dept.parent_agency
+    : (mau02ParentDept?.name || configs.PARENT_AGENCY_NAME || 'ĐẢNG BỘ CẤP TRÊN');
+  const mau02LocationName = mau02Dept.location_name || locationName || 'TP. Hồ Chí Minh';
+  const mau02UnitName = mau02Dept.name || configs.UNIT_NAME || 'ĐƠN VỊ ĐÁNH GIÁ';
+  const mau02LeaderSignerName = mau02Dept.leader_name || leaderSignerName;
+  const mau02LeaderSignerTitle = mau02Dept.leader_title || leaderSignerTitle || 'THỦ TRƯỞNG ĐƠN VỊ';
 
   const isUnitLeader = Boolean(
     (leaderSignerName && targetUser.full_name?.trim().toLowerCase() === leaderSignerName.trim().toLowerCase()) ||
@@ -1606,13 +1616,13 @@ export default function ReportTab({
           )}
 
           {/* Document Container */}
-          <div id="report-print-content" className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-3.5 sm:p-5 lg:p-6 print:p-6 font-times text-xs sm:text-[13px] print:text-[11pt] space-y-4 text-black w-full overflow-hidden print:overflow-visible">
+          <div id="report-print-content" className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-3.5 sm:p-5 lg:p-6 print:p-6 font-times text-[14pt] leading-snug space-y-4 text-black w-full overflow-hidden print:overflow-visible">
             {/* Header Mẫu 02 */}
-            <div className="text-right text-[12pt] sm:text-[14pt] font-bold text-black">
+            <div className="text-right text-[14pt] font-bold text-black">
               Mẫu 02
             </div>
 
-            <div className="grid grid-cols-2 text-center text-xs sm:text-[13px] print:text-[12pt]">
+            <div className="grid grid-cols-2 text-center text-[14pt]">
               <div>
                 <p className="uppercase text-black leading-tight">
                   {mau02ParentAgency}
@@ -1634,39 +1644,39 @@ export default function ReportTab({
 
             {/* Title */}
             <div className="text-center space-y-1 pt-1">
-              <h1 className="text-sm sm:text-base lg:text-[15pt] print:text-[14pt] font-bold uppercase text-red-900 tracking-tight">
+              <h1 className="text-[16pt] print:text-[14pt] font-bold uppercase text-red-900 tracking-tight">
                 BẢNG TỔNG HỢP KẾT QUẢ ĐÁNH GIÁ, XẾP LOẠI VÀ ĐỀ XUẤT CÔNG TÁC CÁN BỘ
               </h1>
-              <p className="text-[11px] sm:text-xs italic text-slate-700">
+              <p className="text-[13pt] italic text-slate-700">
                 (Ban hành kèm theo Hướng dẫn số 06-HD/BTCTU ngày 12 tháng 8 năm 2026 của Ban Tổ chức Thành ủy)
               </p>
-              <p className="text-xs sm:text-[13px] italic text-black">
+              <p className="text-[14pt] italic text-black">
                 {periodDisplayName}
               </p>
             </div>
 
-            {/* Table Mẫu 02 (Dàn đều 100% không kéo ngang) */}
+            {/* Table Mẫu 02 (Thu hẹp độ rộng các cột số, giữ nguyên cỡ chữ 14pt) */}
             <div className="w-full overflow-x-auto lg:overflow-x-visible pt-2">
-              <table className="table-mau-02 w-full table-fixed text-left border-collapse border border-black font-times text-black text-[10.5px] sm:text-[11.5px] xl:text-[12.5px] print:text-[9pt] leading-tight">
+              <table className="table-mau-02 w-full table-fixed text-left border-collapse border border-black font-times text-black text-[14pt] leading-snug">
                 <thead>
-                  <tr className="bg-slate-100 font-bold text-black text-center text-[10.5px] sm:text-xs print:text-[9pt]">
-                    <th rowSpan="2" className="border border-black px-1 py-1.5 w-[3%] text-center">STT</th>
-                    <th rowSpan="2" className="border border-black px-1.5 py-1.5 w-[14%]">Họ và tên</th>
-                    <th rowSpan="2" className="border border-black px-1.5 py-1.5 w-[12%]">Chức vụ / Vị trí</th>
-                    <th rowSpan="2" className="border border-black px-1.5 py-1.5 w-[9%]">Đơn vị</th>
-                    <th colSpan="4" className="border border-black px-1 py-1 w-[20%]">Điểm đánh giá</th>
-                    <th colSpan="2" className="border border-black px-1 py-1 w-[18%]">Xếp loại</th>
-                    <th rowSpan="2" className="border border-black px-1.5 py-1.5 w-[11%]">Tóm tắt căn cứ, lý do</th>
-                    <th rowSpan="2" className="border border-black px-1.5 py-1.5 w-[8%]">Đề xuất cán bộ</th>
-                    <th rowSpan="2" className="no-print border border-black px-1 py-1.5 w-[5%] text-center">Thao tác</th>
+                  <tr className="bg-slate-100 font-bold text-black text-center text-[14pt]">
+                    <th rowSpan="2" className="border border-black px-1 py-1 w-[3.5%] text-center">STT</th>
+                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[15%]">Họ và tên</th>
+                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[11%]">Chức vụ / Vị trí</th>
+                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[9.5%]">Đơn vị</th>
+                    <th colSpan="4" className="border border-black px-1 py-0.5 w-[18.5%]">Điểm đánh giá</th>
+                    <th colSpan="2" className="border border-black px-1 py-0.5 w-[17.5%]">Xếp loại</th>
+                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[13%]">Tóm tắt căn cứ, lý do</th>
+                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[7.5%]">Đề xuất cán bộ</th>
+                    <th rowSpan="2" className="no-print border border-black px-1 py-1 w-[4.5%] text-center">Thao tác</th>
                   </tr>
-                  <tr className="bg-slate-100 font-bold text-black text-center text-[10px] sm:text-[11px] print:text-[8.5pt]">
-                    <th className="border border-black px-0.5 py-1 w-[5%]">Phần A<br />(30đ)</th>
-                    <th className="border border-black px-0.5 py-1 w-[5%]">Phần B<br />(70đ)</th>
-                    <th className="border border-black px-0.5 py-1 w-[5%]">Thưởng<br />(+5%)</th>
-                    <th className="border border-black px-0.5 py-1 w-[5%] text-red-900 font-bold">Tổng<br />(100đ)</th>
-                    <th className="border border-black px-1 py-1 w-[9%]">Cá nhân tự ĐX</th>
-                    <th className="border border-black px-1 py-1 w-[9%]">Lãnh đạo đề xuất</th>
+                  <tr className="bg-slate-100 font-bold text-black text-center text-[13.5pt]">
+                    <th className="border border-black px-0.5 py-0.5 w-[4.5%]">Phần A<br /><span className="text-[11.5pt] font-normal">(30đ)</span></th>
+                    <th className="border border-black px-0.5 py-0.5 w-[4.5%]">Phần B<br /><span className="text-[11.5pt] font-normal">(70đ)</span></th>
+                    <th className="border border-black px-0.5 py-0.5 w-[4.5%]">Thưởng<br /><span className="text-[11.5pt] font-normal">(+5%)</span></th>
+                    <th className="border border-black px-0.5 py-0.5 w-[5%] text-red-900 font-bold">Tổng<br /><span className="text-[11.5pt] font-normal">(100đ)</span></th>
+                    <th className="border border-black px-1 py-0.5 w-[8.5%]">Cá nhân tự ĐX</th>
+                    <th className="border border-black px-1 py-0.5 w-[9%]">Lãnh đạo đề xuất</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black">
@@ -1815,7 +1825,7 @@ export default function ReportTab({
                           {/* KHỐI 1: CÔNG CHỨC */}
                           {congChucList.length > 0 && (
                             <React.Fragment>
-                              <tr className="bg-slate-200 font-bold text-black text-xs sm:text-[13px] print:text-[10pt]">
+                              <tr className="bg-slate-200 font-bold text-black text-[14pt]">
                                 <td colSpan="13" className="border border-black px-2 py-1 uppercase tracking-wide">
                                   {romanNumerals[grpIdx++]}. KHỐI CÔNG CHỨC ({congChucList.length} đồng chí — HTXSNV: {congChucStats.exc}/{congChucStats.total} đạt {congChucStats.excPercent}%)
                                 </td>
@@ -1830,7 +1840,7 @@ export default function ReportTab({
                           {/* KHỐI 2: VIÊN CHỨC */}
                           {vienChucList.length > 0 && (
                             <React.Fragment>
-                              <tr className="bg-slate-200 font-bold text-black text-xs sm:text-[13px] print:text-[10pt]">
+                              <tr className="bg-slate-200 font-bold text-black text-[14pt]">
                                 <td colSpan="13" className="border border-black px-2 py-1 uppercase tracking-wide">
                                   {romanNumerals[grpIdx++]}. KHỐI VIÊN CHỨC ({vienChucList.length} đồng chí — HTXSNV: {vienChucStats.exc}/{vienChucStats.total} đạt {vienChucStats.excPercent}%)
                                 </td>
@@ -1845,7 +1855,7 @@ export default function ReportTab({
                           {/* KHỐI 3: NGƯỜI LAO ĐỘNG */}
                           {laoDongList.length > 0 && (
                             <React.Fragment>
-                              <tr className="bg-slate-200 font-bold text-black text-xs sm:text-[13px] print:text-[10pt]">
+                              <tr className="bg-slate-200 font-bold text-black text-[14pt]">
                                 <td colSpan="13" className="border border-black px-2 py-1 uppercase tracking-wide">
                                   {romanNumerals[grpIdx++]}. KHỐI NGƯỜI LAO ĐỘNG ({laoDongList.length} đồng chí — HTXSNV: {laoDongStats.exc}/{laoDongStats.total} đạt {laoDongStats.excPercent}%)
                                 </td>
@@ -1864,15 +1874,15 @@ export default function ReportTab({
               </table>
             </div>
 
-            {/* Thống kê tỷ lệ xếp loại theo khối đối tượng trên bản in Mẫu 02 */}
+            {/* Thống kê tỷ lệ xếp loại theo khối đối tượng trên bản in Mẫu 02 (Cỡ chữ 14pt) */}
             {mau02List.length > 0 && (
-              <div className="pt-2 space-y-2 text-xs sm:text-[13px] print:text-[10pt] text-black">
-                <p className="font-bold uppercase tracking-tight text-xs sm:text-[13px] print:text-[10pt]">
+              <div className="pt-3 space-y-2 text-[14pt] text-black">
+                <p className="font-bold uppercase tracking-tight text-[14pt]">
                   * BẢNG TỔNG HỢP TỶ LỆ XẾP LOẠI THEO TỪNG KHỐI ĐỐI TƯỢNG (QUY ĐỊNH HTXSNV ≤ 20%):
                 </p>
-                <table className="w-full text-left text-xs sm:text-[13px] print:text-[10pt] border-collapse border border-black font-times text-black">
+                <table className="w-full text-left text-[14pt] border-collapse border border-black font-times text-black">
                   <thead>
-                    <tr className="bg-slate-100 font-bold text-center">
+                    <tr className="bg-slate-100 font-bold text-center text-[14pt]">
                       <th className="border border-black px-2 py-1.5">Khối đối tượng</th>
                       <th className="border border-black px-2 py-1.5 text-center">Tổng số</th>
                       <th className="border border-black px-2 py-1.5 text-center">Hoàn thành XSNV</th>
@@ -1889,50 +1899,50 @@ export default function ReportTab({
                       return (
                         <>
                           {congChucStats.total > 0 && (
-                            <tr>
-                              <td className="border border-black px-2 py-1.5 font-bold">{statIdx++}. Khối Công chức</td>
-                              <td className="border border-black px-2 py-1.5 text-center font-bold">{congChucStats.total}</td>
-                              <td className="border border-black px-2 py-1.5 text-center">{congChucStats.exc}</td>
-                              <td className="border border-black px-2 py-1.5 text-center font-bold">{congChucStats.excPercent}%</td>
-                              <td className="border border-black px-2 py-1.5 text-center">{congChucStats.good} ({congChucStats.goodPercent}%)</td>
-                              <td className="border border-black px-2 py-1.5 text-center">{congChucStats.complete} ({congChucStats.completePercent}%)</td>
-                              <td className="border border-black px-2 py-1.5 text-center">{congChucStats.fail} ({congChucStats.failPercent}%)</td>
-                              <td className="border border-black px-2 py-1.5 text-center italic">{congChucStats.isExcExceeded ? 'Vượt trần 20%' : 'Đạt ≤ 20%'}</td>
+                            <tr className="text-[14pt]">
+                              <td className="border border-black px-2 py-1 font-bold">{statIdx++}. Khối Công chức</td>
+                              <td className="border border-black px-2 py-1 text-center font-bold">{congChucStats.total}</td>
+                              <td className="border border-black px-2 py-1 text-center">{congChucStats.exc}</td>
+                              <td className="border border-black px-2 py-1 text-center font-bold">{congChucStats.excPercent}%</td>
+                              <td className="border border-black px-2 py-1 text-center">{congChucStats.good} ({congChucStats.goodPercent}%)</td>
+                              <td className="border border-black px-2 py-1 text-center">{congChucStats.complete} ({congChucStats.completePercent}%)</td>
+                              <td className="border border-black px-2 py-1 text-center">{congChucStats.fail} ({congChucStats.failPercent}%)</td>
+                              <td className="border border-black px-2 py-1 text-center italic">{congChucStats.isExcExceeded ? 'Vượt trần 20%' : 'Đạt ≤ 20%'}</td>
                             </tr>
                           )}
                           {vienChucStats.total > 0 && (
-                            <tr>
-                              <td className="border border-black px-2 py-1.5 font-bold">{statIdx++}. Khối Viên chức</td>
-                              <td className="border border-black px-2 py-1.5 text-center font-bold">{vienChucStats.total}</td>
-                              <td className="border border-black px-2 py-1.5 text-center">{vienChucStats.exc}</td>
-                              <td className="border border-black px-2 py-1.5 text-center font-bold">{vienChucStats.excPercent}%</td>
-                              <td className="border border-black px-2 py-1.5 text-center">{vienChucStats.good} ({vienChucStats.goodPercent}%)</td>
-                              <td className="border border-black px-2 py-1.5 text-center">{vienChucStats.complete} ({vienChucStats.completePercent}%)</td>
-                              <td className="border border-black px-2 py-1.5 text-center">{vienChucStats.fail} ({vienChucStats.failPercent}%)</td>
-                              <td className="border border-black px-2 py-1.5 text-center italic">{vienChucStats.isExcExceeded ? 'Vượt trần 20%' : 'Đạt ≤ 20%'}</td>
+                            <tr className="text-[14pt]">
+                              <td className="border border-black px-2 py-1 font-bold">{statIdx++}. Khối Viên chức</td>
+                              <td className="border border-black px-2 py-1 text-center font-bold">{vienChucStats.total}</td>
+                              <td className="border border-black px-2 py-1 text-center">{vienChucStats.exc}</td>
+                              <td className="border border-black px-2 py-1 text-center font-bold">{vienChucStats.excPercent}%</td>
+                              <td className="border border-black px-2 py-1 text-center">{vienChucStats.good} ({vienChucStats.goodPercent}%)</td>
+                              <td className="border border-black px-2 py-1 text-center">{vienChucStats.complete} ({vienChucStats.completePercent}%)</td>
+                              <td className="border border-black px-2 py-1 text-center">{vienChucStats.fail} ({vienChucStats.failPercent}%)</td>
+                              <td className="border border-black px-2 py-1 text-center italic">{vienChucStats.isExcExceeded ? 'Vượt trần 20%' : 'Đạt ≤ 20%'}</td>
                             </tr>
                           )}
                           {laoDongStats.total > 0 && (
-                            <tr>
-                              <td className="border border-black px-2 py-1.5 font-bold">{statIdx++}. Khối Người lao động</td>
-                              <td className="border border-black px-2 py-1.5 text-center font-bold">{laoDongStats.total}</td>
-                              <td className="border border-black px-2 py-1.5 text-center">{laoDongStats.exc}</td>
-                              <td className="border border-black px-2 py-1.5 text-center font-bold">{laoDongStats.excPercent}%</td>
-                              <td className="border border-black px-2 py-1.5 text-center">{laoDongStats.good} ({laoDongStats.goodPercent}%)</td>
-                              <td className="border border-black px-2 py-1.5 text-center">{laoDongStats.complete} ({laoDongStats.completePercent}%)</td>
-                              <td className="border border-black px-2 py-1.5 text-center">{laoDongStats.fail} ({laoDongStats.failPercent}%)</td>
-                              <td className="border border-black px-2 py-1.5 text-center italic">{laoDongStats.isExcExceeded ? 'Vượt trần 20%' : 'Đạt ≤ 20%'}</td>
+                            <tr className="text-[14pt]">
+                              <td className="border border-black px-2 py-1 font-bold">{statIdx++}. Khối Người lao động</td>
+                              <td className="border border-black px-2 py-1 text-center font-bold">{laoDongStats.total}</td>
+                              <td className="border border-black px-2 py-1 text-center">{laoDongStats.exc}</td>
+                              <td className="border border-black px-2 py-1 text-center font-bold">{laoDongStats.excPercent}%</td>
+                              <td className="border border-black px-2 py-1 text-center">{laoDongStats.good} ({laoDongStats.goodPercent}%)</td>
+                              <td className="border border-black px-2 py-1 text-center">{laoDongStats.complete} ({laoDongStats.completePercent}%)</td>
+                              <td className="border border-black px-2 py-1 text-center">{laoDongStats.fail} ({laoDongStats.failPercent}%)</td>
+                              <td className="border border-black px-2 py-1 text-center italic">{laoDongStats.isExcExceeded ? 'Vượt trần 20%' : 'Đạt ≤ 20%'}</td>
                             </tr>
                           )}
-                          <tr className="font-bold bg-slate-50">
-                            <td className="border border-black px-2 py-1.5 uppercase">Toàn cơ quan / Đơn vị</td>
-                            <td className="border border-black px-2 py-1.5 text-center">{totalStats.total}</td>
-                            <td className="border border-black px-2 py-1.5 text-center">{totalStats.exc}</td>
-                            <td className="border border-black px-2 py-1.5 text-center">{totalStats.excPercent}%</td>
-                            <td className="border border-black px-2 py-1.5 text-center">{totalStats.good} ({totalStats.goodPercent}%)</td>
-                            <td className="border border-black px-2 py-1.5 text-center">{totalStats.complete} ({totalStats.completePercent}%)</td>
-                            <td className="border border-black px-2 py-1.5 text-center">{totalStats.fail} ({totalStats.failPercent}%)</td>
-                            <td className="border border-black px-2 py-1.5 text-center italic">{totalStats.isExcExceeded ? 'Vượt trần 20%' : 'Đạt ≤ 20%'}</td>
+                          <tr className="font-bold bg-slate-50 text-[14pt]">
+                            <td className="border border-black px-2 py-1 uppercase">Toàn cơ quan / Đơn vị</td>
+                            <td className="border border-black px-2 py-1 text-center">{totalStats.total}</td>
+                            <td className="border border-black px-2 py-1 text-center">{totalStats.exc}</td>
+                            <td className="border border-black px-2 py-1 text-center">{totalStats.excPercent}%</td>
+                            <td className="border border-black px-2 py-1 text-center">{totalStats.good} ({totalStats.goodPercent}%)</td>
+                            <td className="border border-black px-2 py-1 text-center">{totalStats.complete} ({totalStats.completePercent}%)</td>
+                            <td className="border border-black px-2 py-1 text-center">{totalStats.fail} ({totalStats.failPercent}%)</td>
+                            <td className="border border-black px-2 py-1 text-center italic">{totalStats.isExcExceeded ? 'Vượt trần 20%' : 'Đạt ≤ 20%'}</td>
                           </tr>
                         </>
                       );
