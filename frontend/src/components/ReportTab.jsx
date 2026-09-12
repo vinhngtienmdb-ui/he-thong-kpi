@@ -20,6 +20,7 @@ import { api } from '../api';
 import { formatDate, formatAdministrativeDate } from '../constants';
 import { compareUsersByPositionAndName } from '../userSorting';
 import { getUserPermissions } from '../permissions';
+import { exportReportToPdfDirect, cleanupPdfArtifacts } from '../utils/directPdfExport';
 
 export default function ReportTab({ 
   selectedPeriod, 
@@ -252,6 +253,7 @@ export default function ReportTab({
 
   const handleExportPdf = async () => {
     setShowExportMenu(false);
+    cleanupPdfArtifacts();
     const element = document.getElementById('report-print-content') || document.querySelector('.print-document');
     if (!element) {
       alert('Không tìm thấy nội dung báo cáo để xuất PDF');
@@ -259,7 +261,7 @@ export default function ReportTab({
     }
 
     setIsExportingPdf(true);
-    setPdfProgressMsg('Đang tạo và tải file PDF về máy tính...');
+    setPdfProgressMsg('Đang khởi tạo công cụ xuất PDF trực tiếp...');
 
     const isMau02 = canViewAllReports && activeReportView === 'mau_02';
     const cleanTargetName = targetUser?.full_name 
@@ -276,54 +278,50 @@ export default function ReportTab({
     const isLandscape = true;
 
     try {
-      // 1. Gửi HTML lên máy chủ để render file PDF chuẩn vector bằng Chromium engine
-      const res = await fetch('/api/reports/render-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          html: element.outerHTML,
-          isLandscape,
-          filename
-        })
-      });
-
-      if (res.ok) {
-        const blob = await res.blob();
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(downloadUrl);
-        return;
-      }
-
-      throw new Error(`Server PDF status: ${res.status}`);
-    } catch (serverErr) {
-      console.warn('Server PDF render không thành công, chuyển sang xuất phía client:', serverErr);
-
+      // 1. Thử gửi lên máy chủ (nếu môi trường máy chủ hỗ trợ headless Chromium)
+      let exported = false;
       try {
-        // 2. Dự phòng phía client: Tải trực tiếp file PDF qua html2pdf.js (không gọi lệnh in)
-        const html2pdfModule = await import('html2pdf.js');
-        const html2pdf = html2pdfModule.default || html2pdfModule;
+        const res = await fetch('/api/reports/render-pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            html: element.outerHTML,
+            isLandscape,
+            filename
+          })
+        });
 
-        const opt = {
-          margin: [8, 8, 8, 8],
-          filename: filename,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true, logging: false },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
-          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-        };
-
-        await html2pdf().set(opt).from(element).save();
-      } catch (clientErr) {
-        console.error('Lỗi khi xuất PDF phía client:', clientErr);
-        alert('Không thể tạo file PDF. Quý người dùng có thể sử dụng nút "In báo cáo" và chọn "Lưu dưới dạng PDF" (Save as PDF).');
+        if (res.ok && res.headers.get('content-type')?.includes('application/pdf')) {
+          const blob = await res.blob();
+          const downloadUrl = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(downloadUrl);
+          exported = true;
+          return;
+        }
+      } catch (serverErr) {
+        console.warn('Kết xuất PDF máy chủ không khả dụng, chuyển sang công cụ xuất trực tiếp:', serverErr);
       }
+
+      // 2. Xuất trực tiếp bằng công cụ nội bộ client-side (chống xung đột Tailwind v4, không treo màn hình)
+      if (!exported) {
+        await exportReportToPdfDirect(element, {
+          filename,
+          isLandscape,
+          onProgress: (msg) => setPdfProgressMsg(msg)
+        });
+      }
+    } catch (directErr) {
+      console.error('Lỗi khi xuất PDF trực tiếp:', directErr);
+      cleanupPdfArtifacts();
+      alert('Không thể tạo file PDF tự động: ' + directErr.message + '\n\nQuý người dùng có thể sử dụng nút "In báo cáo" và chọn "Lưu dưới dạng PDF" (Save as PDF).');
     } finally {
+      cleanupPdfArtifacts();
       setIsExportingPdf(false);
       setPdfProgressMsg('');
     }
@@ -2033,7 +2031,7 @@ export default function ReportTab({
 
       {/* Floating progress toast for PDF Export */}
       {isExportingPdf && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900/95 text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3.5 backdrop-blur-sm animate-pulse">
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900/95 text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3.5 backdrop-blur-sm animate-pulse pointer-events-none">
           <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin shrink-0"></div>
           <div>
             <div className="font-bold text-sm text-white">Đang xử lý xuất PDF...</div>

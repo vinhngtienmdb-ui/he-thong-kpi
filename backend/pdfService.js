@@ -6,12 +6,27 @@ const crypto = require('crypto');
 
 function findBrowserBinary() {
   const candidates = [
+    // Windows paths
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
     'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
     'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    // Linux / Cloud container paths
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/snap/bin/chromium',
+    '/usr/lib/chromium/chromium',
+    '/app/.apt/usr/bin/google-chrome',
+    // macOS paths
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+    // Environment overrides
     process.env.CHROME_BIN,
-    process.env.EDGE_BIN
+    process.env.EDGE_BIN,
+    process.env.CHROME_PATH,
+    process.env.PUPPETEER_EXECUTABLE_PATH
   ].filter(Boolean);
 
   for (const bin of candidates) {
