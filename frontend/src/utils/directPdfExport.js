@@ -152,7 +152,7 @@ async function collectAllAppStyles() {
 
 /**
  * Bọc hàm getComputedStyle của cửa sổ để:
- * 1. Chặn đứng và chuyển đổi mọi giá trị màu oklab/oklch trước khi html2canvas đọc chúng.
+ * 1. Chặn đứng và chuyển đổi mọi giá trị màu oklab/oklch sang rgb/rgba trước khi html2canvas đọc chúng.
  * 2. Ép buộc 100% phông chữ trả về phải là 'Times New Roman' cho mọi phần tử trong báo cáo.
  */
 export function wrapComputedStyle(targetWindow) {
@@ -163,7 +163,6 @@ export function wrapComputedStyle(targetWindow) {
     const style = original.call(targetWindow, el, pseudo);
     return new Proxy(style, {
       get(target, prop) {
-        // Luôn trả về Times New Roman cho mọi truy vấn font-family
         if (prop === 'fontFamily') {
           return "'Times New Roman', Times, 'Liberation Serif', serif";
         }
@@ -222,9 +221,9 @@ export function cleanupPdfArtifacts() {
  * - Xuất đúng 100% nguyên mẫu hiển thị trên màn hình báo cáo hiện hữu.
  * - Giữ trọn vẹn toàn bộ các cột, dữ liệu, bảng biểu, không bị cắt xén lề phải hoặc lề dưới.
  * - Phông chữ: Chuẩn 100% Times New Roman.
- * - Cỡ chữ: Chuẩn 14pt (tiêu đề chính 16pt đậm).
- * - Không bị co kéo, không bị đè chữ (overlapping), không bị sập dòng bảng, không bị treo trình duyệt.
- * - Cắt trang thông minh: Không bao giờ cắt ngang qua dòng chữ hoặc ô bảng.
+ * - Cỡ chữ trên giấy in: Chuẩn 14pt (tiêu đề chính 16pt đậm), tự động bù tỷ lệ co giãn để đúng chuẩn 14pt.
+ * - Cắt trang thông minh theo DOM: Tuyệt đối không cắt ngang dòng bảng <tr> hay chia đôi dòng chữ.
+ * - Không bị co kéo, không bị đè chữ, không bị treo trình duyệt.
  */
 export async function exportReportToPdfDirect(element, options = {}) {
   const {
@@ -254,20 +253,31 @@ export async function exportReportToPdfDirect(element, options = {}) {
   const printableWidthMm = pageWidthMm - (marginMm * 2); // 281mm cho A4 landscape
   const printableHeightMm = pageHeightMm - (marginMm * 2); // 194mm cho A4 landscape
 
-  // 1. Xác định độ rộng tự nhiên đầy đủ nhất của báo cáo trên màn hình hiện hữu
-  // để chứa trọn vẹn 100% tất cả các cột, không bị mất thông tin bên lề phải
+  // 1. Độ rộng pixel chuẩn A4 ở 96 DPI: 281mm = 1062px
+  const baseA4Width = Math.round((printableWidthMm / 25.4) * 96); // 1062px
+
   const tables = element.querySelectorAll('table');
   let maxTableWidth = 0;
   tables.forEach(tbl => {
     maxTableWidth = Math.max(maxTableWidth, tbl.scrollWidth || 0, tbl.offsetWidth || 0);
   });
 
+  // Nếu bảng yêu cầu độ rộng lớn hơn (ví dụ Mẫu 02 nhiều cột), lấy theo độ rộng bảng nhưng tối thiểu bằng A4
   const naturalWidth = Math.max(
     element.scrollWidth || 0,
     element.offsetWidth || 0,
     maxTableWidth,
-    1250 // Đảm bảo đủ độ rộng thoải mái cho A4 ngang và bảng biểu 17 cột
+    baseA4Width
   );
+
+  // 2. Tính toán tỷ lệ co giãn (scaleFactor) để khi đưa vào PDF, cỡ chữ trên giấy in ĐÚNG 100% LÀ 14pt và 16pt
+  const scaleFactor = naturalWidth / baseA4Width;
+  const bodyFontSizePt = Number((14 * scaleFactor).toFixed(2));
+  const titleFontSizePt = Number((16 * scaleFactor).toFixed(2));
+  const subHeaderSizePt = Number((14 * scaleFactor).toFixed(2));
+  const smallFontSizePt = Number((11 * scaleFactor).toFixed(2));
+  const cellPaddingV = Number((6 * scaleFactor).toFixed(1));
+  const cellPaddingH = Number((8 * scaleFactor).toFixed(1));
 
   onProgress('Đang chuẩn hóa giao diện báo cáo chuẩn Times New Roman...');
   const sanitizedAppCss = await collectAllAppStyles();
@@ -275,13 +285,12 @@ export async function exportReportToPdfDirect(element, options = {}) {
   // Bọc getComputedStyle của cửa sổ chính
   const restoreParentWindow = wrapComputedStyle(window);
 
+  // Danh sách các điểm ngắt trang an toàn đo từ DOM
+  let domBreakpoints = [];
+
   try {
     onProgress('Đang kết xuất hình ảnh báo cáo nguyên mẫu...');
 
-    // LƯU Ý CỰC KỲ QUAN TRỌNG:
-    // TUYỆT ĐỐI KHÔNG truyền 'height' hoặc 'width' vào options của html2canvas!
-    // Truyền 'height' sẽ ép canvas phải co xẹp theo chiều cao màn hình khiến các dòng bảng bị đè lên nhau (squished/overlap)!
-    // Để html2canvas tự động lấy toàn bộ chiều dài tự nhiên của clonedElement.
     const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
@@ -290,7 +299,7 @@ export async function exportReportToPdfDirect(element, options = {}) {
       scrollX: 0,
       scrollY: 0,
       windowWidth: naturalWidth + 60,
-      windowHeight: 25000, // Cửa sổ ảo đủ cao để render toàn bộ văn bản nhiều trang
+      windowHeight: 25000,
       onclone: (clonedDoc, clonedElement) => {
         // Bọc getComputedStyle của cửa sổ iframe clone
         wrapComputedStyle(clonedDoc.defaultView);
@@ -307,7 +316,7 @@ export async function exportReportToPdfDirect(element, options = {}) {
         appStyleTag.textContent = sanitizedAppCss;
         clonedDoc.head.appendChild(appStyleTag);
 
-        // 3. Tiêm stylesheet chuẩn hành chính: ép buộc Times New Roman & mở rộng hiển thị trọn vẹn
+        // 3. Tiêm stylesheet chuẩn hành chính: ép buộc Times New Roman & bù kích thước font chuẩn 14pt
         const printOverrideTag = clonedDoc.createElement('style');
         printOverrideTag.id = 'report-print-override';
         printOverrideTag.textContent = `
@@ -325,7 +334,7 @@ export async function exportReportToPdfDirect(element, options = {}) {
             background-image: none !important;
             color: #000000 !important;
             font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
-            font-size: 14pt !important;
+            font-size: ${bodyFontSizePt}pt !important;
             margin: 0 !important;
             padding: 0 !important;
             width: ${naturalWidth}px !important;
@@ -340,12 +349,12 @@ export async function exportReportToPdfDirect(element, options = {}) {
             background-image: none !important;
             color: #000000 !important;
             font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
-            font-size: 14pt !important;
+            font-size: ${bodyFontSizePt}pt !important;
             width: ${naturalWidth}px !important;
             min-width: ${naturalWidth}px !important;
             max-width: none !important;
             margin: 0 auto !important;
-            padding: 20px 24px !important;
+            padding: ${Math.round(20 * scaleFactor)}px ${Math.round(24 * scaleFactor)}px !important;
             overflow: visible !important;
             box-shadow: none !important;
             border: none !important;
@@ -362,11 +371,11 @@ export async function exportReportToPdfDirect(element, options = {}) {
             width: 100% !important;
           }
 
-          /* Áp dụng chuẩn Times New Roman và cỡ 14pt cho tất cả các thẻ văn bản */
-          /* TUYỆT ĐỐI KHÔNG ĐƯA tr, thead, tbody VÀO ĐÂY vì sẽ làm sập tính toán chiều cao dòng trong html2canvas! */
+          /* Áp dụng chuẩn Times New Roman và cỡ chữ 14pt (bù tỷ lệ) cho văn bản */
+          /* TUYỆT ĐỐI KHÔNG ĐƯA tr, thead, tbody VÀO ĐÂY */
           p, span, div, li, a, label, strong, b, em, i {
             font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
-            font-size: 14pt !important;
+            font-size: ${bodyFontSizePt}pt !important;
             line-height: 1.4 !important;
             color: #000000 !important;
           }
@@ -374,20 +383,20 @@ export async function exportReportToPdfDirect(element, options = {}) {
           /* Tiêu đề văn bản: 16pt đậm chữ hoa */
           h1 {
             font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
-            font-size: 16pt !important;
+            font-size: ${titleFontSizePt}pt !important;
             font-weight: bold !important;
             text-align: center !important;
             text-transform: uppercase !important;
-            margin: 10px 0 !important;
+            margin: ${Math.round(10 * scaleFactor)}px 0 !important;
             line-height: 1.3 !important;
             color: #000000 !important;
           }
 
           h2, h3, h4 {
             font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
-            font-size: 14pt !important;
+            font-size: ${subHeaderSizePt}pt !important;
             font-weight: bold !important;
-            margin: 8px 0 !important;
+            margin: ${Math.round(8 * scaleFactor)}px 0 !important;
             line-height: 1.3 !important;
             color: #000000 !important;
           }
@@ -398,8 +407,8 @@ export async function exportReportToPdfDirect(element, options = {}) {
             max-width: 100% !important;
             border-collapse: collapse !important;
             font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
-            font-size: 14pt !important;
-            margin: 8px 0 !important;
+            font-size: ${bodyFontSizePt}pt !important;
+            margin: ${Math.round(8 * scaleFactor)}px 0 !important;
           }
 
           tr {
@@ -410,9 +419,9 @@ export async function exportReportToPdfDirect(element, options = {}) {
             border: 1px solid #000000 !important;
             color: #000000 !important;
             font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
-            font-size: 14pt !important;
+            font-size: ${bodyFontSizePt}pt !important;
             line-height: 1.35 !important;
-            padding: 6px 8px !important;
+            padding: ${cellPaddingV}px ${cellPaddingH}px !important;
             vertical-align: middle !important;
             word-break: break-word !important;
             overflow-wrap: break-word !important;
@@ -427,12 +436,12 @@ export async function exportReportToPdfDirect(element, options = {}) {
 
           /* Bảng Mẫu 02 với 17 cột */
           .table-mau-02 th, .table-mau-02 td {
-            padding: 3px 4px !important;
-            font-size: 14pt !important;
+            padding: ${Math.round(3.5 * scaleFactor)}px ${Math.round(4.5 * scaleFactor)}px !important;
+            font-size: ${bodyFontSizePt}pt !important;
           }
 
           .table-mau-02 th span, .table-mau-02 th small {
-            font-size: 11pt !important;
+            font-size: ${smallFontSizePt}pt !important;
             font-weight: normal !important;
           }
 
@@ -491,10 +500,39 @@ export async function exportReportToPdfDirect(element, options = {}) {
         clonedElement.querySelectorAll('*').forEach(el => {
           el.style.fontFamily = "'Times New Roman', Times, 'Liberation Serif', serif";
           const s = el.getAttribute('style');
-          if (s && (s.includes('oklab') || s.includes('oklch') || s.includes('color(') || s.includes('hwb'))) {
+          if (s && (s.includes('oklab') || s.includes('oklch') || s.includes('color') || s.includes('lab') || s.includes('hwb'))) {
             el.setAttribute('style', sanitizeColorString(s));
           }
         });
+
+        // ====================================================================
+        // THU THẬP TỌA ĐỘ RANH GIỚI HÀNG (TR) VÀ CÁC KHỐI ĐỂ CẮT TRANG CHUẨN XÁC 100%
+        // ====================================================================
+        const clonedRect = clonedElement.getBoundingClientRect();
+        const rawBreakpoints = [];
+
+        // 1. Ranh giới dưới của tất cả các dòng <tr> trong mọi bảng
+        const allRows = clonedElement.querySelectorAll('tr');
+        allRows.forEach(row => {
+          const r = row.getBoundingClientRect();
+          const bottom = r.bottom - clonedRect.top;
+          if (bottom > 0) {
+            rawBreakpoints.push({ y: bottom, type: 'tr' });
+          }
+        });
+
+        // 2. Ranh giới trên và dưới của các khối nội dung, chữ ký, thống kê
+        const allBlocks = clonedElement.querySelectorAll('h1, h2, h3, h4, p, .signature-block, .stats-summary-container, .grid');
+        allBlocks.forEach(el => {
+          const r = el.getBoundingClientRect();
+          const top = r.top - clonedRect.top;
+          const bottom = r.bottom - clonedRect.top;
+          if (top > 0) rawBreakpoints.push({ y: top, type: 'block-top' });
+          if (bottom > 0) rawBreakpoints.push({ y: bottom, type: 'block-bottom' });
+        });
+
+        rawBreakpoints.sort((a, b) => a.y - b.y);
+        domBreakpoints = rawBreakpoints;
       }
     });
 
@@ -507,6 +545,7 @@ export async function exportReportToPdfDirect(element, options = {}) {
       compress: true
     });
 
+    const canvasScale = 2; // Khớp với scale: 2 của html2canvas
     const canvasWidth = canvas.width;
     const canvasHeight = canvas.height;
     const pageCanvasHeight = Math.floor((printableHeightMm / printableWidthMm) * canvasWidth);
@@ -516,55 +555,57 @@ export async function exportReportToPdfDirect(element, options = {}) {
       const imgData = canvas.toDataURL('image/jpeg', 0.98);
       pdf.addImage(imgData, 'JPEG', marginMm, marginMm, printableWidthMm, imgHeightMm);
     } else {
-      const mainCtx = canvas.getContext('2d');
       let remainingHeight = canvasHeight;
       let sourceY = 0;
       let pageIndex = 0;
 
       while (remainingHeight > 0) {
+        const idealCutY = sourceY + pageCanvasHeight;
         let currentSliceHeight = Math.min(pageCanvasHeight, remainingHeight);
 
-        // Nếu còn trang tiếp theo, tìm điểm cắt thông minh (không cắt ngang chữ hay dòng bảng)
-        if (remainingHeight > pageCanvasHeight) {
-          const scanWindow = Math.min(Math.floor(pageCanvasHeight * 0.18), 320);
-          const scanStartY = sourceY + currentSliceHeight - scanWindow;
+        // Nếu còn trang tiếp theo, tìm điểm cắt thông minh chuẩn theo DOM (giữa các hàng <tr>)
+        if (idealCutY < canvasHeight) {
+          // Vùng tìm kiếm: từ (sourceY + 60% chiều cao trang) đến idealCutY
+          const minAllowedY = sourceY + Math.floor(pageCanvasHeight * 0.60);
+          const candidates = domBreakpoints
+            .map(bp => Math.round(bp.y * canvasScale))
+            .filter(bpY => bpY <= idealCutY && bpY >= minAllowedY);
 
-          try {
-            const imgDataObj = mainCtx.getImageData(0, scanStartY, canvasWidth, scanWindow);
-            const data = imgDataObj.data;
-            const maxBorderNoise = Math.ceil(canvasWidth / 120);
+          if (candidates.length > 0) {
+            // Lấy điểm ngắt hợp lệ lớn nhất (sát đáy trang nhất) mà không vượt quá trang
+            const bestCutY = Math.max(...candidates);
+            currentSliceHeight = bestCutY - sourceY;
+          } else {
+            // Dự phòng pixel scan nếu không có điểm ngắt DOM
+            const mainCtx = canvas.getContext('2d');
+            const scanWindow = Math.min(Math.floor(pageCanvasHeight * 0.20), 350);
+            const scanStartY = idealCutY - scanWindow;
+            try {
+              const imgDataObj = mainCtx.getImageData(0, scanStartY, canvasWidth, scanWindow);
+              const data = imgDataObj.data;
+              const maxBorderNoise = Math.ceil(canvasWidth / 120);
 
-            let bestY = -1;
-            let minDark = 999999;
-            let minDarkY = -1;
-
-            for (let r = scanWindow - 1; r >= 0; r--) {
-              let darkPixels = 0;
-              const rowOffset = r * canvasWidth * 4;
-              // Sample every 4th pixel for high speed
-              for (let x = 0; x < canvasWidth; x += 4) {
-                const i = rowOffset + (x * 4);
-                if (data[i] < 160 && data[i + 1] < 160 && data[i + 2] < 160) {
-                  darkPixels++;
+              let bestY = -1;
+              for (let r = scanWindow - 1; r >= 0; r--) {
+                let darkPixels = 0;
+                const rowOffset = r * canvasWidth * 4;
+                for (let x = 0; x < canvasWidth; x += 4) {
+                  const i = rowOffset + (x * 4);
+                  if (data[i] < 160 && data[i + 1] < 160 && data[i + 2] < 160) {
+                    darkPixels++;
+                  }
+                }
+                if (darkPixels <= maxBorderNoise) {
+                  bestY = r;
+                  break;
                 }
               }
-              // Dòng này hoàn toàn sạch không chứa chữ (chỉ chứa khoảng trắng hoặc vạch dọc bảng)
-              if (darkPixels <= maxBorderNoise) {
-                bestY = r;
-                break;
+              if (bestY !== -1 && bestY > 20) {
+                currentSliceHeight = (scanStartY + bestY) - sourceY;
               }
-              if (darkPixels < minDark) {
-                minDark = darkPixels;
-                minDarkY = r;
-              }
+            } catch (e) {
+              console.warn('Lỗi quét điểm cắt pixel dự phòng:', e);
             }
-
-            const chosenY = bestY !== -1 ? bestY : minDarkY;
-            if (chosenY !== -1 && chosenY > 20) {
-              currentSliceHeight = (scanStartY + chosenY) - sourceY;
-            }
-          } catch (e) {
-            console.warn('Không thể quét điểm cắt thông minh:', e);
           }
         }
 
