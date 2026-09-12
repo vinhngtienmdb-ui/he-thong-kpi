@@ -344,7 +344,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans">
+    <div className="min-h-screen bg-slate-50 flex font-sans print:block print:min-h-0 print:h-auto print:bg-white">
       {/* Sidebar Navigation */}
       <Sidebar
         currentTab={currentTab}
@@ -362,7 +362,7 @@ export default function App() {
       />
 
       {/* Main Area (Adjusts margin based on sidebar collapsed state) */}
-      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isCollapsed ? 'lg:ml-20' : 'lg:ml-80'} print:ml-0 print:m-0 print:p-0`}>
+      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isCollapsed ? 'lg:ml-20' : 'lg:ml-80'} print:block print:w-full print:min-h-0 print:h-auto print:ml-0 print:m-0 print:p-0`}>
         
         {/* Real ICPV Header Bar */}
         <Header 
@@ -452,7 +452,7 @@ export default function App() {
         </div>
 
         {/* Main Tab Content */}
-        <main className="flex-1 w-full px-2 sm:px-4 lg:px-6 py-3 sm:py-5 pb-20 sm:pb-24 lg:pb-6 print:p-0 print:m-0 overflow-x-hidden">
+        <main className="flex-1 w-full px-2 sm:px-4 lg:px-6 py-3 sm:py-5 pb-20 sm:pb-24 lg:pb-6 print:p-0 print:m-0 print:overflow-visible print:block print:h-auto print:min-h-0 overflow-x-hidden">
           {currentTab === 'dashboard' && (
             <DashboardTab
               selectedPeriod={selectedPeriod}

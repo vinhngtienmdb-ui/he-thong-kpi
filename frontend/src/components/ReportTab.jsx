@@ -235,17 +235,20 @@ export default function ReportTab({
 
   const handlePrint = () => {
     setShowExportMenu(false);
-    // Force A4 landscape print orientation in browser
+    const isLandscape = (canViewAllReports && activeReportView === 'mau_02') || activeReportView === 'execution_report';
     let styleEl = document.getElementById('dynamic-print-landscape-style');
     if (!styleEl) {
       styleEl = document.createElement('style');
       styleEl.id = 'dynamic-print-landscape-style';
       document.head.appendChild(styleEl);
     }
-    styleEl.innerHTML = '@media print { @page { size: A4 landscape !important; margin: 8mm 10mm 8mm 12mm !important; } }';
+    // Strict W3C standard: Do not use !important inside @page declarations
+    styleEl.innerHTML = isLandscape
+      ? '@page { size: A4 landscape; margin: 8mm 8mm 8mm 8mm; }'
+      : '@page { size: A4 portrait; margin: 15mm 15mm 15mm 20mm; }';
     setTimeout(() => {
       window.print();
-    }, 60);
+    }, 100);
   };
 
   const handleExportPdf = async () => {
@@ -257,7 +260,7 @@ export default function ReportTab({
     }
 
     setIsExportingPdf(true);
-    setPdfProgressMsg('Đang xuất dữ liệu ra file PDF (khổ A4 ngang)...');
+    setPdfProgressMsg('Đang xuất dữ liệu ra file PDF...');
 
     try {
       const html2pdfModule = await import('html2pdf.js');
@@ -274,12 +277,13 @@ export default function ReportTab({
           ? `Bao_cao_cong_viec_${cleanTargetName}_${activePeriodId}.pdf`
           : `Bao_cao_danh_gia_${cleanTargetName}_${activePeriodId}.pdf`);
 
+      const isLandscape = isMau02 || activeReportView === 'execution_report';
       const opt = {
-        margin: [8, 10, 8, 12],
+        margin: isLandscape ? [8, 8, 8, 8] : [15, 15, 15, 20],
         filename: filename,
         image: { type: 'jpeg', quality: 0.98 },
         html2canvas: { scale: 2, useCORS: true, logging: false, letterRendering: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: isLandscape ? 'landscape' : 'portrait' },
         pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
       };
 
@@ -1616,7 +1620,7 @@ export default function ReportTab({
           )}
 
           {/* Document Container */}
-          <div id="report-print-content" className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-3.5 sm:p-5 lg:p-6 print:p-6 font-times text-[14pt] leading-snug space-y-4 text-black w-full overflow-hidden print:overflow-visible">
+          <div id="report-print-content" className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-3.5 sm:p-5 lg:p-6 print:p-0 print:border-none print:shadow-none font-times text-[14pt] leading-snug space-y-4 print:space-y-4 text-black w-full overflow-hidden print:overflow-visible">
             {/* Header Mẫu 02 */}
             <div className="text-right text-[14pt] font-bold text-black">
               Mẫu 02
@@ -1656,19 +1660,22 @@ export default function ReportTab({
             </div>
 
             {/* Table Mẫu 02 (Thu hẹp độ rộng các cột số, giữ nguyên cỡ chữ 14pt) */}
-            <div className="w-full overflow-x-auto lg:overflow-x-visible pt-2">
+            <div className="w-full overflow-x-auto lg:overflow-x-visible pt-2 print:overflow-visible print:p-0 print:m-0">
               <table className="table-mau-02 w-full table-fixed text-left border-collapse border border-black font-times text-black text-[14pt] leading-snug">
                 <thead>
                   <tr className="bg-slate-100 font-bold text-black text-center text-[14pt]">
                     <th rowSpan="2" className="border border-black px-1 py-1 w-[3.5%] text-center">STT</th>
-                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[15%]">Họ và tên</th>
-                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[11%]">Chức vụ / Vị trí</th>
-                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[9.5%]">Đơn vị</th>
+                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[14.5%]">Họ và tên</th>
+                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[10.5%]">Chức vụ / Vị trí</th>
+                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[9%]">Đơn vị</th>
                     <th colSpan="4" className="border border-black px-1 py-0.5 w-[18.5%]">Điểm đánh giá</th>
                     <th colSpan="2" className="border border-black px-1 py-0.5 w-[17.5%]">Xếp loại</th>
-                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[13%]">Tóm tắt căn cứ, lý do</th>
-                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[7.5%]">Đề xuất cán bộ</th>
-                    <th rowSpan="2" className="no-print border border-black px-1 py-1 w-[4.5%] text-center">Thao tác</th>
+                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[13.5%]">Tóm tắt căn cứ, lý do</th>
+                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[8%]">Đề xuất cán bộ</th>
+                    <th rowSpan="2" className="border border-black px-1 py-1 w-[5%] text-center">
+                      <span className="no-print">Thao tác</span>
+                      <span className="hidden print:inline">Ghi chú</span>
+                    </th>
                   </tr>
                   <tr className="bg-slate-100 font-bold text-black text-center text-[13.5pt]">
                     <th className="border border-black px-0.5 py-0.5 w-[4.5%]">Phần A<br /><span className="text-[11.5pt] font-normal">(30đ)</span></th>
@@ -1781,37 +1788,39 @@ export default function ReportTab({
                               )}
                             </td>
 
-                            {/* Actions (Screen only) */}
-                            <td className="no-print border border-black px-1 py-1 text-center">
-                              {isEditing ? (
-                                <div className="flex flex-col gap-1">
+                            {/* Actions on screen / Ghi chú on print */}
+                            <td className="border border-black px-1 py-1 text-center">
+                              <div className="no-print">
+                                {isEditing ? (
+                                  <div className="flex flex-col gap-1">
+                                    <button
+                                      type="button"
+                                      disabled={mau02Saving}
+                                      onClick={() => handleSaveMau02Row(r.user_id)}
+                                      className="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold cursor-pointer"
+                                    >
+                                      Lưu
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingRow(null)}
+                                      className="px-1.5 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[10px] cursor-pointer"
+                                    >
+                                      Huỷ
+                                    </button>
+                                  </div>
+                                ) : canEditMau02 ? (
                                   <button
                                     type="button"
-                                    disabled={mau02Saving}
-                                    onClick={() => handleSaveMau02Row(r.user_id)}
-                                    className="px-1.5 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold cursor-pointer"
+                                    onClick={() => handleStartEditMau02(r)}
+                                    className="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[10.5px] font-medium border border-indigo-200 cursor-pointer"
                                   >
-                                    Lưu
+                                    Đề xuất
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingRow(null)}
-                                    className="px-1.5 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[10px] cursor-pointer"
-                                  >
-                                    Huỷ
-                                  </button>
-                                </div>
-                              ) : canEditMau02 ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartEditMau02(r)}
-                                  className="px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[10.5px] font-medium border border-indigo-200 cursor-pointer"
-                                >
-                                  Đề xuất
-                                </button>
-                              ) : (
-                                <span className="text-[10px] text-slate-400 italic">Chỉ xem</span>
-                              )}
+                                ) : (
+                                  <span className="text-[10px] text-slate-400 italic">Chỉ xem</span>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -1876,11 +1885,11 @@ export default function ReportTab({
 
             {/* Thống kê tỷ lệ xếp loại theo khối đối tượng trên bản in Mẫu 02 (Cỡ chữ 14pt) */}
             {mau02List.length > 0 && (
-              <div className="pt-3 space-y-2 text-[14pt] text-black">
+              <div className="stats-summary-container pt-3 space-y-2 text-[14pt] text-black">
                 <p className="font-bold uppercase tracking-tight text-[14pt]">
                   * BẢNG TỔNG HỢP TỶ LỆ XẾP LOẠI THEO TỪNG KHỐI ĐỐI TƯỢNG (QUY ĐỊNH HTXSNV ≤ 20%):
                 </p>
-                <table className="w-full text-left text-[14pt] border-collapse border border-black font-times text-black">
+                <table className="stats-summary-table w-full text-left text-[14pt] border-collapse border border-black font-times text-black">
                   <thead>
                     <tr className="bg-slate-100 font-bold text-center text-[14pt]">
                       <th className="border border-black px-2 py-1.5">Khối đối tượng</th>
@@ -1953,7 +1962,7 @@ export default function ReportTab({
             )}
 
             {/* Bottom 2-Column Signatures */}
-            <div className="grid grid-cols-2 text-center pt-8 text-[14pt] text-black">
+            <div className="signature-block grid grid-cols-2 text-center pt-8 text-[14pt] text-black">
               {/* Col 1: Người lập biểu (để trống tên và chức danh) */}
               <div className="space-y-20">
                 <div>
