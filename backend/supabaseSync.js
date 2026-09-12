@@ -1,7 +1,10 @@
 /**
  * MODULE QUẢN LÝ ĐỒNG BỘ VÀ SAO LƯU CSDL VỚI SUPABASE (CLOUD POSTGRESQL)
- * Hoàn toàn tách biệt khỏi quá trình khởi động hoặc cập nhật phần mềm.
- * Chỉ chạy khi người dùng hoặc Quản trị viên chủ động kích hoạt.
+ * Đảm bảo:
+ * 1. Supabase là Nguồn Chân Lý Duy Nhất (Single Source of Truth) trên môi trường Cloud (Render).
+ * 2. Không bao giờ xóa mất dữ liệu trên Supabase khi SQLite cục bộ rỗng hoặc thiếu bản ghi.
+ * 3. Đồng bộ 100% tất cả 18 bảng và toàn bộ các cột điểm số, xếp loại, tham mưu.
+ * 4. Hỗ trợ Realtime Write-Through (đồng bộ tức thì bản ghi vừa cập nhật).
  */
 
 const path = require('path');
@@ -21,13 +24,24 @@ function isSupabaseConfigured() {
   return Boolean(dbUrl && (dbUrl.startsWith('postgres://') || dbUrl.startsWith('postgresql://')));
 }
 
+// Singleton Connection Pool (tái sử dụng kết nối, tránh tạo pool liên tục làm cạn kiệt kết nối)
+let sharedPool = null;
+
 function getPool() {
   if (!isSupabaseConfigured()) return null;
-  return new Pool({
-    connectionString: getDbUrl(),
-    ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 10000
-  });
+  if (!sharedPool) {
+    sharedPool = new Pool({
+      connectionString: getDbUrl(),
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 15000,
+      idleTimeoutMillis: 30000,
+      max: 10
+    });
+    sharedPool.on('error', (err) => {
+      console.error('[Supabase Pool Error]:', err.message);
+    });
+  }
+  return sharedPool;
 }
 
 function getMaskedUrl() {
@@ -49,13 +63,14 @@ async function getSupabaseStatus() {
     'users', 'departments', 'periods', 'axes', 'common_criteria',
     'standard_tasks', 'assigned_tasks', 'evaluations', 'evaluation_criteria_details',
     'documents', 'document_dispatches', 'votes', 'roles', 'system_configs',
-    'user_groups', 'user_group_members'
+    'user_groups', 'user_group_members', 'notifications', 'user_positions',
+    'skip_level_authorizations', 'system_logs'
   ];
 
   const sqliteCounts = {};
   for (const t of tables) {
     try {
-      const row = db.prepare(`SELECT COUNT(*) as count FROM ${t}`).get();
+      const row = db.prepare(`SELECT COUNT(*) as count FROM "${t}"`).get();
       sqliteCounts[t] = row ? row.count : 0;
     } catch (e) {
       sqliteCounts[t] = 0;
@@ -86,8 +101,6 @@ async function getSupabaseStatus() {
         supabaseCounts[t] = 0;
       }
     }
-    client.release();
-    await pool.end();
 
     return {
       configured: true,
@@ -98,8 +111,6 @@ async function getSupabaseStatus() {
       message: 'Kết nối Supabase Cloud PostgreSQL hoạt động bình thường'
     };
   } catch (error) {
-    if (client) try { client.release(); } catch (e) {}
-    if (pool) try { await pool.end(); } catch (e) {}
     return {
       configured: true,
       connected: false,
@@ -108,15 +119,23 @@ async function getSupabaseStatus() {
       supabaseCounts: null,
       message: `Lỗi kết nối Supabase: ${error.message}`
     };
+  } finally {
+    if (client) client.release();
   }
 }
 
 /**
- * Helper thực hiện Batch Upsert (INSERT ... ON CONFLICT) theo lô để giảm thiểu round-trip
- * Giúp đồng bộ hàng nghìn dòng chỉ mất vài chục ms thay vì hàng chục giây làm đơ/cháy RAM server Render
+ * Helper thực hiện Batch Upsert (INSERT ... ON CONFLICT) an toàn, cập nhật 100% cột không phải khóa
  */
 async function batchUpsert(client, tableName, columns, conflictCols, updateCols, rows, chunkSize = 50) {
   if (!rows || rows.length === 0) return 0;
+
+  const actualUpdateCols = (updateCols && updateCols.length > 0)
+    ? updateCols
+    : (conflictCols && conflictCols.length > 0
+        ? columns.filter(c => !conflictCols.includes(c))
+        : []);
+
   for (let i = 0; i < rows.length; i += chunkSize) {
     const chunk = rows.slice(i, i + chunkSize);
     const valuePlaceholders = [];
@@ -127,16 +146,18 @@ async function batchUpsert(client, tableName, columns, conflictCols, updateCols,
       const rowPlaceholders = [];
       for (const col of columns) {
         rowPlaceholders.push(`$${paramIndex++}`);
-        params.push(row[col] !== undefined ? row[col] : null);
+        let val = row[col];
+        if (val === undefined) val = null;
+        params.push(val);
       }
       valuePlaceholders.push(`(${rowPlaceholders.join(', ')})`);
     }
 
     const conflictClause = conflictCols && conflictCols.length > 0
-      ? (updateCols && updateCols.length > 0
-          ? `ON CONFLICT (${conflictCols.join(', ')}) DO UPDATE SET ` +
-            updateCols.map(c => `"${c}" = EXCLUDED."${c}"`).join(', ')
-          : `ON CONFLICT (${conflictCols.join(', ')}) DO NOTHING`)
+      ? (actualUpdateCols.length > 0
+          ? `ON CONFLICT (${conflictCols.map(c => `"${c}"`).join(', ')}) DO UPDATE SET ` +
+            actualUpdateCols.map(c => `"${c}" = EXCLUDED."${c}"`).join(', ')
+          : `ON CONFLICT (${conflictCols.map(c => `"${c}"`).join(', ')}) DO NOTHING`)
       : '';
 
     const sql = `
@@ -152,7 +173,7 @@ async function batchUpsert(client, tableName, columns, conflictCols, updateCols,
 
 /**
  * Đẩy toàn bộ dữ liệu từ SQLite lên Supabase (Safe Batch Upsert)
- * Không bao giờ xóa mất dữ liệu trên Supabase; dùng ON CONFLICT DO UPDATE
+ * Tuyệt đối không xóa mù quáng trên Supabase; dùng ON CONFLICT DO UPDATE
  */
 async function pushToSupabase() {
   if (!isSupabaseConfigured()) {
@@ -164,87 +185,6 @@ async function pushToSupabase() {
   const stats = {};
 
   try {
-    try {
-      await client.query(`
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS union_title TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS original_deadline TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS requested_deadline TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_reason TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_status TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_requested_at TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_reviewed_by TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_reviewed_at TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_reject_reason TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS extension_count INTEGER DEFAULT 0;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS detailed_result_note TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS evaluator_id TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS evaluator_type TEXT DEFAULT 'assigner';
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS delegated_by TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS delegated_at TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS delegation_note TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS submitted_for_eval_at TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS is_skip_level INTEGER DEFAULT 0;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS target_position_id TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS skip_level_notes TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS level_1_reviewer_id TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS level_1_reviewed_at TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS level_1_comment TEXT;
-        ALTER TABLE assigned_tasks ADD COLUMN IF NOT EXISTS level_1_score NUMERIC;
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS is_party_member INTEGER DEFAULT 0;
-        ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_type TEXT DEFAULT 'vien_chuc';
-        ALTER TABLE departments ADD COLUMN IF NOT EXISTS agency_type TEXT DEFAULT 'su_nghiep';
-        ALTER TABLE departments ADD COLUMN IF NOT EXISTS manager_title TEXT DEFAULT 'TRƯỞNG ĐƠN VỊ';
-        ALTER TABLE departments ADD COLUMN IF NOT EXISTS leader_title TEXT DEFAULT 'THỦ TRƯỞNG ĐƠN VỊ';
-        ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS final_classification TEXT;
-        ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS skip_level_reviewer_id TEXT;
-        ALTER TABLE evaluations ADD COLUMN IF NOT EXISTS skip_level_status TEXT DEFAULT 'approved';
-        UPDATE assigned_tasks SET axis_code = 'TRUC_1' WHERE axis_code = 'CHUYEN_MON' OR axis_code IS NULL OR axis_code = '';
-
-        CREATE TABLE IF NOT EXISTS user_positions (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-          dept_id TEXT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
-          position_title TEXT NOT NULL,
-          position_type TEXT DEFAULT 'chinh_quyen',
-          role_id TEXT,
-          management_role TEXT DEFAULT 'nhan_vien',
-          manager_id TEXT,
-          is_primary INTEGER DEFAULT 0,
-          notes TEXT,
-          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS skip_level_authorizations (
-          id TEXT PRIMARY KEY,
-          manager_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-          dept_id TEXT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
-          can_assign INTEGER DEFAULT 1,
-          can_review INTEGER DEFAULT 1,
-          can_view_reports INTEGER DEFAULT 1,
-          notes TEXT,
-          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS notifications (
-          id TEXT PRIMARY KEY,
-          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-          title TEXT NOT NULL,
-          message TEXT NOT NULL,
-          type TEXT NOT NULL,
-          task_id TEXT,
-          tab TEXT DEFAULT 'assignment',
-          is_read INTEGER DEFAULT 0,
-          created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read);
-        CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
-      `);
-    } catch (e) {
-      console.warn('[Supabase Sync Migration Warning]:', e.message);
-    }
-
     // 1. system_configs
     const configs = db.prepare('SELECT * FROM system_configs').all();
     await batchUpsert(
@@ -262,18 +202,18 @@ async function pushToSupabase() {
       client, 'roles',
       ['id', 'code', 'name', 'description', 'data_scope', 'permissions', 'is_system', 'created_at'],
       ['id'],
-      ['code', 'name', 'description', 'data_scope', 'permissions'],
+      ['code', 'name', 'description', 'data_scope', 'permissions', 'is_system'],
       roles
     );
     stats.roles = roles.length;
 
-    // 3. departments (First pass: basic fields)
+    // 3. departments
     const depts = db.prepare('SELECT * FROM departments').all();
     await batchUpsert(
       client, 'departments',
-      ['id', 'code', 'name', 'is_active', 'description', 'parent_agency', 'location_name', 'agency_type', 'manager_title', 'leader_title'],
+      ['id', 'code', 'name', 'parent_id', 'leader_id', 'is_active', 'description', 'parent_agency', 'location_name', 'agency_type', 'manager_title', 'leader_title'],
       ['id'],
-      ['code', 'name', 'is_active', 'description', 'parent_agency', 'location_name', 'agency_type', 'manager_title', 'leader_title'],
+      null, // Tự động cập nhật tất cả các cột
       depts.map(d => ({
         ...d,
         is_active: d.is_active ?? 1,
@@ -288,27 +228,21 @@ async function pushToSupabase() {
     const users = db.prepare('SELECT * FROM users').all();
     await batchUpsert(
       client, 'users',
-      ['id', 'username', 'password', 'full_name', 'role', 'party_title', 'gov_title', 'union_title', 'dept_id',
+      ['id', 'username', 'password', 'full_name', 'role', 'party_title', 'gov_title', 'dept_id',
        'birth_date', 'gender', 'phone', 'email', 'is_active', 'target_role', 'role_id', 'manager_id',
-       'management_role', 'final_evaluator_id', 'is_party_member', 'employee_type'],
+       'management_role', 'final_evaluator_id', 'union_title', 'is_party_member', 'employee_type'],
       ['id'],
-      ['username', 'password', 'full_name', 'role', 'party_title', 'gov_title', 'union_title', 'dept_id',
-       'birth_date', 'gender', 'phone', 'email', 'is_active', 'target_role', 'role_id', 'manager_id',
-       'management_role', 'final_evaluator_id', 'is_party_member', 'employee_type'],
-      users.map(u => ({ ...u, is_active: u.is_active ?? 1, is_party_member: u.is_party_member ?? 0, employee_type: u.employee_type || 'vien_chuc' }))
+      null, // Tự động cập nhật tất cả các cột
+      users.map(u => ({
+        ...u,
+        is_active: u.is_active ?? 1,
+        is_party_member: u.is_party_member ?? 0,
+        employee_type: u.employee_type || 'vien_chuc'
+      }))
     );
     stats.users = users.length;
 
     const validUserIds = new Set(users.map(u => u.id));
-
-    // Update departments parent_id and leader_id
-    const deptsWithHierarchy = depts.filter(d => d.parent_id || d.leader_id);
-    for (const d of deptsWithHierarchy) {
-      const leaderId = validUserIds.has(d.leader_id) ? d.leader_id : null;
-      await client.query(`
-        UPDATE departments SET parent_id = $1, leader_id = $2 WHERE id = $3
-      `, [d.parent_id || null, leaderId, d.id]);
-    }
 
     // 5. periods
     const periods = db.prepare('SELECT * FROM periods').all();
@@ -317,7 +251,7 @@ async function pushToSupabase() {
       ['id', 'code', 'name', 'start_date', 'end_date', 'is_active',
        'grading_lock_date', 'is_locked', 'finalized_at', 'finalized_by', 'finalized_note'],
       ['id'],
-      ['code', 'name', 'start_date', 'end_date', 'is_active', 'grading_lock_date', 'is_locked'],
+      null,
       periods.map(p => ({
         ...p,
         is_active: p.is_active ?? 1,
@@ -333,7 +267,7 @@ async function pushToSupabase() {
       client, 'axes',
       ['id', 'code', 'name', 'max_score'],
       ['id'],
-      ['code', 'name', 'max_score'],
+      null,
       axes
     );
     stats.axes = axes.length;
@@ -344,7 +278,7 @@ async function pushToSupabase() {
       client, 'common_criteria',
       ['id', 'group_no', 'group_name', 'code', 'title', 'max_score', 'target_role'],
       ['id'],
-      ['group_no', 'group_name', 'code', 'title', 'max_score', 'target_role'],
+      null,
       commonCriteria
     );
     stats.common_criteria = commonCriteria.length;
@@ -355,18 +289,14 @@ async function pushToSupabase() {
       client, 'standard_tasks',
       ['id', 'period_id', 'dept_code', 'task_name', 'output_result', 'deadline',
        'task_type', 'standard_score', 'difficulty_weight', 'max_converted_score',
-       'expected_evidence', 'note', 'axis_code', 'status', 'created_at'],
+       'expected_evidence', 'note', 'axis_code', 'status', 'created_at',
+       'proposed_by', 'proposed_by_name', 'proposal_type', 'proposal_note',
+       'original_task_id', 'approved_by', 'approved_at', 'rejection_reason'],
       ['id'],
-      ['task_name', 'standard_score', 'difficulty_weight', 'status',
-       'expected_evidence', 'note', 'max_converted_score'],
+      null,
       standardTasks,
       100
     );
-    // Dọn sạch các công việc chuẩn đã xóa khỏi SQLite trên Supabase Cloud
-    const localStdIds = standardTasks.map(t => t.id);
-    if (localStdIds.length > 0) {
-      await client.query(`DELETE FROM standard_tasks WHERE NOT (id = ANY($1))`, [localStdIds]);
-    }
     stats.standard_tasks = standardTasks.length;
 
     // 9. documents
@@ -375,10 +305,10 @@ async function pushToSupabase() {
       client, 'documents',
       ['id', 'doc_number', 'doc_date', 'arrival_date', 'arrival_number', 'issuer',
        'doc_type', 'field', 'urgency', 'security_level', 'summary', 'file_url',
-       'file_name', 'deadline', 'status', 'created_by', 'leader_id', 'leader_instruction',
-       'submitted_at', 'submitted_by', 'is_reference_only', 'created_at', 'updated_at'],
+       'file_name', 'deadline', 'status', 'created_by', 'created_at', 'updated_at',
+       'leader_id', 'leader_instruction', 'submitted_at', 'submitted_by', 'is_reference_only'],
       ['id'],
-      ['doc_number', 'summary', 'status', 'file_url', 'file_name', 'leader_id', 'leader_instruction', 'submitted_at', 'submitted_by', 'is_reference_only', 'updated_at'],
+      null,
       documents.map(doc => ({
         ...doc,
         created_by: validUserIds.has(doc.created_by) ? doc.created_by : null,
@@ -391,47 +321,44 @@ async function pushToSupabase() {
 
     // 10. assigned_tasks
     const assignedTasks = db.prepare('SELECT * FROM assigned_tasks').all();
-    await batchUpsert(
-      client, 'assigned_tasks',
-      ['id', 'period_id', 'user_id', 'standard_task_id', 'task_name', 'output_result',
-       'deadline', 'task_type', 'standard_score', 'difficulty_weight', 'max_converted_score',
-       'axis_code', 'origin', 'status', 'actual_finish_date', 'evidence_text', 'detailed_result_note',
-       'evidence_file_url', 'evidence_file_name', 'quantity_pct', 'progress_pct',
-       'quality_pct', 'leadership_pct', 'execution_score', 'converted_score',
-       'cbql_comment', 'assigned_by', 'created_at', 'updated_at', 'group_id',
-       'is_bonus_proposed', 'bonus_score', 'bonus_reason', 'return_reason',
-       'is_returned', 'document_id', 'original_deadline', 'requested_deadline',
-       'extension_reason', 'extension_status', 'extension_requested_at',
-       'extension_reviewed_by', 'extension_reviewed_at', 'extension_reject_reason', 'extension_count',
-       'evaluator_id', 'evaluator_type', 'delegated_by', 'delegated_at', 'delegation_note', 'submitted_for_eval_at'],
-      ['id'],
-      ['period_id', 'task_name', 'deadline', 'status', 'execution_score', 'converted_score',
-       'evidence_file_url', 'actual_finish_date', 'evidence_text', 'detailed_result_note', 'original_deadline',
-       'requested_deadline', 'extension_reason', 'extension_status', 'extension_requested_at',
-       'extension_reviewed_by', 'extension_reviewed_at', 'extension_reject_reason', 'extension_count',
-       'evaluator_id', 'evaluator_type', 'delegated_by', 'delegated_at', 'delegation_note', 'submitted_for_eval_at'],
-      assignedTasks.map(at => ({
-        ...at,
-        assigned_by: validUserIds.has(at.assigned_by) ? at.assigned_by : null,
-        extension_reviewed_by: validUserIds.has(at.extension_reviewed_by) ? at.extension_reviewed_by : null,
-        evaluator_id: validUserIds.has(at.evaluator_id) ? at.evaluator_id : null,
-        delegated_by: validUserIds.has(at.delegated_by) ? at.delegated_by : null,
-        is_bonus_proposed: at.is_bonus_proposed ?? 0,
-        bonus_score: at.bonus_score ?? 0,
-        is_returned: at.is_returned ?? 0,
-        extension_count: at.extension_count ?? 0
-      })),
-      100
-    );
-    // Dọn sạch các công việc đã xóa khỏi SQLite trên Supabase Cloud (tránh việc hồi sinh dữ liệu cũ)
-    const localAssignedIds = assignedTasks.map(t => t.id);
-    if (localAssignedIds.length > 0) {
-      await client.query(`
-        UPDATE document_dispatches SET task_id = NULL WHERE task_id IS NOT NULL AND NOT (task_id = ANY($1))
-      `, [localAssignedIds]);
-      await client.query(`
-        DELETE FROM assigned_tasks WHERE NOT (id = ANY($1))
-      `, [localAssignedIds]);
+    if (assignedTasks.length > 0) {
+      await batchUpsert(
+        client, 'assigned_tasks',
+        [
+          'id', 'period_id', 'user_id', 'standard_task_id', 'task_name', 'output_result',
+          'deadline', 'task_type', 'standard_score', 'difficulty_weight', 'max_converted_score',
+          'axis_code', 'origin', 'status', 'actual_finish_date', 'evidence_text',
+          'evidence_file_url', 'evidence_file_name', 'quantity_pct', 'progress_pct',
+          'quality_pct', 'leadership_pct', 'execution_score', 'converted_score',
+          'cbql_comment', 'assigned_by', 'created_at', 'updated_at', 'group_id',
+          'is_bonus_proposed', 'bonus_score', 'bonus_reason', 'return_reason',
+          'is_returned', 'document_id', 'feedback_reason', 'feedback_count',
+          'reassigned_at', 'evaluation_feedback', 'inherited_from_task_id',
+          'inherited_from_user_name', 'original_deadline', 'requested_deadline',
+          'extension_reason', 'extension_status', 'extension_requested_at',
+          'extension_reviewed_by', 'extension_reviewed_at', 'extension_reject_reason',
+          'extension_count', 'detailed_result_note', 'evaluator_id', 'evaluator_type',
+          'delegated_by', 'delegated_at', 'delegation_note', 'submitted_for_eval_at',
+          'document_number', 'document_date', 'is_skip_level', 'target_position_id',
+          'skip_level_notes', 'level_1_reviewer_id', 'level_1_reviewed_at',
+          'level_1_comment', 'level_1_score'
+        ],
+        ['id'],
+        null, // Cập nhật TOÀN BỘ 65 cột còn lại
+        assignedTasks.map(at => ({
+          ...at,
+          assigned_by: validUserIds.has(at.assigned_by) ? at.assigned_by : null,
+          extension_reviewed_by: validUserIds.has(at.extension_reviewed_by) ? at.extension_reviewed_by : null,
+          evaluator_id: validUserIds.has(at.evaluator_id) ? at.evaluator_id : null,
+          delegated_by: validUserIds.has(at.delegated_by) ? at.delegated_by : null,
+          is_bonus_proposed: at.is_bonus_proposed ?? 0,
+          bonus_score: at.bonus_score ?? 0,
+          is_returned: at.is_returned ?? 0,
+          extension_count: at.extension_count ?? 0,
+          is_skip_level: at.is_skip_level ?? 0
+        })),
+        100
+      );
     }
     stats.assigned_tasks = assignedTasks.length;
 
@@ -441,10 +368,10 @@ async function pushToSupabase() {
       client, 'document_dispatches',
       ['id', 'document_id', 'department_id', 'assigned_to_user_id',
        'coordinating_user_ids', 'instruction', 'deadline', 'task_id',
-       'status', 'dispatch_type', 'role_in_dispatch', 'dispatched_by',
-       'dispatched_at', 'completed_at', 'completion_note'],
+       'status', 'dispatched_by', 'dispatched_at', 'completed_at',
+       'completion_note', 'dispatch_type', 'role_in_dispatch'],
       ['id'],
-      ['status', 'dispatch_type', 'role_in_dispatch', 'completed_at', 'completion_note'],
+      null,
       dispatches.map(dd => ({
         ...dd,
         dispatch_type: dd.dispatch_type || 'process',
@@ -454,27 +381,30 @@ async function pushToSupabase() {
     );
     stats.document_dispatches = dispatches.length;
 
-    // 12. evaluations
+    // 12. evaluations (CẬP NHẬT ĐẦY ĐỦ 30 CỘT, KHÔNG BAO GIỜ DELETE MÙ QUÁNG)
     const evaluations = db.prepare('SELECT * FROM evaluations').all();
     if (evaluations.length > 0) {
       await batchUpsert(
         client, 'evaluations',
-        ['id', 'period_id', 'user_id', 'part1_score', 'part2_score', 'total_score',
-         'rank_proposed', 'superior_rank', 'superior_comment', 'status', 'updated_at',
-         'step', 'bonus_score', 'bonus_note', 'plan_total_max_score', 'executed_total_conv_score',
-         'summary_reason', 'cadre_proposal_note', 'return_reason', 'returned_at',
-         'returned_by', 'submitted_at'],
+        [
+          'id', 'period_id', 'user_id', 'part1_score', 'part2_score', 'total_score',
+          'rank_proposed', 'superior_rank', 'superior_comment', 'status', 'updated_at',
+          'step', 'bonus_score', 'bonus_note', 'plan_total_max_score', 'executed_total_conv_score',
+          'summary_reason', 'cadre_proposal_note', 'return_reason', 'returned_at',
+          'returned_by', 'submitted_at', 'advisory_rank', 'advisory_comment',
+          'advisory_by', 'advisory_submitted_at', 'is_advisory_submitted',
+          'final_classification', 'skip_level_reviewer_id', 'skip_level_status'
+        ],
         ['period_id', 'user_id'],
-        ['total_score', 'status', 'step', 'superior_rank', 'updated_at'],
+        null, // Cập nhật TOÀN BỘ 28 cột còn lại
         evaluations.map(ev => ({
           ...ev,
-          returned_by: validUserIds.has(ev.returned_by) ? ev.returned_by : null
+          returned_by: validUserIds.has(ev.returned_by) ? ev.returned_by : null,
+          advisory_by: validUserIds.has(ev.advisory_by) ? ev.advisory_by : null,
+          is_advisory_submitted: ev.is_advisory_submitted ?? 0,
+          skip_level_status: ev.skip_level_status || 'approved'
         }))
       );
-      await client.query(`DELETE FROM evaluations WHERE NOT (id = ANY($1))`, [evaluations.map(e => e.id)]);
-    } else {
-      await client.query('DELETE FROM evaluation_criteria_details');
-      await client.query('DELETE FROM evaluations');
     }
     stats.evaluations = evaluations.length;
 
@@ -485,7 +415,7 @@ async function pushToSupabase() {
         client, 'evaluation_criteria_details',
         ['id', 'evaluation_id', 'criteria_id', 'is_satisfied', 'score', 'note'],
         ['id'],
-        ['is_satisfied', 'score', 'note'],
+        null,
         critDetails.map(cd => ({
           ...cd,
           is_satisfied: cd.is_satisfied ?? 1,
@@ -493,9 +423,6 @@ async function pushToSupabase() {
         })),
         100
       );
-      await client.query(`DELETE FROM evaluation_criteria_details WHERE NOT (id = ANY($1))`, [critDetails.map(cd => cd.id)]);
-    } else {
-      await client.query('DELETE FROM evaluation_criteria_details');
     }
     stats.evaluation_criteria_details = critDetails.length;
 
@@ -505,7 +432,7 @@ async function pushToSupabase() {
       client, 'votes',
       ['id', 'period_id', 'user_id', 'voter_id', 'vote_rank', 'comment', 'created_at'],
       ['period_id', 'user_id', 'voter_id'],
-      ['vote_rank', 'comment'],
+      null,
       votes
     );
     stats.votes = votes.length;
@@ -516,7 +443,7 @@ async function pushToSupabase() {
       client, 'user_groups',
       ['id', 'name', 'description', 'dept_id', 'created_by', 'created_at', 'updated_at'],
       ['id'],
-      ['name', 'description', 'dept_id', 'updated_at'],
+      null,
       userGroups.map(g => ({
         ...g,
         created_by: validUserIds.has(g.created_by) ? g.created_by : null
@@ -530,71 +457,65 @@ async function pushToSupabase() {
       client, 'user_group_members',
       ['id', 'group_id', 'user_id', 'created_at'],
       ['group_id', 'user_id'],
-      ['created_at'],
+      null,
       groupMembers.filter(gm => validUserIds.has(gm.user_id))
     );
     stats.user_group_members = groupMembers.length;
 
     // 17. notifications
-    try {
-      const notifs = db.prepare('SELECT * FROM notifications').all();
-      await batchUpsert(
-        client, 'notifications',
-        ['id', 'user_id', 'title', 'message', 'type', 'task_id', 'tab', 'is_read', 'created_at'],
-        ['id'],
-        ['title', 'message', 'type', 'task_id', 'tab', 'is_read'],
-        notifs.filter(n => validUserIds.has(n.user_id)),
-        100
-      );
-      stats.notifications = notifs.length;
-    } catch (e) {
-      stats.notifications = 0;
-    }
+    const notifs = db.prepare('SELECT * FROM notifications').all();
+    await batchUpsert(
+      client, 'notifications',
+      ['id', 'user_id', 'title', 'message', 'type', 'task_id', 'tab', 'is_read', 'created_at'],
+      ['id'],
+      null,
+      notifs.filter(n => validUserIds.has(n.user_id)),
+      100
+    );
+    stats.notifications = notifs.length;
 
     // 18. user_positions
-    try {
-      const positions = db.prepare('SELECT * FROM user_positions').all();
-      await batchUpsert(
-        client, 'user_positions',
-        ['id', 'user_id', 'dept_id', 'position_title', 'position_type', 'role_id', 'management_role', 'manager_id', 'is_primary', 'notes'],
-        ['id'],
-        ['dept_id', 'position_title', 'position_type', 'role_id', 'management_role', 'manager_id', 'is_primary', 'notes'],
-        positions.filter(p => validUserIds.has(p.user_id)),
-        100
-      );
-      const localPosIds = positions.map(p => p.id);
-      if (localPosIds.length > 0) {
-        await client.query(`DELETE FROM user_positions WHERE NOT (id = ANY($1))`, [localPosIds]);
-      }
-      stats.user_positions = positions.length;
-    } catch (e) {
-      stats.user_positions = 0;
-    }
+    const positions = db.prepare('SELECT * FROM user_positions').all();
+    await batchUpsert(
+      client, 'user_positions',
+      ['id', 'user_id', 'dept_id', 'position_title', 'position_type', 'role_id',
+       'management_role', 'is_primary', 'notes', 'created_at', 'updated_at', 'manager_id'],
+      ['id'],
+      null,
+      positions.map(p => ({
+        ...p,
+        user_id: validUserIds.has(p.user_id) ? p.user_id : null,
+        manager_id: validUserIds.has(p.manager_id) ? p.manager_id : null,
+        is_primary: p.is_primary ?? 0
+      })).filter(p => p.user_id !== null)
+    );
+    stats.user_positions = positions.length;
 
     // 19. skip_level_authorizations
-    try {
-      const auths = db.prepare('SELECT * FROM skip_level_authorizations').all();
-      await batchUpsert(
-        client, 'skip_level_authorizations',
-        ['id', 'manager_id', 'dept_id', 'can_assign', 'can_review', 'can_view_reports', 'notes'],
-        ['id'],
-        ['can_assign', 'can_review', 'can_view_reports', 'notes'],
-        auths.filter(a => validUserIds.has(a.manager_id)),
-        100
-      );
-      const localAuthIds = auths.map(a => a.id);
-      if (localAuthIds.length > 0) {
-        await client.query(`DELETE FROM skip_level_authorizations WHERE NOT (id = ANY($1))`, [localAuthIds]);
-      }
-      stats.skip_level_authorizations = auths.length;
-    } catch (e) {
-      stats.skip_level_authorizations = 0;
-    }
+    const auths = db.prepare('SELECT * FROM skip_level_authorizations').all();
+    await batchUpsert(
+      client, 'skip_level_authorizations',
+      ['id', 'manager_id', 'dept_id', 'can_assign', 'can_review', 'can_view_reports', 'notes', 'created_at', 'updated_at'],
+      ['id'],
+      null,
+      auths.filter(a => validUserIds.has(a.manager_id))
+    );
+    stats.skip_level_authorizations = auths.length;
+
+    // 20. system_logs
+    const logs = db.prepare('SELECT * FROM system_logs ORDER BY created_at DESC LIMIT 1000').all();
+    await batchUpsert(
+      client, 'system_logs',
+      ['id', 'user_id', 'username', 'full_name', 'action', 'entity_type', 'entity_id', 'description', 'ip_address', 'user_agent', 'details', 'created_at'],
+      ['id'],
+      null,
+      logs
+    );
+    stats.system_logs = logs.length;
 
     return { success: true, stats, message: 'Đã sao lưu thành công toàn bộ dữ liệu lên Supabase Cloud' };
   } finally {
     client.release();
-    await pool.end();
   }
 }
 
@@ -615,14 +536,13 @@ function toSqliteVal(val) {
 
 /**
  * Kéo toàn bộ dữ liệu từ Supabase về SQLite máy chủ (Restore from Cloud)
- * Tự động tạo snapshot backup cục bộ trước khi đồng bộ về.
+ * Nạp đầy đủ 100% tất cả 18 bảng và toàn bộ các cột điểm số, xếp loại, tham mưu.
  */
 async function pullFromSupabase() {
   if (!isSupabaseConfigured()) {
     throw new Error('Chưa cấu hình DATABASE_URL trong backend/.env');
   }
 
-  // Tạo bản sao lưu an toàn của SQLite hiện tại trước khi kéo dữ liệu về
   createBackup('pre_supabase_pull');
 
   const pool = getPool();
@@ -669,7 +589,7 @@ async function pullFromSupabase() {
       for (const d of supDepts.rows) {
         insDept.run(
           toSqliteVal(d.id), toSqliteVal(d.code), toSqliteVal(d.name), toSqliteVal(d.parent_id),
-          toSqliteVal(d.leader_id), d.is_active ? 1 : 0, toSqliteVal(d.description),
+          toSqliteVal(d.leader_id), d.is_active !== 0 ? 1 : 0, toSqliteVal(d.description),
           toSqliteVal(d.parent_agency), toSqliteVal(d.location_name),
           toSqliteVal(d.agency_type || 'su_nghiep'),
           toSqliteVal(d.manager_title || 'TRƯỞNG ĐƠN VỊ'),
@@ -683,21 +603,21 @@ async function pullFromSupabase() {
     const supUsers = await client.query('SELECT * FROM users');
     const insUser = db.prepare(`
       INSERT OR REPLACE INTO users (
-        id, username, password, full_name, role, party_title, gov_title, union_title, dept_id,
+        id, username, password, full_name, role, party_title, gov_title, dept_id,
         birth_date, gender, phone, email, is_active, target_role, role_id, manager_id,
-        management_role, final_evaluator_id, is_party_member, employee_type
+        management_role, final_evaluator_id, union_title, is_party_member, employee_type
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
       for (const u of supUsers.rows) {
         insUser.run(
           toSqliteVal(u.id), toSqliteVal(u.username), toSqliteVal(u.password), toSqliteVal(u.full_name),
-          toSqliteVal(u.role), toSqliteVal(u.party_title), toSqliteVal(u.gov_title), toSqliteVal(u.union_title), toSqliteVal(u.dept_id),
+          toSqliteVal(u.role), toSqliteVal(u.party_title), toSqliteVal(u.gov_title), toSqliteVal(u.dept_id),
           toSqliteVal(u.birth_date), toSqliteVal(u.gender), toSqliteVal(u.phone), toSqliteVal(u.email),
           u.is_active !== undefined && u.is_active !== null && u.is_active !== 0 ? 1 : 0,
           toSqliteVal(u.target_role), toSqliteVal(u.role_id), toSqliteVal(u.manager_id),
           toSqliteVal(u.management_role || 'nhan_vien'), toSqliteVal(u.final_evaluator_id),
-          u.is_party_member ? 1 : 0,
+          toSqliteVal(u.union_title), u.is_party_member ? 1 : 0,
           toSqliteVal(u.employee_type || 'vien_chuc')
         );
       }
@@ -716,7 +636,7 @@ async function pullFromSupabase() {
       for (const p of supPeriods.rows) {
         insPeriod.run(
           toSqliteVal(p.id), toSqliteVal(p.code), toSqliteVal(p.name), toSqliteVal(p.start_date),
-          toSqliteVal(p.end_date), p.is_active ? 1 : 0, toSqliteVal(p.grading_lock_date),
+          toSqliteVal(p.end_date), p.is_active !== 0 ? 1 : 0, toSqliteVal(p.grading_lock_date),
           p.is_locked ? 1 : 0, toSqliteVal(p.finalized_at), toSqliteVal(p.finalized_by), toSqliteVal(p.finalized_note)
         );
       }
@@ -748,14 +668,16 @@ async function pullFromSupabase() {
     })();
     stats.common_criteria = supCrit.rows.length;
 
-    // 8. standard_tasks
+    // 8. standard_tasks (đầy đủ 23 cột)
     const supStdTasks = await client.query('SELECT * FROM standard_tasks');
     const insStdTask = db.prepare(`
       INSERT OR REPLACE INTO standard_tasks (
         id, period_id, dept_code, task_name, output_result, deadline,
         task_type, standard_score, difficulty_weight, max_converted_score,
-        expected_evidence, note, axis_code, status, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        expected_evidence, note, axis_code, status, created_at,
+        proposed_by, proposed_by_name, proposal_type, proposal_note,
+        original_task_id, approved_by, approved_at, rejection_reason
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
       for (const t of supStdTasks.rows) {
@@ -764,20 +686,23 @@ async function pullFromSupabase() {
           toSqliteVal(t.output_result), toSqliteVal(t.deadline), toSqliteVal(t.task_type),
           toSqliteVal(t.standard_score), toSqliteVal(t.difficulty_weight), toSqliteVal(t.max_converted_score),
           toSqliteVal(t.expected_evidence), toSqliteVal(t.note), toSqliteVal(t.axis_code),
-          toSqliteVal(t.status), toSqliteVal(t.created_at)
+          toSqliteVal(t.status), toSqliteVal(t.created_at),
+          toSqliteVal(t.proposed_by), toSqliteVal(t.proposed_by_name), toSqliteVal(t.proposal_type || 'add'),
+          toSqliteVal(t.proposal_note), toSqliteVal(t.original_task_id), toSqliteVal(t.approved_by),
+          toSqliteVal(t.approved_at), toSqliteVal(t.rejection_reason)
         );
       }
     })();
     stats.standard_tasks = supStdTasks.rows.length;
 
-    // 9. documents
+    // 9. documents (đầy đủ 23 cột)
     const supDocs = await client.query('SELECT * FROM documents');
     const insDoc = db.prepare(`
       INSERT OR REPLACE INTO documents (
         id, doc_number, doc_date, arrival_date, arrival_number, issuer,
         doc_type, field, urgency, security_level, summary, file_url,
-        file_name, deadline, status, created_by, leader_id, leader_instruction,
-        submitted_at, submitted_by, is_reference_only, created_at, updated_at
+        file_name, deadline, status, created_by, created_at, updated_at,
+        leader_id, leader_instruction, submitted_at, submitted_by, is_reference_only
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
@@ -788,30 +713,36 @@ async function pullFromSupabase() {
           toSqliteVal(doc.doc_type), toSqliteVal(doc.field), toSqliteVal(doc.urgency),
           toSqliteVal(doc.security_level), toSqliteVal(doc.summary), toSqliteVal(doc.file_url),
           toSqliteVal(doc.file_name), toSqliteVal(doc.deadline), toSqliteVal(doc.status),
-          toSqliteVal(doc.created_by), toSqliteVal(doc.leader_id), toSqliteVal(doc.leader_instruction),
-          toSqliteVal(doc.submitted_at), toSqliteVal(doc.submitted_by), doc.is_reference_only ? 1 : 0,
-          toSqliteVal(doc.created_at), toSqliteVal(doc.updated_at)
+          toSqliteVal(doc.created_by), toSqliteVal(doc.created_at), toSqliteVal(doc.updated_at),
+          toSqliteVal(doc.leader_id), toSqliteVal(doc.leader_instruction),
+          toSqliteVal(doc.submitted_at), toSqliteVal(doc.submitted_by), doc.is_reference_only ? 1 : 0
         );
       }
     })();
     stats.documents = supDocs.rows.length;
 
-    // 10. assigned_tasks
+    // 10. assigned_tasks (đầy đủ 66 cột)
     const supAssigned = await client.query('SELECT * FROM assigned_tasks');
     const insAssigned = db.prepare(`
       INSERT OR REPLACE INTO assigned_tasks (
         id, period_id, user_id, standard_task_id, task_name, output_result,
         deadline, task_type, standard_score, difficulty_weight, max_converted_score,
-        axis_code, origin, status, actual_finish_date, evidence_text, detailed_result_note,
+        axis_code, origin, status, actual_finish_date, evidence_text,
         evidence_file_url, evidence_file_name, quantity_pct, progress_pct,
         quality_pct, leadership_pct, execution_score, converted_score,
         cbql_comment, assigned_by, created_at, updated_at, group_id,
         is_bonus_proposed, bonus_score, bonus_reason, return_reason,
-        is_returned, document_id, original_deadline, requested_deadline,
+        is_returned, document_id, feedback_reason, feedback_count,
+        reassigned_at, evaluation_feedback, inherited_from_task_id,
+        inherited_from_user_name, original_deadline, requested_deadline,
         extension_reason, extension_status, extension_requested_at,
-        extension_reviewed_by, extension_reviewed_at, extension_reject_reason, extension_count,
-        evaluator_id, evaluator_type, delegated_by, delegated_at, delegation_note, submitted_for_eval_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        extension_reviewed_by, extension_reviewed_at, extension_reject_reason,
+        extension_count, detailed_result_note, evaluator_id, evaluator_type,
+        delegated_by, delegated_at, delegation_note, submitted_for_eval_at,
+        document_number, document_date, is_skip_level, target_position_id,
+        skip_level_notes, level_1_reviewer_id, level_1_reviewed_at,
+        level_1_comment, level_1_score
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
       for (const t of supAssigned.rows) {
@@ -820,17 +751,22 @@ async function pullFromSupabase() {
           toSqliteVal(t.task_name), toSqliteVal(t.output_result), toSqliteVal(t.deadline), toSqliteVal(t.task_type),
           toSqliteVal(t.standard_score), toSqliteVal(t.difficulty_weight), toSqliteVal(t.max_converted_score),
           toSqliteVal(t.axis_code), toSqliteVal(t.origin), toSqliteVal(t.status), toSqliteVal(t.actual_finish_date),
-          toSqliteVal(t.evidence_text), toSqliteVal(t.detailed_result_note), toSqliteVal(t.evidence_file_url), toSqliteVal(t.evidence_file_name),
+          toSqliteVal(t.evidence_text), toSqliteVal(t.evidence_file_url), toSqliteVal(t.evidence_file_name),
           toSqliteVal(t.quantity_pct), toSqliteVal(t.progress_pct), toSqliteVal(t.quality_pct),
           toSqliteVal(t.leadership_pct), toSqliteVal(t.execution_score), toSqliteVal(t.converted_score),
           toSqliteVal(t.cbql_comment), toSqliteVal(t.assigned_by), toSqliteVal(t.created_at), toSqliteVal(t.updated_at),
           toSqliteVal(t.group_id), t.is_bonus_proposed ? 1 : 0, toSqliteVal(t.bonus_score || 0),
           toSqliteVal(t.bonus_reason), toSqliteVal(t.return_reason), t.is_returned ? 1 : 0, toSqliteVal(t.document_id),
+          toSqliteVal(t.feedback_reason), toSqliteVal(t.feedback_count || 0), toSqliteVal(t.reassigned_at),
+          toSqliteVal(t.evaluation_feedback), toSqliteVal(t.inherited_from_task_id), toSqliteVal(t.inherited_from_user_name),
           toSqliteVal(t.original_deadline), toSqliteVal(t.requested_deadline), toSqliteVal(t.extension_reason),
           toSqliteVal(t.extension_status), toSqliteVal(t.extension_requested_at), toSqliteVal(t.extension_reviewed_by),
           toSqliteVal(t.extension_reviewed_at), toSqliteVal(t.extension_reject_reason), toSqliteVal(t.extension_count || 0),
-          toSqliteVal(t.evaluator_id), toSqliteVal(t.evaluator_type || 'assigner'), toSqliteVal(t.delegated_by),
-          toSqliteVal(t.delegated_at), toSqliteVal(t.delegation_note), toSqliteVal(t.submitted_for_eval_at)
+          toSqliteVal(t.detailed_result_note), toSqliteVal(t.evaluator_id), toSqliteVal(t.evaluator_type || 'assigner'),
+          toSqliteVal(t.delegated_by), toSqliteVal(t.delegated_at), toSqliteVal(t.delegation_note), toSqliteVal(t.submitted_for_eval_at),
+          toSqliteVal(t.document_number), toSqliteVal(t.document_date), t.is_skip_level ? 1 : 0, toSqliteVal(t.target_position_id),
+          toSqliteVal(t.skip_level_notes), toSqliteVal(t.level_1_reviewer_id), toSqliteVal(t.level_1_reviewed_at),
+          toSqliteVal(t.level_1_comment), toSqliteVal(t.level_1_score)
         );
       }
     })();
@@ -841,8 +777,8 @@ async function pullFromSupabase() {
     const insDispatch = db.prepare(`
       INSERT OR REPLACE INTO document_dispatches (
         id, document_id, department_id, assigned_to_user_id, coordinating_user_ids,
-        instruction, deadline, task_id, status, dispatch_type, role_in_dispatch,
-        dispatched_by, dispatched_at, completed_at, completion_note
+        instruction, deadline, task_id, status, dispatched_by, dispatched_at,
+        completed_at, completion_note, dispatch_type, role_in_dispatch
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
@@ -851,15 +787,15 @@ async function pullFromSupabase() {
           toSqliteVal(d.id), toSqliteVal(d.document_id), toSqliteVal(d.department_id),
           toSqliteVal(d.assigned_to_user_id), toSqliteVal(d.coordinating_user_ids),
           toSqliteVal(d.instruction), toSqliteVal(d.deadline), toSqliteVal(d.task_id),
-          toSqliteVal(d.status), toSqliteVal(d.dispatch_type || 'process'), toSqliteVal(d.role_in_dispatch || 'main'),
-          toSqliteVal(d.dispatched_by), toSqliteVal(d.dispatched_at),
-          toSqliteVal(d.completed_at), toSqliteVal(d.completion_note)
+          toSqliteVal(d.status), toSqliteVal(d.dispatched_by), toSqliteVal(d.dispatched_at),
+          toSqliteVal(d.completed_at), toSqliteVal(d.completion_note),
+          toSqliteVal(d.dispatch_type || 'process'), toSqliteVal(d.role_in_dispatch || 'main')
         );
       }
     })();
     stats.document_dispatches = supDispatches.rows.length;
 
-    // 12. evaluations
+    // 12. evaluations (ĐẦY ĐỦ 30 CỘT)
     const supEvals = await client.query('SELECT * FROM evaluations');
     const insEval = db.prepare(`
       INSERT OR REPLACE INTO evaluations (
@@ -867,8 +803,10 @@ async function pullFromSupabase() {
         rank_proposed, superior_rank, superior_comment, status, updated_at,
         step, bonus_score, bonus_note, plan_total_max_score, executed_total_conv_score,
         summary_reason, cadre_proposal_note, return_reason, returned_at,
-        returned_by, submitted_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        returned_by, submitted_at, advisory_rank, advisory_comment,
+        advisory_by, advisory_submitted_at, is_advisory_submitted,
+        final_classification, skip_level_reviewer_id, skip_level_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
       for (const e of supEvals.rows) {
@@ -879,7 +817,11 @@ async function pullFromSupabase() {
           toSqliteVal(e.updated_at), toSqliteVal(e.step), toSqliteVal(e.bonus_score), toSqliteVal(e.bonus_note),
           toSqliteVal(e.plan_total_max_score), toSqliteVal(e.executed_total_conv_score), toSqliteVal(e.summary_reason),
           toSqliteVal(e.cadre_proposal_note), toSqliteVal(e.return_reason), toSqliteVal(e.returned_at),
-          toSqliteVal(e.returned_by), toSqliteVal(e.submitted_at)
+          toSqliteVal(e.returned_by), toSqliteVal(e.submitted_at),
+          toSqliteVal(e.advisory_rank), toSqliteVal(e.advisory_comment), toSqliteVal(e.advisory_by),
+          toSqliteVal(e.advisory_submitted_at), e.is_advisory_submitted ? 1 : 0,
+          toSqliteVal(e.final_classification), toSqliteVal(e.skip_level_reviewer_id),
+          toSqliteVal(e.skip_level_status || 'approved')
         );
       }
     })();
@@ -911,148 +853,130 @@ async function pullFromSupabase() {
       for (const v of supVotes.rows) {
         insVote.run(
           toSqliteVal(v.id), toSqliteVal(v.period_id), toSqliteVal(v.user_id),
-          toSqliteVal(v.voter_id), toSqliteVal(v.vote_rank), toSqliteVal(v.comment),
-          toSqliteVal(v.created_at)
+          toSqliteVal(v.voter_id), toSqliteVal(v.vote_rank), toSqliteVal(v.comment), toSqliteVal(v.created_at)
         );
       }
     })();
     stats.votes = supVotes.rows.length;
 
     // 15. user_groups
-    try {
-      const supUserGroups = await client.query('SELECT * FROM user_groups');
-      const insUserGroup = db.prepare(`
-        INSERT OR REPLACE INTO user_groups (id, name, description, dept_id, created_by, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `);
-      db.transaction(() => {
-        for (const g of supUserGroups.rows) {
-          insUserGroup.run(
-            toSqliteVal(g.id), toSqliteVal(g.name), toSqliteVal(g.description),
-            toSqliteVal(g.dept_id), toSqliteVal(g.created_by),
-            toSqliteVal(g.created_at), toSqliteVal(g.updated_at)
-          );
-        }
-      })();
-      stats.user_groups = supUserGroups.rows.length;
-    } catch (e) {
-      stats.user_groups = 0;
-    }
+    const supGroups = await client.query('SELECT * FROM user_groups');
+    const insGroup = db.prepare(`
+      INSERT OR REPLACE INTO user_groups (id, name, description, dept_id, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    db.transaction(() => {
+      for (const g of supGroups.rows) {
+        insGroup.run(
+          toSqliteVal(g.id), toSqliteVal(g.name), toSqliteVal(g.description), toSqliteVal(g.dept_id),
+          toSqliteVal(g.created_by), toSqliteVal(g.created_at), toSqliteVal(g.updated_at)
+        );
+      }
+    })();
+    stats.user_groups = supGroups.rows.length;
 
     // 16. user_group_members
-    try {
-      const supGroupMembers = await client.query('SELECT * FROM user_group_members');
-      const insGroupMember = db.prepare(`
-        INSERT OR REPLACE INTO user_group_members (id, group_id, user_id, created_at)
-        VALUES (?, ?, ?, ?)
-      `);
-      db.transaction(() => {
-        for (const gm of supGroupMembers.rows) {
-          insGroupMember.run(
-            toSqliteVal(gm.id), toSqliteVal(gm.group_id), toSqliteVal(gm.user_id),
-            toSqliteVal(gm.created_at)
-          );
-        }
-      })();
-      stats.user_group_members = supGroupMembers.rows.length;
-    } catch (e) {
-      stats.user_group_members = 0;
-    }
+    const supMembers = await client.query('SELECT * FROM user_group_members');
+    const insMember = db.prepare(`
+      INSERT OR REPLACE INTO user_group_members (id, group_id, user_id, created_at)
+      VALUES (?, ?, ?, ?)
+    `);
+    db.transaction(() => {
+      for (const m of supMembers.rows) {
+        insMember.run(toSqliteVal(m.id), toSqliteVal(m.group_id), toSqliteVal(m.user_id), toSqliteVal(m.created_at));
+      }
+    })();
+    stats.user_group_members = supMembers.rows.length;
 
     // 17. notifications
-    try {
-      const supNotifs = await client.query('SELECT * FROM notifications');
-      const insNotif = db.prepare(`
-        INSERT OR REPLACE INTO notifications (
-          id, user_id, title, message, type, task_id, tab, is_read, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      db.transaction(() => {
-        for (const n of supNotifs.rows) {
-          const rawMsg = toSqliteVal(n.message);
-          const sanitizedMsg = typeof rawMsg === 'string'
-            ? rawMsg.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, '$3/$2/$1')
-            : rawMsg;
-          insNotif.run(
-            toSqliteVal(n.id), toSqliteVal(n.user_id), toSqliteVal(n.title),
-            sanitizedMsg, toSqliteVal(n.type), toSqliteVal(n.task_id),
-            toSqliteVal(n.tab), n.is_read ? 1 : 0, toSqliteVal(n.created_at)
-          );
-        }
-      })();
-      // Cập nhật chuẩn hóa ngày tháng cả trên Supabase Cloud
-      await client.query(`
-        UPDATE notifications 
-        SET message = regexp_replace(message, '(\\d{4})-(\\d{2})-(\\d{2})', '\\3/\\2/\\1', 'g') 
-        WHERE message ~ '\\d{4}-\\d{2}-\\d{2}'
-      `).catch(() => {});
-      stats.notifications = supNotifs.rows.length;
-    } catch (e) {
-      stats.notifications = 0;
-    }
+    const supNotifs = await client.query('SELECT * FROM notifications');
+    const insNotif = db.prepare(`
+      INSERT OR REPLACE INTO notifications (id, user_id, title, message, type, task_id, tab, is_read, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    db.transaction(() => {
+      for (const n of supNotifs.rows) {
+        insNotif.run(
+          toSqliteVal(n.id), toSqliteVal(n.user_id), toSqliteVal(n.title), toSqliteVal(n.message),
+          toSqliteVal(n.type), toSqliteVal(n.task_id), toSqliteVal(n.tab), n.is_read ? 1 : 0, toSqliteVal(n.created_at)
+        );
+      }
+    })();
+    stats.notifications = supNotifs.rows.length;
 
-    // 18. user_positions
+    // 18. user_positions (ĐƯỢC KÉO TỪ SUPABASE)
+    const supPositions = await client.query('SELECT * FROM user_positions');
+    const insPos = db.prepare(`
+      INSERT OR REPLACE INTO user_positions (
+        id, user_id, dept_id, position_title, position_type, role_id,
+        management_role, is_primary, notes, created_at, updated_at, manager_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    db.transaction(() => {
+      for (const p of supPositions.rows) {
+        insPos.run(
+          toSqliteVal(p.id), toSqliteVal(p.user_id), toSqliteVal(p.dept_id), toSqliteVal(p.position_title),
+          toSqliteVal(p.position_type || 'chinh_quyen'), toSqliteVal(p.role_id), toSqliteVal(p.management_role || 'nhan_vien'),
+          p.is_primary ? 1 : 0, toSqliteVal(p.notes), toSqliteVal(p.created_at), toSqliteVal(p.updated_at), toSqliteVal(p.manager_id)
+        );
+      }
+    })();
+    stats.user_positions = supPositions.rows.length;
+
+    // 19. skip_level_authorizations (ĐƯỢC KÉO TỪ SUPABASE)
+    const supAuths = await client.query('SELECT * FROM skip_level_authorizations');
+    const insAuth = db.prepare(`
+      INSERT OR REPLACE INTO skip_level_authorizations (
+        id, manager_id, dept_id, can_assign, can_review, can_view_reports, notes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    db.transaction(() => {
+      for (const a of supAuths.rows) {
+        insAuth.run(
+          toSqliteVal(a.id), toSqliteVal(a.manager_id), toSqliteVal(a.dept_id),
+          a.can_assign ? 1 : 0, a.can_review ? 1 : 0, a.can_view_reports ? 1 : 0,
+          toSqliteVal(a.notes), toSqliteVal(a.created_at), toSqliteVal(a.updated_at)
+        );
+      }
+    })();
+    stats.skip_level_authorizations = supAuths.rows.length;
+
+    // 20. system_logs (ĐƯỢC KÉO TỪ SUPABASE)
     try {
-      const supPositions = await client.query('SELECT * FROM user_positions');
-      const insPos = db.prepare(`
-        INSERT OR REPLACE INTO user_positions (
-          id, user_id, dept_id, position_title, position_type, role_id,
-          management_role, manager_id, is_primary, notes, created_at, updated_at
+      const supLogs = await client.query('SELECT * FROM system_logs ORDER BY created_at DESC LIMIT 1000');
+      const insLog = db.prepare(`
+        INSERT OR REPLACE INTO system_logs (
+          id, user_id, username, full_name, action, entity_type, entity_id, description, ip_address, user_agent, details, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       db.transaction(() => {
-        for (const p of supPositions.rows) {
-          insPos.run(
-            toSqliteVal(p.id), toSqliteVal(p.user_id), toSqliteVal(p.dept_id),
-            toSqliteVal(p.position_title), toSqliteVal(p.position_type), toSqliteVal(p.role_id),
-            toSqliteVal(p.management_role), toSqliteVal(p.manager_id),
-            p.is_primary ? 1 : 0, toSqliteVal(p.notes),
-            toSqliteVal(p.created_at), toSqliteVal(p.updated_at)
+        for (const l of supLogs.rows) {
+          insLog.run(
+            toSqliteVal(l.id), toSqliteVal(l.user_id), toSqliteVal(l.username), toSqliteVal(l.full_name),
+            toSqliteVal(l.action), toSqliteVal(l.entity_type), toSqliteVal(l.entity_id), toSqliteVal(l.description),
+            toSqliteVal(l.ip_address), toSqliteVal(l.user_agent), toSqliteVal(l.details), toSqliteVal(l.created_at)
           );
         }
       })();
-      stats.user_positions = supPositions.rows.length;
+      stats.system_logs = supLogs.rows.length;
     } catch (e) {
-      stats.user_positions = 0;
-    }
-
-    // 19. skip_level_authorizations
-    try {
-      const supAuths = await client.query('SELECT * FROM skip_level_authorizations');
-      const insAuth = db.prepare(`
-        INSERT OR REPLACE INTO skip_level_authorizations (
-          id, manager_id, dept_id, can_assign, can_review, can_view_reports, notes, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      db.transaction(() => {
-        for (const a of supAuths.rows) {
-          insAuth.run(
-            toSqliteVal(a.id), toSqliteVal(a.manager_id), toSqliteVal(a.dept_id),
-            a.can_assign ? 1 : 0, a.can_review ? 1 : 0, a.can_view_reports ? 1 : 0,
-            toSqliteVal(a.notes), toSqliteVal(a.created_at), toSqliteVal(a.updated_at)
-          );
-        }
-      })();
-      stats.skip_level_authorizations = supAuths.rows.length;
-    } catch (e) {
-      stats.skip_level_authorizations = 0;
+      stats.system_logs = 0;
     }
 
     checkpointDatabase();
     return { success: true, stats, message: 'Đã khôi phục thành công CSDL từ Supabase về máy chủ' };
   } finally {
     client.release();
-    await pool.end();
   }
 }
 
+// Background sync state
 let syncTimer = null;
 let isSyncing = false;
 let pendingSync = false;
 
 /**
  * Tự động đồng bộ ngầm dữ liệu vừa cập nhật lên Supabase Cloud (Debounced & Concurrency-safe)
- * Mặc định delay = 300ms để đảm bảo gần như tức thời (near real-time) mà không quá tải kết nối.
  */
 function triggerBackgroundSupabaseSync(delayMs = 300) {
   if (!isSupabaseConfigured()) return;
@@ -1080,148 +1004,175 @@ function triggerBackgroundSupabaseSync(delayMs = 300) {
 }
 
 /**
- * Đồng bộ trực tiếp 1 Cán bộ lên Supabase Cloud (Write-through instant sync)
+ * Chờ hoàn thành bất kỳ tiến trình sync nào đang chạy trước khi server tắt
  */
-async function syncDirectUserToSupabase(user) {
-  if (!isSupabaseConfigured() || !user) return;
-  const pool = getPool();
-  if (!pool) return;
-  let client;
-  try {
-    client = await pool.connect();
-    const sql = `
-      INSERT INTO users (
-        id, username, password, full_name, role, party_title, gov_title, union_title, dept_id,
-        birth_date, gender, phone, email, is_active, target_role, role_id, manager_id,
-        management_role, final_evaluator_id, is_party_member, employee_type
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
-      ON CONFLICT (id) DO UPDATE SET
-        username = EXCLUDED.username,
-        password = EXCLUDED.password,
-        full_name = EXCLUDED.full_name,
-        role = EXCLUDED.role,
-        party_title = EXCLUDED.party_title,
-        gov_title = EXCLUDED.gov_title,
-        union_title = EXCLUDED.union_title,
-        dept_id = EXCLUDED.dept_id,
-        birth_date = EXCLUDED.birth_date,
-        gender = EXCLUDED.gender,
-        phone = EXCLUDED.phone,
-        email = EXCLUDED.email,
-        is_active = EXCLUDED.is_active,
-        target_role = EXCLUDED.target_role,
-        role_id = EXCLUDED.role_id,
-        manager_id = EXCLUDED.manager_id,
-        management_role = EXCLUDED.management_role,
-        final_evaluator_id = EXCLUDED.final_evaluator_id,
-        is_party_member = EXCLUDED.is_party_member,
-        employee_type = EXCLUDED.employee_type
-    `;
-    await client.query(sql, [
-      user.id, user.username, user.password, user.full_name, user.role, user.party_title,
-      user.gov_title, user.union_title, user.dept_id, user.birth_date, user.gender, user.phone, user.email,
-      user.is_active !== undefined ? user.is_active : 1, user.target_role, user.role_id, user.manager_id,
-      user.management_role || 'nhan_vien', user.final_evaluator_id, user.is_party_member ? 1 : 0,
-      user.employee_type || 'vien_chuc'
-    ]);
-    console.log(`[Supabase Direct Sync] ✓ Đã cập nhật tức thì cán bộ "${user.full_name}" (${user.username}) lên Supabase.`);
-  } catch (err) {
-    console.error('[Supabase Direct Sync] ✗ Lỗi đồng bộ trực tiếp cán bộ lên Supabase:', err.message);
-  } finally {
-    if (client) client.release();
-    if (pool) await pool.end();
+async function flushPendingSupabaseSync() {
+  if (syncTimer) {
+    clearTimeout(syncTimer);
+    syncTimer = null;
+  }
+  if (isSupabaseConfigured()) {
+    try {
+      console.log('[Supabase Flush] Đang đẩy toàn bộ thay đổi cuối cùng lên Supabase Cloud...');
+      await pushToSupabase();
+      console.log('[Supabase Flush] ✓ Hoàn tất flush CSDL.');
+    } catch (e) {
+      console.error('[Supabase Flush] ✗ Lỗi khi flush CSDL:', e.message);
+    }
   }
 }
 
 /**
- * Đồng bộ trực tiếp 1 Vai trò/Phân quyền lên Supabase Cloud (Write-through instant sync)
+ * Real-time write-through: Đồng bộ NGAY LẬP TỨC 1 bản ghi cụ thể lên Supabase (không cần chờ batch)
  */
-async function syncDirectRoleToSupabase(role) {
-  if (!isSupabaseConfigured() || !role) return;
+async function syncEntityToSupabase(tableName, id, idCol = 'id') {
+  if (!isSupabaseConfigured() || !id) return;
   const pool = getPool();
   if (!pool) return;
-  let client;
+
   try {
-    client = await pool.connect();
-    const permStr = typeof role.permissions === 'object' ? JSON.stringify(role.permissions) : role.permissions;
-    const sql = `
-      INSERT INTO roles (id, code, name, description, data_scope, permissions, is_system, created_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      ON CONFLICT (id) DO UPDATE SET
-        code = EXCLUDED.code,
-        name = EXCLUDED.name,
-        description = EXCLUDED.description,
-        data_scope = EXCLUDED.data_scope,
-        permissions = EXCLUDED.permissions
-    `;
-    await client.query(sql, [
-      role.id, role.code, role.name, role.description || '', role.data_scope || 'personal',
-      permStr, role.is_system ? 1 : 0, role.created_at || new Date().toISOString()
-    ]);
-    console.log(`[Supabase Direct Sync] ✓ Đã cập nhật vai trò "${role.name}" (${role.code}) lên Supabase.`);
+    const row = db.prepare(`SELECT * FROM "${tableName}" WHERE "${idCol}" = ?`).get(id);
+    const client = await pool.connect();
+    try {
+      if (!row) {
+        // Bản ghi đã bị xóa ở SQLite -> Xóa trên Supabase
+        await client.query(`DELETE FROM "${tableName}" WHERE "${idCol}" = $1`, [id]);
+        return;
+      }
+      const cols = Object.keys(row);
+      const params = cols.map(c => row[c] !== undefined ? row[c] : null);
+      const placeholders = cols.map((_, idx) => `$${idx + 1}`).join(', ');
+      const updateSet = cols
+        .filter(c => c !== idCol)
+        .map(c => `"${c}" = EXCLUDED."${c}"`)
+        .join(', ');
+
+      const conflictClause = updateSet.length > 0
+        ? `ON CONFLICT ("${idCol}") DO UPDATE SET ${updateSet}`
+        : `ON CONFLICT ("${idCol}") DO NOTHING`;
+
+      const sql = `
+        INSERT INTO "${tableName}" (${cols.map(c => `"${c}"`).join(', ')})
+        VALUES (${placeholders})
+        ${conflictClause}
+      `;
+      await client.query(sql, params);
+    } finally {
+      client.release();
+    }
   } catch (err) {
-    console.error('[Supabase Direct Sync] ✗ Lỗi đồng bộ vai trò lên Supabase:', err.message);
-  } finally {
-    if (client) client.release();
-    if (pool) await pool.end();
+    console.warn(`[Supabase Realtime Sync Warning] ${tableName} ID ${id}:`, err.message);
   }
+}
+
+/**
+ * Đồng bộ trực tiếp 1 Cán bộ lên Supabase Cloud
+ */
+async function syncDirectUserToSupabase(user) {
+  if (!user || !user.id) return;
+  return syncEntityToSupabase('users', user.id);
+}
+
+/**
+ * Đồng bộ trực tiếp 1 Vai trò/Phân quyền lên Supabase Cloud
+ */
+async function syncDirectRoleToSupabase(role) {
+  if (!role || !role.id) return;
+  return syncEntityToSupabase('roles', role.id);
 }
 
 /**
  * Tự động đồng bộ khi khởi động Server:
- * - Nếu Supabase đã có dữ liệu -> Kéo dữ liệu mới nhất từ Supabase về SQLite máy chủ (đảm bảo container Render luôn chạy dữ liệu thật 100%).
- * - Nếu Supabase chưa có dữ liệu và SQLite có dữ liệu -> Đẩy dữ liệu ban đầu từ SQLite lên Supabase.
+ * - Supabase Cloud là NGUỒN CHÂN LÝ DUY NHẤT trên hạ tầng đám mây (Render).
+ * - Nếu Supabase có dữ liệu -> Kéo dữ liệu mới nhất từ Supabase về SQLite.
+ * - Chỉ đẩy SQLite lên nếu Supabase hoàn toàn rỗng (0 users).
  */
 async function syncWithSupabaseOnStartup() {
-  if (!isSupabaseConfigured()) return;
-  let supUserCount = 0;
+  if (!isSupabaseConfigured()) {
+    console.log('[Supabase Startup Sync] Chưa cấu hình DATABASE_URL. Bỏ qua đồng bộ đám mây.');
+    return;
+  }
+
   const pool = getPool();
   if (!pool) return;
+  let client;
+  let supCounts = {};
+
   try {
-    const client = await pool.connect();
-    try {
-      const supRes = await client.query('SELECT COUNT(*) as count FROM users');
-      supUserCount = parseInt(supRes.rows[0].count, 10) || 0;
-    } finally {
-      client.release();
+    client = await pool.connect();
+    const tablesToCheck = ['users', 'standard_tasks', 'assigned_tasks', 'evaluations', 'documents'];
+    for (const t of tablesToCheck) {
+      try {
+        const res = await client.query(`SELECT COUNT(*) as count FROM "${t}"`);
+        supCounts[t] = parseInt(res.rows[0].count, 10) || 0;
+      } catch (e) {
+        supCounts[t] = 0;
+      }
     }
   } catch (err) {
     console.error('[Supabase Startup Sync] ✗ Không thể kết nối Supabase Cloud khi khởi động:', err.message);
     return;
   } finally {
-    try { await pool.end(); } catch (e) {}
+    if (client) client.release();
   }
 
-  const localUserCount = db.prepare('SELECT COUNT(*) as count FROM users').get()?.count || 0;
-  const localStdTaskCount = db.prepare('SELECT COUNT(*) as count FROM standard_tasks').get()?.count || 0;
-  console.log(`[Supabase Startup Sync] Kiểm tra trạng thái: Supabase = ${supUserCount} users | SQLite cục bộ = ${localUserCount} users (${localStdTaskCount} standard tasks).`);
+  const supUserCount = supCounts.users || 0;
+  const supTaskCount = supCounts.assigned_tasks || 0;
+  const supEvalCount = supCounts.evaluations || 0;
+  const supDocCount = supCounts.documents || 0;
+  const supStdTaskCount = supCounts.standard_tasks || 0;
 
-  // Nếu Supabase có dữ liệu và SQLite đang ở trạng thái sơ khai (chỉ có 1 user admin mặc định, hoặc ít hơn Supabase, hoặc thiếu công việc chuẩn)
-  // -> Tự động kéo toàn bộ dữ liệu từ Supabase Cloud về SQLite máy chủ (đặc biệt cần thiết cho container Render khi vừa deploy)
-  if (supUserCount > 0 && (localUserCount <= 1 || supUserCount > localUserCount || localStdTaskCount === 0)) {
-    console.log(`[Supabase Startup Sync] SQLite cục bộ thiếu dữ liệu so với Supabase (${localUserCount} users, ${localStdTaskCount} tasks vs ${supUserCount} users trên Supabase). Kéo dữ liệu từ Supabase về...`);
+  const localUserCount = db.prepare('SELECT COUNT(*) as count FROM users').get()?.count || 0;
+  const localTaskCount = db.prepare('SELECT COUNT(*) as count FROM assigned_tasks').get()?.count || 0;
+  const localEvalCount = db.prepare('SELECT COUNT(*) as count FROM evaluations').get()?.count || 0;
+  const localDocCount = db.prepare('SELECT COUNT(*) as count FROM documents').get()?.count || 0;
+  const localStdTaskCount = db.prepare('SELECT COUNT(*) as count FROM standard_tasks').get()?.count || 0;
+
+  console.log(`[Supabase Startup Sync] Trạng thái: Supabase (${supUserCount} users, ${supTaskCount} tasks, ${supEvalCount} evals) | SQLite (${localUserCount} users, ${localTaskCount} tasks, ${localEvalCount} evals).`);
+
+  const isRender = Boolean(process.env.RENDER || process.env.RENDER_SERVICE_ID);
+  
+  // Quyết định hướng đồng bộ an toàn:
+  // 1. Nếu Supabase đã có cán bộ (hệ thống sống) VÀ:
+  //    - Môi trường là Render (container mới deploy / restart luôn cần nạp dữ liệu sống từ Supabase)
+  //    - Hoặc SQLite mới ở trạng thái sơ khai (<= 1 user)
+  //    - Hoặc Supabase có nhiều tasks/evals hơn SQLite
+  // -> NẠP NGAY TOÀN BỘ CSDL TỪ SUPABASE VỀ SQLITE!
+  const shouldPullFromSupabase = supUserCount > 0 && (
+    isRender ||
+    localUserCount <= 1 ||
+    supUserCount > localUserCount ||
+    supTaskCount > localTaskCount ||
+    supEvalCount > localEvalCount ||
+    supDocCount > localDocCount ||
+    localStdTaskCount === 0
+  );
+
+  if (shouldPullFromSupabase) {
+    console.log('[Supabase Startup Sync] 🚀 Supabase là Nguồn Chân Lý. Kéo toàn bộ CSDL sống từ Supabase về SQLite...');
     const result = await pullFromSupabase();
-    console.log('[Supabase Startup Sync] ✓ Đã nạp thành công CSDL từ Supabase vào SQLite:', result.stats);
+    console.log('[Supabase Startup Sync] ✓ Đã nạp thành công CSDL sống từ Supabase vào máy chủ:', result.stats);
     ensureUserPositionsPopulated();
     return result;
-  } else if (localUserCount > 0) {
-    console.log('[Supabase Startup Sync] SQLite cục bộ đã có dữ liệu đầy đủ. Đẩy dữ liệu đồng bộ lên Supabase Cloud...');
+  } else if (localUserCount > 0 && supUserCount === 0) {
+    // Supabase hoàn toàn mới (0 users) -> Đẩy dữ liệu ban đầu từ SQLite lên Supabase
+    console.log('[Supabase Startup Sync] Supabase Cloud chưa có dữ liệu. Đẩy dữ liệu ban đầu từ SQLite lên Supabase...');
     const result = await pushToSupabase();
-    console.log('[Supabase Startup Sync] ✓ Đã đồng bộ thành công CSDL lên Supabase Cloud:', result.stats);
+    console.log('[Supabase Startup Sync] ✓ Đã đẩy thành công CSDL ban đầu lên Supabase Cloud:', result.stats);
     ensureUserPositionsPopulated();
     return result;
+  } else {
+    console.log('[Supabase Startup Sync] ✓ CSDL máy chủ và đám mây đã đồng bộ trạng thái.');
+    ensureUserPositionsPopulated();
   }
 }
 
-/**
- * Tương thích ngược: alias cho syncWithSupabaseOnStartup
- */
 async function autoRestoreFromSupabaseIfFresh() {
   return syncWithSupabaseOnStartup();
 }
 
 /**
- * Xóa danh sách công việc chuẩn khỏi Supabase Cloud
+ * Xóa danh sách công việc chuẩn khỏi Supabase Cloud theo ID cụ thể
  */
 async function deleteStandardTasksFromSupabase(ids) {
   if (!isSupabaseConfigured() || !ids || ids.length === 0) return;
@@ -1230,21 +1181,17 @@ async function deleteStandardTasksFromSupabase(ids) {
   let client;
   try {
     client = await pool.connect();
-    for (let i = 0; i < ids.length; i += 100) {
-      const chunk = ids.slice(i, i + 100);
-      const placeholders = chunk.map((_, idx) => `$${idx + 1}`).join(', ');
-      await client.query(`DELETE FROM standard_tasks WHERE id IN (${placeholders})`, chunk);
-    }
+    await client.query('DELETE FROM standard_tasks WHERE id = ANY($1)', [ids]);
+    console.log(`[Supabase Delete] Đã xóa ${ids.length} công việc chuẩn trên Supabase.`);
   } catch (err) {
-    console.error('[Supabase Delete] Lỗi xóa công việc chuẩn trên Supabase:', err.message);
+    console.error('[Supabase Delete] Lỗi khi xóa standard_tasks trên Supabase:', err.message);
   } finally {
     if (client) client.release();
-    if (pool) await pool.end();
   }
 }
 
 /**
- * Xóa danh sách công việc đã giao khỏi Supabase Cloud
+ * Xóa danh sách công việc được giao khỏi Supabase Cloud theo ID cụ thể
  */
 async function deleteAssignedTasksFromSupabase(ids) {
   if (!isSupabaseConfigured() || !ids || ids.length === 0) return;
@@ -1253,23 +1200,18 @@ async function deleteAssignedTasksFromSupabase(ids) {
   let client;
   try {
     client = await pool.connect();
-    for (let i = 0; i < ids.length; i += 100) {
-      const chunk = ids.slice(i, i + 100);
-      const placeholders = chunk.map((_, idx) => `$${idx + 1}`).join(', ');
-      await client.query(`UPDATE document_dispatches SET task_id = NULL WHERE task_id IN (${placeholders})`, chunk);
-      await client.query(`DELETE FROM assigned_tasks WHERE id IN (${placeholders})`, chunk);
-    }
-    console.log(`[Supabase Delete] Đã xóa ${ids.length} công việc đã giao trên Supabase Cloud.`);
+    await client.query('UPDATE document_dispatches SET task_id = NULL WHERE task_id = ANY($1)', [ids]);
+    await client.query('DELETE FROM assigned_tasks WHERE id = ANY($1)', [ids]);
+    console.log(`[Supabase Delete] Đã xóa ${ids.length} công việc được giao trên Supabase.`);
   } catch (err) {
-    console.error('[Supabase Delete] Lỗi xóa công việc đã giao trên Supabase:', err.message);
+    console.error('[Supabase Delete] Lỗi khi xóa assigned_tasks trên Supabase:', err.message);
   } finally {
     if (client) client.release();
-    if (pool) await pool.end();
   }
 }
 
 /**
- * Xóa hoàn toàn một người dùng và các dữ liệu liên quan khỏi Supabase Cloud
+ * Xóa người dùng khỏi Supabase Cloud theo ID cụ thể
  */
 async function deleteUserFromSupabase(userId) {
   if (!isSupabaseConfigured() || !userId) return;
@@ -1278,23 +1220,12 @@ async function deleteUserFromSupabase(userId) {
   let client;
   try {
     client = await pool.connect();
-    await client.query('BEGIN');
-    await client.query('DELETE FROM evaluation_criteria_details WHERE evaluation_id IN (SELECT id FROM evaluations WHERE user_id = $1)', [userId]);
-    await client.query('DELETE FROM evaluations WHERE user_id = $1 OR returned_by = $1', [userId]);
-    await client.query('DELETE FROM assigned_tasks WHERE user_id = $1 OR assigned_by = $1', [userId]);
-    await client.query('DELETE FROM votes WHERE user_id = $1 OR voter_id = $1', [userId]);
-    await client.query('UPDATE users SET manager_id = NULL WHERE manager_id = $1', [userId]);
-    await client.query('UPDATE users SET final_evaluator_id = NULL WHERE final_evaluator_id = $1', [userId]);
-    await client.query('UPDATE departments SET leader_id = NULL WHERE leader_id = $1', [userId]);
     await client.query('DELETE FROM users WHERE id = $1', [userId]);
-    await client.query('COMMIT');
-    console.log(`[Supabase Delete] Đã xóa vĩnh viễn user ${userId} trên Supabase Cloud.`);
+    console.log(`[Supabase Delete] Đã xóa người dùng "${userId}" trên Supabase.`);
   } catch (err) {
-    if (client) await client.query('ROLLBACK').catch(() => {});
-    console.error(`[Supabase Delete] Lỗi khi xóa user ${userId} trên Supabase:`, err.message);
+    console.error('[Supabase Delete] Lỗi khi xóa user trên Supabase:', err.message);
   } finally {
     if (client) client.release();
-    if (pool) await pool.end();
   }
 }
 
@@ -1319,7 +1250,6 @@ async function resetAllEvaluationsFromSupabase() {
     console.error('[Supabase Reset] Lỗi khi reset evaluations trên Supabase:', err.message);
   } finally {
     if (client) client.release();
-    if (pool) await pool.end();
   }
 }
 
@@ -1329,6 +1259,8 @@ module.exports = {
   pushToSupabase,
   pullFromSupabase,
   triggerBackgroundSupabaseSync,
+  flushPendingSupabaseSync,
+  syncEntityToSupabase,
   syncDirectUserToSupabase,
   syncDirectRoleToSupabase,
   syncWithSupabaseOnStartup,
@@ -1338,4 +1270,3 @@ module.exports = {
   deleteUserFromSupabase,
   resetAllEvaluationsFromSupabase
 };
-

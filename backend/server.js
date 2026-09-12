@@ -38,6 +38,8 @@ const {
   pullFromSupabase, 
   isSupabaseConfigured,
   triggerBackgroundSupabaseSync,
+  flushPendingSupabaseSync,
+  syncEntityToSupabase,
   syncDirectUserToSupabase,
   syncDirectRoleToSupabase,
   syncWithSupabaseOnStartup,
@@ -47,14 +49,6 @@ const {
   deleteUserFromSupabase,
   resetAllEvaluationsFromSupabase
 } = require('./supabaseSync');
-
-// Initialize database
-initDatabase();
-
-// Tự động đồng bộ hai chiều khi khởi động: nếu Supabase có dữ liệu thì kéo về, nếu trống thì đẩy lên
-syncWithSupabaseOnStartup().catch(err => {
-  console.error('[Supabase Startup Sync] Khởi chạy đồng bộ Supabase thất bại:', err.message);
-});
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -7424,7 +7418,38 @@ setInterval(() => {
   }
 }, 30 * 60 * 1000);
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Backend server running on http://0.0.0.0:${PORT}`);
-  startKeepAlivePinger();
-});
+async function startServer() {
+  // 1. Khởi tạo CSDL SQLite cục bộ
+  initDatabase();
+
+  // 2. Chờ nạp dữ liệu sống từ Supabase Cloud HOÀN TẤT 100% trước khi mở cổng nhận traffic
+  try {
+    console.log('[Server Startup] Đang kiểm tra và đồng bộ CSDL với Supabase Cloud...');
+    await syncWithSupabaseOnStartup();
+    console.log('[Server Startup] ✓ Đồng bộ CSDL Supabase hoàn tất. Sẵn sàng phục vụ.');
+  } catch (err) {
+    console.error('[Server Startup] ✗ Lỗi đồng bộ Supabase khi khởi động (chạy fallback SQLite):', err.message);
+  }
+
+  // 3. Mở cổng nhận traffic
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Backend server running on http://0.0.0.0:${PORT}`);
+    startKeepAlivePinger();
+  });
+
+  // 4. Xử lý tắt máy chủ an toàn (Graceful Shutdown)
+  const gracefulShutdown = async (signal) => {
+    console.log(`[Server Shutdown] Nhận tín hiệu ${signal}. Đang hoàn tất đồng bộ CSDL trước khi thoát...`);
+    try {
+      await checkpointDatabase();
+      await flushPendingSupabaseSync();
+    } catch (e) {
+      console.error('[Server Shutdown] Lỗi khi flush dữ liệu:', e.message);
+    }
+    process.exit(0);
+  };
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+}
+
+startServer();
