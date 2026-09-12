@@ -1252,10 +1252,10 @@ export default function Header({
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 5.3</span>
-                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 08:50 (Bản phát hành mới nhất - Xuất Excel Người dùng, Gộp Nút Báo cáo & Khổ A4 14pt, Đổi tên Cấu hình & Nhật ký Hoạt động Realtime)</span>
+                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 08:50 (Bản phát hành mới nhất - Xuất Excel Người dùng, Gộp Nút Báo cáo & Khổ A4 14pt, Đổi tên Cấu hình & Nhật ký hoạt động (Logs))</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
-                  Xuất File Excel Danh Sách Người Dùng, Tối Ưu Nút Báo Cáo & Định Dạng Khổ Giấy A4 Times New Roman 14pt, Chuẩn Hóa Tên Chức Năng Cấu Hình & Hệ Thống Nhật Ký Hoạt Động Realtime
+                  Xuất File Excel Danh Sách Người Dùng, Tối Ưu Nút Báo Cáo & Định Dạng Khổ Giấy A4 Times New Roman 14pt, Chuẩn Hóa Tên Chức Năng Cấu Hình & Nhật Ký Hoạt Động (Logs)
                 </h4>
                 <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
                   <li><strong>Xuất file Excel danh sách người dùng & cán bộ nhân viên:</strong>
@@ -1278,9 +1278,9 @@ export default function Header({
                       <li>Đổi tên <em>Sao lưu & Phục hồi CSDL</em> &rarr; <strong>Backup</strong>.</li>
                     </ul>
                   </li>
-                  <li><strong>Phát triển Chức năng Ghi Log Hệ thống Hoạt động Realtime:</strong>
+                  <li><strong>Chức năng Nhật ký hoạt động (Logs):</strong>
                     <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
-                      <li>Bổ sung phân hệ <strong>5. Nhật ký hoạt động</strong> trong module Cấu hình với chế độ <code>● LIVE (3s)</code> tự động cập nhật thời gian thực, có nút chuyển đổi Bật/Tạm dừng Live và Làm mới tức thì.</li>
+                      <li>Bổ sung phân hệ <strong>5. Nhật ký hoạt động (Logs)</strong> trong module Cấu hình với chế độ <code>● LIVE (3s)</code> tự động cập nhật thời gian thực, có nút chuyển đổi Bật/Tạm dừng Live và Làm mới tức thì.</li>
                       <li>Ghi nhận kiểm toán tự động mọi thao tác trọng yếu: Đăng nhập/Đăng xuất, Đổi mật khẩu, Thêm/Sửa/Xóa/Khóa/Mở khóa/Cấp lại mật khẩu/Xuất Excel người dùng, Quản lý đơn vị & phân quyền, Giao việc & Chấm điểm KPI, Trình & Hoàn thành văn bản, Sao lưu & Phục hồi CSDL.</li>
                       <li>Tích hợp bộ lọc đa tiêu chí (theo Loại thao tác, Người thực hiện, Nội dung, Địa chỉ IP, Ngày thực hiện), modal xem chi tiết payload kỹ thuật và công cụ dọn dẹp nhật ký cũ tối ưu hiệu năng.</li>
                     </ul>

@@ -714,7 +714,7 @@ export default function SystemConfigTab({
             Cấu hình Hệ thống & Chu kỳ KPI
           </h2>
           <p className="text-slate-500 text-xs mt-1">
-            Quản lý đơn vị, Quản lý phân quyền, Quản lý chu kỳ đánh giá, Backup CSDL và Nhật ký hoạt động realtime
+            Quản lý đơn vị, Quản lý phân quyền, Quản lý chu kỳ đánh giá, Backup CSDL và Nhật ký hoạt động (Logs)
           </p>
         </div>
 
@@ -823,7 +823,7 @@ export default function SystemConfigTab({
         </button>
         <button
           onClick={() => setActiveSubTab('logs')}
-          className={`flex-1 min-w-[150px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs font-bold transition ${
+          className={`flex-1 min-w-[160px] flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs font-bold transition ${
             activeSubTab === 'logs'
               ? 'bg-red-700 text-white shadow-sm'
               : 'text-slate-600 hover:bg-slate-100'
@@ -831,7 +831,7 @@ export default function SystemConfigTab({
         >
           <Activity className="w-4 h-4 shrink-0" />
           <span className="flex items-center gap-1.5">
-            5. Nhật ký hoạt động
+            5. Nhật ký hoạt động (Logs)
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -1775,7 +1775,7 @@ export default function SystemConfigTab({
                 </div>
                 <div>
                   <div className="flex items-center gap-2.5">
-                    <h3 className="text-base font-bold text-slate-900">Nhật ký Hoạt động Hệ thống Realtime</h3>
+                    <h3 className="text-base font-bold text-slate-900">Nhật ký hoạt động (Logs)</h3>
                     {isLiveActive ? (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                         <span className="relative flex h-2 w-2">
