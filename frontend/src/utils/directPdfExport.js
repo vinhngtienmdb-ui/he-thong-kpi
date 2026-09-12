@@ -1,9 +1,10 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
-// Canvas 2D phục vụ chuyển đổi màu sắc hiện đại (oklab, oklch, color) sang RGB chuẩn
+// Canvas 2D phục vụ chuyển đổi màu sắc hiện đại (oklab, oklch, color, color-mix, lab, lch, hwb) sang RGB chuẩn
 let _colorCanvas = null;
 let _colorCtx = null;
+const _colorCache = new Map();
 
 function getColorContext() {
   if (!_colorCtx && typeof document !== 'undefined') {
@@ -16,52 +17,97 @@ function getColorContext() {
 }
 
 /**
- * Chuyển đổi một màu CSS (kể cả oklab, oklch, color()) sang chuỗi rgb() / rgba() chuẩn
+ * Chuyển đổi bất kỳ màu CSS nào (kể cả oklab, oklch, color(), color-mix(), lab, lch, hwb)
+ * thành chuỗi rgb(...) hoặc rgba(...) chuẩn bằng cách render điểm ảnh 1x1 trên canvas thực tế.
+ * Phương pháp này hoạt động chuẩn xác 100% trên mọi trình duyệt hiện đại (kể cả Chrome 120+ nơi
+ * mà ctx.fillStyle không tự động chuyển đổi oklab về rgb).
  */
 export function convertColorToRgb(colorStr) {
   if (!colorStr || typeof colorStr !== 'string') return '#000000';
   
-  if (colorStr.includes('oklab') || colorStr.includes('oklch') || colorStr.includes('color(') || colorStr.includes('hwb')) {
-    const ctx = getColorContext();
-    if (ctx) {
-      try {
-        ctx.fillStyle = '#000000';
-        ctx.fillStyle = colorStr;
-        return ctx.fillStyle; // Trình duyệt tự động chuyển đổi sang rgb(...) hoặc #rrggbb
-      } catch (e) {
-        return '#000000';
-      }
-    }
+  const trimmed = colorStr.trim();
+  if (!trimmed.includes('oklab') && !trimmed.includes('oklch') && !trimmed.includes('color') && !trimmed.includes('lab') && !trimmed.includes('hwb')) {
+    return colorStr;
+  }
+
+  if (_colorCache.has(trimmed)) {
+    return _colorCache.get(trimmed);
+  }
+
+  const ctx = getColorContext();
+  if (!ctx) return '#000000';
+
+  try {
+    ctx.clearRect(0, 0, 1, 1);
+    ctx.fillStyle = '#000000';
+    ctx.fillStyle = trimmed;
+    ctx.fillRect(0, 0, 1, 1);
+
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+    const alpha = a / 255;
+    const res = alpha === 1 
+      ? `rgb(${r}, ${g}, ${b})` 
+      : `rgba(${r}, ${g}, ${b}, ${Number(alpha.toFixed(3))})`;
+
+    _colorCache.set(trimmed, res);
+    return res;
+  } catch (e) {
+    _colorCache.set(trimmed, '#000000');
     return '#000000';
   }
-  return colorStr;
 }
 
 /**
- * Làm sạch một chuỗi CSS (như box-shadow, border, color) có chứa oklab/oklch
+ * Quét và thay thế tất cả các hàm màu hiện đại trong chuỗi CSS (hỗ trợ cả các hàm lồng nhau như color-mix)
+ */
+function replaceColorFunctions(str) {
+  if (!str || typeof str !== 'string') return str;
+  if (!str.includes('oklab') && !str.includes('oklch') && !str.includes('color') && !str.includes('lab') && !str.includes('hwb')) {
+    return str;
+  }
+
+  const regex = /\b(color-mix|oklab|oklch|color|lab|lch|hwb)\(/gi;
+  let result = '';
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(str)) !== null) {
+    result += str.substring(lastIndex, match.index);
+    const startIndex = match.index;
+    let depth = 1;
+    let i = match.index + match[0].length;
+    while (i < str.length && depth > 0) {
+      if (str[i] === '(') depth++;
+      else if (str[i] === ')') depth--;
+      i++;
+    }
+    const colorFunc = str.substring(startIndex, i);
+    result += convertColorToRgb(colorFunc);
+    lastIndex = i;
+    regex.lastIndex = i;
+  }
+  result += str.substring(lastIndex);
+  return result;
+}
+
+/**
+ * Làm sạch một chuỗi CSS (như box-shadow, border, color, background) có chứa oklab/oklch/color-mix
  */
 export function sanitizeColorString(str) {
   if (!str || typeof str !== 'string') return str;
-  if (!str.includes('oklab') && !str.includes('oklch') && !str.includes('color(') && !str.includes('hwb')) {
+  if (!str.includes('oklab') && !str.includes('oklch') && !str.includes('color') && !str.includes('lab') && !str.includes('hwb')) {
     return str;
   }
-  return str.replace(/(oklab|oklch|color|hwb)\([^)]+\)/g, (match) => {
-    return convertColorToRgb(match);
-  });
+  return replaceColorFunctions(str);
 }
 
 /**
- * Làm sạch toàn bộ nội dung file CSS để loại bỏ hoàn toàn oklab/oklch
+ * Làm sạch toàn bộ nội dung file CSS để loại bỏ hoàn toàn oklab/oklch/color-mix
  * nhưng giữ nguyên 100% quy tắc CSS, layout, grid, border, padding của ứng dụng
  */
 export function sanitizeCssText(cssText) {
   if (!cssText || typeof cssText !== 'string') return '';
-  if (!cssText.includes('oklab') && !cssText.includes('oklch') && !cssText.includes('color(') && !cssText.includes('hwb')) {
-    return cssText;
-  }
-  return cssText.replace(/(oklab|oklch|color|hwb)\([^)]+\)/g, (match) => {
-    return convertColorToRgb(match);
-  });
+  return replaceColorFunctions(cssText);
 }
 
 /**
