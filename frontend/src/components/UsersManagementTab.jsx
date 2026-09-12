@@ -290,11 +290,13 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
         const matchesUser = u.username?.toLowerCase().includes(term);
         const matchesPhone = u.phone?.toLowerCase().includes(term);
         const matchesGovTitle = u.gov_title?.toLowerCase().includes(term);
+        const matchesPartyTitle = u.party_title?.toLowerCase().includes(term);
+        const matchesEmpType = (u.employee_type === 'nguoi_lao_dong' ? 'người lao động' : (u.employee_type === 'cong_chuc' ? 'công chức' : 'viên chức')).includes(term);
         const matchesPos = u.positions?.some(p => 
           p.position_title?.toLowerCase().includes(term) ||
           p.dept_name?.toLowerCase().includes(term)
         );
-        if (!matchesName && !matchesUser && !matchesPhone && !matchesGovTitle && !matchesPos) {
+        if (!matchesName && !matchesUser && !matchesPhone && !matchesGovTitle && !matchesPartyTitle && !matchesEmpType && !matchesPos) {
           return false;
         }
       }
@@ -1428,7 +1430,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                                   🎓 Viên chức
                                 </span>
                               )}
-                              {u.is_party_member === 1 && (
+                              {(u.is_party_member === 1 || Boolean(u.party_title && u.party_title.trim())) && (
                                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-100 text-red-800 border border-red-200 text-[10px] font-bold" title={u.party_title || 'Đảng viên'}>
                                   🚩 {u.party_title ? u.party_title : 'Đảng viên'}
                                 </span>
@@ -1670,7 +1672,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                                 🎓 Viên chức
                               </span>
                             )}
-                            {u.is_party_member === 1 && (
+                            {(u.is_party_member === 1 || Boolean(u.party_title && u.party_title.trim())) && (
                               <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-800 border border-red-200 text-[10px] font-bold">
                                 🚩 {u.party_title || 'Đảng viên'}
                               </span>
@@ -1833,7 +1835,7 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
 
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Loại người dùng <span className="text-rose-500">*</span>
+                        Phân loại đối tượng <span className="text-rose-500">*</span>
                       </label>
                       <select
                         value={formData.employee_type || 'vien_chuc'}
@@ -2166,15 +2168,12 @@ export default function UsersManagementTab({ currentUser, departments = [], onRe
                             🚩 Là Đảng viên Đảng Cộng sản Việt Nam
                           </span>
                         </label>
-                        {!formData.is_party_member && (
-                          <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded font-bold">Quần chúng</span>
-                        )}
                       </div>
 
                       {formData.is_party_member ? (
                         <div>
                           <label className="block text-xs font-semibold text-red-900 mb-1">
-                            Chức vụ Đảng:
+                            Chức danh Đảng:
                           </label>
                           <input
                             type="text"

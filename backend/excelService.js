@@ -862,8 +862,10 @@ async function importUsersFromExcel(fileOrPath, options = {}) {
   });
 
   const userLookup = new Map(); // username -> id
+  const nameLookup = new Map(); // fullName -> id
   existingUsers.forEach(u => {
     userLookup.set(u.username.toLowerCase(), u.id);
+    if (u.full_name) nameLookup.set(u.full_name.trim().toLowerCase(), u.id);
   });
 
   const updateExisting = options.updateExisting !== false; // default true
@@ -872,55 +874,92 @@ async function importUsersFromExcel(fileOrPath, options = {}) {
   let updatedCount = 0;
   let skippedCount = 0;
   const errors = [];
-  const pendingManagers = []; // { userId, managerUsername, rowNumber }
+  const pendingManagers = []; // { userId, managerInput, rowNumber }
+
+  // Detect header row and column mapping
+  let headerRowIndex = -1;
+  const colMap = {};
+
+  sheet.eachRow((row, rowNumber) => {
+    if (headerRowIndex !== -1 || rowNumber > 10) return;
+    const cells = [];
+    row.eachCell((cell, colNumber) => {
+      cells.push({ colNumber, text: String(cell.text || '').trim().toLowerCase() });
+    });
+
+    const hasUsername = cells.some(c => c.text.includes('tên đăng nhập') || c.text === 'username' || c.text.includes('tài khoản'));
+    const hasFullName = cells.some(c => c.text.includes('họ và tên') || c.text.includes('họ tên') || c.text === 'full_name');
+
+    if (hasUsername || hasFullName) {
+      headerRowIndex = rowNumber;
+      cells.forEach(c => {
+        const t = c.text;
+        if (t.includes('họ và tên') || t.includes('họ tên') || t === 'full_name') colMap.fullName = c.colNumber;
+        else if (t.includes('tên đăng nhập') || t === 'username' || t.includes('tài khoản')) colMap.username = c.colNumber;
+        else if (t.includes('mật khẩu') || t === 'password') colMap.password = c.colNumber;
+        else if (t.includes('phân loại đối tượng') || t.includes('đối tượng') || t.includes('loại cán bộ') || t === 'employee_type') colMap.employeeType = c.colNumber;
+        else if (t.includes('đơn vị') || t.includes('phòng ban') || t.includes('chi bộ') || t === 'dept') colMap.dept = c.colNumber;
+        else if (t.includes('chức vụ kiêm nhiệm') || t.includes('kiêm nhiệm')) colMap.secondaryPos = c.colNumber;
+        else if (t.includes('chức danh đảng') || t.includes('chức vụ đảng') || (t.includes('đảng') && !t.includes('lãnh đạo'))) colMap.partyTitle = c.colNumber;
+        else if (t.includes('đoàn thể') || t.includes('công đoàn')) colMap.unionTitle = c.colNumber;
+        else if (t.includes('vị trí việc làm') || t.includes('chức vụ') || t.includes('chức danh')) colMap.govTitle = c.colNumber;
+        else if (t.includes('lãnh đạo / cbql') || t.includes('cbql trực tiếp') || t.includes('người đánh giá') || t.includes('lãnh đạo trực tiếp')) colMap.manager = c.colNumber;
+        else if (t.includes('vai trò hệ thống') || t.includes('vai trò') || t.includes('nhóm quyền')) colMap.role = c.colNumber;
+        else if (t.includes('cấp bậc quản lý') || t.includes('cấp quản lý')) colMap.managementRole = c.colNumber;
+        else if (t.includes('ngày sinh') || t.includes('năm sinh')) colMap.birthDate = c.colNumber;
+        else if (t.includes('giới tính')) colMap.gender = c.colNumber;
+        else if (t.includes('điện thoại / email') || t.includes('số điện thoại') || t.includes('điện thoại')) colMap.phoneOrContact = c.colNumber;
+        else if (t.includes('email')) colMap.email = c.colNumber;
+      });
+    }
+  });
 
   const insertUserStmt = db.prepare(`
     INSERT INTO users (
       id, username, password, full_name, role, target_role, role_id, manager_id,
       management_role, final_evaluator_id,
-      party_title, gov_title, dept_id, birth_date, gender, phone, email, is_active
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      party_title, is_party_member, union_title, employee_type,
+      gov_title, dept_id, birth_date, gender, phone, email, is_active
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `);
 
   const updateUserStmt = db.prepare(`
     UPDATE users
     SET full_name = ?, role = ?, target_role = ?, role_id = ?,
         management_role = COALESCE(?, management_role),
-        party_title = ?, gov_title = ?, dept_id = ?, birth_date = ?,
+        party_title = ?, is_party_member = ?,
+        union_title = COALESCE(?, union_title),
+        employee_type = COALESCE(?, employee_type),
+        gov_title = ?, dept_id = ?, birth_date = ?,
         gender = ?, phone = ?, email = ?
     WHERE id = ?
   `);
 
   sheet.eachRow((row, rowNumber) => {
+    // Skip before or at header row
+    if (headerRowIndex !== -1 && rowNumber <= headerRowIndex) return;
+
     const cell1Text = String(row.getCell(1).text || '').trim();
-    const cell2Text = String(row.getCell(2).text || '').trim();
-    const cell4Text = String(row.getCell(4).text || '').trim();
-
-    // Skip title or subtitle banners
+    // Skip title or subtitle banners if header detection was bypassed
     if (cell1Text.toUpperCase().includes('DANH SÁCH') || cell1Text.toUpperCase().includes('QUY ĐỊNH') || cell1Text.toUpperCase().includes('HƯỚNG DẪN')) return;
+    if (cell1Text.toUpperCase() === 'STT') return;
 
-    // Skip table header row
-    if (cell1Text.toUpperCase() === 'STT' || cell2Text.toLowerCase().includes('tên đăng nhập') || cell4Text.toLowerCase().includes('họ và tên')) return;
+    const usernameRaw = colMap.username ? String(row.getCell(colMap.username).text || '').trim() : String(row.getCell(2).text || '').trim();
+    if (!usernameRaw || usernameRaw.toLowerCase().includes('tên đăng nhập') || usernameRaw.toLowerCase() === 'username') return;
 
-    const usernameRaw = cell2Text;
-    if (!usernameRaw) return; // Skip blank lines
-    if (usernameRaw.toLowerCase().includes('tên đăng nhập') || usernameRaw.toLowerCase() === 'username') return;
-
-    totalRows++;
-    const username = usernameRaw.toLowerCase().replace(/\s+/g, '_');
-    const password = String(row.getCell(3).text || '').trim() || '123456';
-    const fullName = String(row.getCell(4).text || '').trim();
-
-    if (!fullName) {
-      errors.push({ row: rowNumber, username, message: 'Thiếu họ và tên cán bộ' });
+    const fullName = colMap.fullName ? String(row.getCell(colMap.fullName).text || '').trim() : String(row.getCell(4).text || '').trim();
+    if (!fullName || fullName.toLowerCase().includes('họ và tên')) {
       return;
     }
 
+    totalRows++;
+    const username = usernameRaw.toLowerCase().replace(/\s+/g, '_');
+    const password = (colMap.password ? String(row.getCell(colMap.password).text || '').trim() : String(row.getCell(3).text || '').trim()) || '123456';
+
     // Match department
-    const deptInput = String(row.getCell(5).text || '').trim().toLowerCase();
+    const deptInput = (colMap.dept ? String(row.getCell(colMap.dept).text || '').trim() : String(row.getCell(5).text || '').trim()).toLowerCase();
     let deptId = deptLookup.get(deptInput) || null;
     if (!deptId && deptInput) {
-      // Fuzzy search in departments
       const foundDept = depts.find(d => 
         (d.code && d.code.toLowerCase().includes(deptInput)) || 
         (d.name && d.name.toLowerCase().includes(deptInput))
@@ -929,7 +968,7 @@ async function importUsersFromExcel(fileOrPath, options = {}) {
     }
 
     // Match role
-    const roleInput = String(row.getCell(6).text || '').trim().toLowerCase();
+    const roleInput = (colMap.role ? String(row.getCell(colMap.role).text || '').trim() : String(row.getCell(6).text || '').trim()).toLowerCase();
     let matchedRole = roleLookup.get(roleInput);
     if (!matchedRole) {
       if (roleInput.includes('đơn vị') || roleInput.includes('admin_donvi')) {
@@ -948,12 +987,30 @@ async function importUsersFromExcel(fileOrPath, options = {}) {
     const effectiveTargetRole = isAdm ? 'admin' : (effectiveRole === 'cbql' ? 'cbql' : 'cbnv');
     const effectiveRoleId = matchedRole?.id || null;
 
-    const partyTitle = String(row.getCell(7).text || '').trim() || 'Đảng viên';
-    const govTitle = String(row.getCell(8).text || '').trim() || 'Chuyên viên';
-    const managerUsername = String(row.getCell(9).text || '').trim().toLowerCase();
+    // Phân loại đối tượng: vien_chuc, nguoi_lao_dong, cong_chuc
+    const empTypeRaw = (colMap.employeeType ? String(row.getCell(colMap.employeeType).text || '').trim() : '').toLowerCase();
+    let employeeType = 'vien_chuc';
+    if (empTypeRaw.includes('lao động') || empTypeRaw.includes('nguoi_lao_dong')) {
+      employeeType = 'nguoi_lao_dong';
+    } else if (empTypeRaw.includes('công chức') || empTypeRaw.includes('cong_chuc')) {
+      employeeType = 'cong_chuc';
+    }
+
+    // Chức danh Đảng: Trống nếu không phải Đảng viên, không gán nhãn "Quần chúng"
+    const partyTitleRaw = (colMap.partyTitle ? String(row.getCell(colMap.partyTitle).text || '').trim() : String(row.getCell(7).text || '').trim());
+    let partyTitle = '';
+    let isPartyMember = 0;
+    if (partyTitleRaw && !partyTitleRaw.toLowerCase().includes('quần chúng') && partyTitleRaw.toLowerCase() !== 'không') {
+      partyTitle = partyTitleRaw;
+      isPartyMember = 1;
+    }
+
+    const unionTitle = colMap.unionTitle ? String(row.getCell(colMap.unionTitle).text || '').trim() : '';
+    const govTitle = (colMap.govTitle ? String(row.getCell(colMap.govTitle).text || '').trim() : String(row.getCell(8).text || '').trim()) || 'Chuyên viên';
+    const managerInput = (colMap.manager ? String(row.getCell(colMap.manager).text || '').trim() : String(row.getCell(9).text || '').trim()).toLowerCase();
 
     // Birth date
-    const birthVal = row.getCell(10).value;
+    const birthVal = colMap.birthDate ? row.getCell(colMap.birthDate).value : row.getCell(10).value;
     let birthDate = '1985-01-01';
     if (birthVal) {
       const parsedBirth = formatDate(birthVal);
@@ -961,15 +1018,44 @@ async function importUsersFromExcel(fileOrPath, options = {}) {
     }
 
     // Gender
-    const genderRaw = String(row.getCell(11).text || '').trim().toLowerCase();
+    const genderRaw = (colMap.gender ? String(row.getCell(colMap.gender).text || '').trim() : String(row.getCell(11).text || '').trim()).toLowerCase();
     const gender = genderRaw.includes('nữ') || genderRaw === 'f' ? 'Nữ' : 'Nam';
 
-    const phone = String(row.getCell(12).text || '').trim();
-    const email = String(row.getCell(13).text || '').trim();
+    // Phone & Email
+    let phone = '';
+    let email = '';
+    if (colMap.phoneOrContact) {
+      const contactText = String(row.getCell(colMap.phoneOrContact).text || '').trim();
+      if (contactText.includes('@')) {
+        const parts = contactText.split(/[-–—/,\s]+/).filter(Boolean);
+        const emailPart = parts.find(p => p.includes('@'));
+        if (emailPart) email = emailPart.trim();
+        const phonePart = parts.find(p => /^0\d{8,11}$/.test(p.replace(/\D/g, '')));
+        if (phonePart) phone = phonePart.trim();
+      } else {
+        phone = contactText;
+      }
+    } else {
+      phone = String(row.getCell(12).text || '').trim();
+      email = String(row.getCell(13).text || '').trim();
+    }
+    if (colMap.email) {
+      const directEmail = String(row.getCell(colMap.email).text || '').trim();
+      if (directEmail) email = directEmail;
+    }
 
     // Determine management role
     let managementRole = 'nhan_vien';
-    if (effectiveRole === 'admin') {
+    if (colMap.managementRole) {
+      const mgmtRaw = String(row.getCell(colMap.managementRole).text || '').trim().toLowerCase();
+      if (mgmtRaw.includes('lãnh đạo') || mgmtRaw.includes('trưởng') || mgmtRaw === 'lanh_dao') {
+        managementRole = 'lanh_dao';
+      } else if (mgmtRaw.includes('quản lý') || mgmtRaw.includes('phó') || mgmtRaw === 'quan_ly') {
+        managementRole = 'quan_ly';
+      } else if (mgmtRaw.includes('tổ trưởng') || mgmtRaw === 'to_truong') {
+        managementRole = 'to_truong';
+      }
+    } else if (effectiveRole === 'admin') {
       managementRole = 'lanh_dao';
     } else if (effectiveRole === 'cbql') {
       const lowerGov = govTitle.toLowerCase();
@@ -994,12 +1080,14 @@ async function importUsersFromExcel(fileOrPath, options = {}) {
           updateUserStmt.run(
             fullName, effectiveRole, effectiveTargetRole, effectiveRoleId,
             managementRole,
-            partyTitle, govTitle, deptId, birthDate,
+            partyTitle, isPartyMember, unionTitle, employeeType,
+            govTitle, deptId, birthDate,
             gender, phone, email, existingId
           );
+          nameLookup.set(fullName.toLowerCase(), existingId);
           updatedCount++;
-          if (managerUsername) {
-            pendingManagers.push({ userId: existingId, managerUsername, rowNumber });
+          if (managerInput) {
+            pendingManagers.push({ userId: existingId, managerInput, rowNumber });
           }
         } else {
           skippedCount++;
@@ -1008,13 +1096,16 @@ async function importUsersFromExcel(fileOrPath, options = {}) {
         const newId = uuidv4();
         insertUserStmt.run(
           newId, username, password, fullName, effectiveRole, effectiveTargetRole,
-          effectiveRoleId, null, managementRole, null, partyTitle, govTitle, deptId, birthDate,
+          effectiveRoleId, null, managementRole, null,
+          partyTitle, isPartyMember, unionTitle, employeeType,
+          govTitle, deptId, birthDate,
           gender, phone, email
         );
         userLookup.set(username, newId);
+        nameLookup.set(fullName.toLowerCase(), newId);
         importedCount++;
-        if (managerUsername) {
-          pendingManagers.push({ userId: newId, managerUsername, rowNumber });
+        if (managerInput) {
+          pendingManagers.push({ userId: newId, managerInput, rowNumber });
         }
       }
     } catch (err) {
@@ -1022,10 +1113,10 @@ async function importUsersFromExcel(fileOrPath, options = {}) {
     }
   });
 
-  // Second pass: resolve manager_id
+  // Second pass: resolve manager_id by username or full_name
   const updateManagerStmt = db.prepare('UPDATE users SET manager_id = ? WHERE id = ?');
   for (const pm of pendingManagers) {
-    const mgrId = userLookup.get(pm.managerUsername);
+    const mgrId = userLookup.get(pm.managerInput) || nameLookup.get(pm.managerInput);
     if (mgrId && mgrId !== pm.userId) {
       try {
         updateManagerStmt.run(mgrId, pm.userId);
@@ -1210,30 +1301,32 @@ async function exportCBQLWorkbook(periodId, userId) {
     ws.getRow(rowNum).height = 24;
   };
   const birthStr = formatDateVN(user.birth_date) || '10/04/1973';
+  const empTypeStr = user.employee_type === 'nguoi_lao_dong' ? 'Người lao động' : (user.employee_type === 'cong_chuc' ? 'Công chức' : 'Viên chức');
   setInfoRow(6, 'Họ và tên:', `${user.full_name || ''}                                Ngày sinh: ${birthStr}`);
-  setInfoRow(7, 'Chức vụ Đảng:', user.party_title || 'Đảng viên');
-  setInfoRow(8, 'Chức vụ chính quyền:', user.gov_title || (isCbnv ? 'Chuyên viên' : 'Lãnh đạo'));
-  setInfoRow(9, 'Chức vụ đoàn thể:', user.union_title || 'Không có');
-  setInfoRow(10, 'Đơn vị công tác:', user.dept_name || '');
+  setInfoRow(7, 'Phân loại đối tượng:', empTypeStr);
+  setInfoRow(8, 'Chức danh Đảng:', user.party_title || '');
+  setInfoRow(9, 'Chức vụ / Vị trí việc làm:', user.gov_title || (isCbnv ? 'Chuyên viên' : 'Lãnh đạo'));
+  setInfoRow(10, 'Chức vụ đoàn thể:', user.union_title || 'Không có');
+  setInfoRow(11, 'Đơn vị công tác:', user.dept_name || '');
 
-  // Row 11-12: Section Header
-  ws.mergeCells('B11:I11');
-  ws.getCell('B11').value = 'I. Tự đánh giá kết quả thực hiện nhiệm vụ';
-  ws.getCell('B11').font = { name: 'Times New Roman', size: 14, bold: true };
-  ws.getRow(11).height = 24;
-
+  // Row 12-13: Section Header
   ws.mergeCells('B12:I12');
-  ws.getCell('B12').value = 'Trên cơ sở nhiệm vụ được giao, cá nhân tự đánh giá về kết quả thực hiện nhiệm vụ theo quý như sau:';
-  ws.getCell('B12').font = { name: 'Times New Roman', size: 14, italic: true };
+  ws.getCell('B12').value = 'I. Tự đánh giá kết quả thực hiện nhiệm vụ';
+  ws.getCell('B12').font = { name: 'Times New Roman', size: 14, bold: true };
   ws.getRow(12).height = 24;
 
-  // Row 13: Group A Title
-  ws.getCell('A13').value = 'A';
-  ws.getCell('A13').font = { name: 'Times New Roman', size: 14, bold: true };
   ws.mergeCells('B13:I13');
-  ws.getCell('B13').value = 'NHÓM TIÊU CHÍ CHUNG (30 ĐIỂM)';
-  ws.getCell('B13').font = { name: 'Times New Roman', size: 14, bold: true };
-  ws.getRow(13).height = 26;
+  ws.getCell('B13').value = 'Trên cơ sở nhiệm vụ được giao, cá nhân tự đánh giá về kết quả thực hiện nhiệm vụ theo quý như sau:';
+  ws.getCell('B13').font = { name: 'Times New Roman', size: 14, italic: true };
+  ws.getRow(13).height = 24;
+
+  // Row 14: Group A Title
+  ws.getCell('A14').value = 'A';
+  ws.getCell('A14').font = { name: 'Times New Roman', size: 14, bold: true };
+  ws.mergeCells('B14:I14');
+  ws.getCell('B14').value = 'NHÓM TIÊU CHÍ CHUNG (30 ĐIỂM)';
+  ws.getCell('B14').font = { name: 'Times New Roman', size: 14, bold: true };
+  ws.getRow(14).height = 26;
 
   // Row 14: Header Table
   const tableHeader = ws.addRow([
@@ -1508,9 +1601,13 @@ async function exportCBQLWorkbook(periodId, userId) {
     ws.mergeCells(`B${rSup4.number}:I${rSup4.number}`);
   }
 
-  // Xác nhận Ban Thường vụ / Tập thể Lãnh đạo
+  // Xác nhận Ban Thường vụ / Tập thể Lãnh đạo (Mẫu 01-A) hoặc Thủ trưởng cơ quan (Mẫu 01-B)
   ws.addRow([]);
-  const confHead = ws.addRow(['', '', '', 'XÁC NHẬN CỦA BAN THƯỜNG VỤ CẤP ỦY\nHOẶC THỦ TRƯỞNG CƠ QUAN, ĐƠN VỊ']);
+  const confTitle = isCbnv
+    ? 'THỦ TRƯỞNG CƠ QUAN, ĐƠN VỊ'
+    : 'XÁC NHẬN CỦA BAN THƯỜNG VỤ CẤP ỦY\nHOẶC TẬP THỂ LÃNH ĐẠO CƠ QUAN, ĐƠN VỊ';
+
+  const confHead = ws.addRow(['', '', '', confTitle]);
   confHead.font = { name: 'Times New Roman', size: 14, bold: true };
   confHead.alignment = { horizontal: 'center', wrapText: true };
   ws.mergeCells(`D${confHead.number}:I${confHead.number}`);
@@ -1529,7 +1626,8 @@ async function exportCBQLWorkbook(periodId, userId) {
   ws.addRow([]);
   ws.addRow([]);
 
-  const confName = ws.addRow(['', '', '', isUnitLeader ? '' : leaderName]);
+  const printedSignerName = isCbnv ? (isUnitLeader ? '' : leaderName) : '';
+  const confName = ws.addRow(['', '', '', printedSignerName]);
   confName.font = { name: 'Times New Roman', size: 14, bold: true };
   confName.alignment = { horizontal: 'center' };
   ws.mergeCells(`D${confName.number}:I${confName.number}`);

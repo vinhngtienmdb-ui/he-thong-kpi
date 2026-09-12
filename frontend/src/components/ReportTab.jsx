@@ -696,7 +696,10 @@ export default function ReportTab({
             <b>Họ và tên:</b> {targetUser.full_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Ngày sinh:</b> {formatDate(targetUser.birth_date, '10/04/1973')}
           </p>
           <p>
-            <b>Chức vụ Đảng:</b> {targetUser.party_title || (targetUser.is_party_member ? 'Đảng viên' : 'Quần chúng')}
+            <b>Phân loại đối tượng:</b> {targetUser.employee_type === 'nguoi_lao_dong' ? 'Người lao động' : (targetUser.employee_type === 'cong_chuc' ? 'Công chức' : 'Viên chức')}
+          </p>
+          <p>
+            <b>Chức danh Đảng:</b> {targetUser.party_title || ''}
           </p>
           <p>
             <b>Chức vụ / Vị trí việc làm:</b> {targetUser.gov_title || (isCbnv ? 'Chuyên viên' : 'Lãnh đạo')}
@@ -1089,18 +1092,16 @@ export default function ReportTab({
                 <div className="space-y-20">
                   <div>
                     <p className="font-bold uppercase text-black leading-tight">
-                      {leaderSignerTitle || 'XÁC NHẬN CỦA BAN THƯỜNG VỤ CẤP ỦY\nHOẶC TẬP THỂ LÃNH ĐẠO CƠ QUAN, ĐƠN VỊ'}
+                      XÁC NHẬN CỦA BAN THƯỜNG VỤ CẤP ỦY
+                      <br />
+                      HOẶC TẬP THỂ LÃNH ĐẠO CƠ QUAN, ĐƠN VỊ
                     </p>
                     <p className="italic text-[14pt] text-slate-700 mt-0.5">
                       (Ký, ghi rõ họ tên và đóng dấu)
                     </p>
                   </div>
-                  <div>
-                    {!isUnitLeader && (
-                      <p className="font-bold text-[14pt] text-black">
-                        {leaderSignerName}
-                      </p>
-                    )}
+                  <div className="min-h-[3rem]">
+                    {/* Bỏ trống để ký, đóng dấu xác nhận chính thức */}
                   </div>
                 </div>
               </div>
@@ -1262,7 +1263,10 @@ export default function ReportTab({
                 <b>Họ và tên:</b> {targetUser.full_name} &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <b>Ngày sinh:</b> {formatDate(targetUser.birth_date, '10/04/1973')}
               </p>
               <p>
-                <b>Chức vụ Đảng:</b> {targetUser.party_title || (targetUser.is_party_member ? 'Đảng viên' : 'Quần chúng')}
+                <b>Phân loại đối tượng:</b> {targetUser.employee_type === 'nguoi_lao_dong' ? 'Người lao động' : (targetUser.employee_type === 'cong_chuc' ? 'Công chức' : 'Viên chức')}
+              </p>
+              <p>
+                <b>Chức danh Đảng:</b> {targetUser.party_title || ''}
               </p>
               <p>
                 <b>Chức vụ / Vị trí việc làm:</b> {targetUser.gov_title || (isCbnv ? 'Chuyên viên' : 'Lãnh đạo')}

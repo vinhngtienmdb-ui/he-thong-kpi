@@ -4836,7 +4836,8 @@ app.get('/api/evaluations', (req, res) => {
   }
 
   // Common Criteria tailored to role (Mẫu 01-A for CBQL vs Mẫu 01-B for CBNV)
-  const roleFilter = targetUser.role === 'cbql' ? "('all', 'cbql')" : "('all', 'cbnv')";
+  const isCbnv = (targetUser.target_role === 'cbnv') || (targetUser.role === 'cbnv' && targetUser.target_role !== 'cbql');
+  const roleFilter = !isCbnv ? "('all', 'cbql')" : "('all', 'cbnv')";
   const criteria = db.prepare(`
     SELECT c.*, COALESCE(d.is_satisfied, 1) as is_satisfied, COALESCE(d.score, c.max_score) as score, d.note
     FROM common_criteria c

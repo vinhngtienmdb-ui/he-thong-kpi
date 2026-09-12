@@ -339,8 +339,29 @@ async function exportCBQLDocx(periodId, userId) {
               new Paragraph({
                 spacing: { after: 80 },
                 children: [
-                  new TextRun({ text: 'Chức vụ Đảng: ', bold: true, size: 28, font: 'Times New Roman' }),
-                  new TextRun({ text: user.party_title || (user.is_party_member ? 'Đảng viên' : 'Quần chúng'), size: 28, font: 'Times New Roman' })
+                  new TextRun({ text: 'Phân loại đối tượng: ', bold: true, size: 28, font: 'Times New Roman' }),
+                  new TextRun({ 
+                    text: user.employee_type === 'nguoi_lao_dong' ? 'Người lao động' : (user.employee_type === 'cong_chuc' ? 'Công chức' : 'Viên chức'), 
+                    size: 28, 
+                    font: 'Times New Roman' 
+                  })
+                ]
+              })
+            ]
+          })
+        ]
+      }),
+      new TableRow({
+        children: [
+          new TableCell({
+            borders: transparentBorders,
+            columnSpan: 2,
+            children: [
+              new Paragraph({
+                spacing: { after: 80 },
+                children: [
+                  new TextRun({ text: 'Chức danh Đảng: ', bold: true, size: 28, font: 'Times New Roman' }),
+                  new TextRun({ text: user.party_title || '', size: 28, font: 'Times New Roman' })
                 ]
               })
             ]
@@ -912,18 +933,18 @@ async function exportCBQLDocx(periodId, userId) {
     })
   );
 
-  // 9. Overall Score & Proposed Rank
+  // 9. Overall Score & Proposed Rank (Section II)
   children.push(
     new Paragraph({
       spacing: { before: 180, after: 80 },
       children: [
-        new TextRun({ text: 'TỔNG HỢP KẾT QUẢ ĐÁNH GIÁ VÀ XẾP LOẠI:', bold: true, size: 28, font: 'Times New Roman' })
+        new TextRun({ text: 'II. Tự đề xuất xếp loại mức chất lượng', bold: true, size: 28, font: 'Times New Roman' })
       ]
     }),
     new Paragraph({
       spacing: { after: 60 },
       children: [
-        new TextRun({ text: '• Tổng điểm đạt được (A + B): ', bold: true, size: 28, font: 'Times New Roman' }),
+        new TextRun({ text: '• Tổng điểm đạt được (A + B + Thưởng): ', bold: true, size: 28, font: 'Times New Roman' }),
         new TextRun({ text: `${totalScore.toFixed(2)} / 100 điểm `, bold: true, size: 28, font: 'Times New Roman' }),
         new TextRun({ text: `(Phần A: ${part1Score}đ + Phần B: ${part2Score.toFixed(2)}đ + Thưởng: ${bonusScore.toFixed(2)}đ)`, italics: true, size: 28, font: 'Times New Roman' })
       ]
@@ -937,12 +958,12 @@ async function exportCBQLDocx(periodId, userId) {
     })
   );
 
-  // 10. Section II: Nhận xét cấp có thẩm quyền
+  // 10. Section III: Nhận xét cấp có thẩm quyền
   children.push(
     new Paragraph({
       spacing: { before: 120, after: 80 },
       children: [
-        new TextRun({ text: 'II. Nhận xét, đánh giá của cấp có thẩm quyền', bold: true, size: 28, font: 'Times New Roman' })
+        new TextRun({ text: 'III. Nhận xét, đánh giá của cấp có thẩm quyền', bold: true, size: 28, font: 'Times New Roman' })
       ]
     }),
     new Paragraph({
@@ -1081,17 +1102,13 @@ async function exportCBQLDocx(periodId, userId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: (leaderTitle || 'THỦ TRƯỞNG ĐƠN VỊ').toUpperCase(), bold: true, size: 28, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'XÁC NHẬN CỦA BAN THƯỜNG VỤ CẤP ỦY\nHOẶC TẬP THỂ LÃNH ĐẠO CƠ QUAN, ĐƠN VỊ', bold: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 children: [new TextRun({ text: '(Ký, ghi rõ họ tên và đóng dấu)', italics: true, size: 28, font: 'Times New Roman' })]
               }),
-              new Paragraph({ spacing: { before: 1200 } }),
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: leaderName || '', bold: true, size: 28, font: 'Times New Roman' })]
-              })
+              new Paragraph({ spacing: { before: 1200 } })
             ]
           })
         ]
