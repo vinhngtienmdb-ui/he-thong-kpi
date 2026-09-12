@@ -59,26 +59,60 @@ async function renderHtmlToPdf(html, options = {}) {
     }
     *, *::before, *::after {
       box-sizing: border-box;
+      font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
     }
     body, html {
       margin: 0;
       padding: 0;
       background: #ffffff;
       color: #000000;
-      font-family: 'Times New Roman', Times, serif;
-      font-size: 14pt;
+      font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
+      font-size: 14pt !important;
       line-height: 1.35;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-    .no-print {
+    .print-document, #report-print-content {
+      background-color: #ffffff !important;
+      color: #000000 !important;
+      font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
+      font-size: 14pt !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      box-shadow: none !important;
+      border: none !important;
+      width: 100% !important;
+    }
+    p, span, div, td, th, li, a, label, strong, b, em, i, tr, thead, tbody {
+      font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
+      font-size: 14pt !important;
+      line-height: 1.35 !important;
+      color: #000000 !important;
+    }
+    h1 {
+      font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
+      font-size: 16pt !important;
+      font-weight: bold !important;
+      text-align: center !important;
+      text-transform: uppercase !important;
+      color: #000000 !important;
+      margin: 8px 0 !important;
+      line-height: 1.3 !important;
+    }
+    h2, h3, h4 {
+      font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
+      font-size: 14pt !important;
+      font-weight: bold !important;
+      color: #000000 !important;
+    }
+    .no-print, button, select, input, textarea {
       display: none !important;
     }
     table {
       width: 100% !important;
       max-width: 100% !important;
       border-collapse: collapse !important;
-      font-family: 'Times New Roman', Times, serif !important;
+      font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
       font-size: 14pt !important;
       page-break-inside: auto;
     }
@@ -100,16 +134,20 @@ async function renderHtmlToPdf(html, options = {}) {
     th, td {
       border: 1px solid #000000 !important;
       color: #000000 !important;
-      padding: 3px 4px !important;
+      padding: 3px 5px !important;
       font-size: 14pt !important;
       line-height: 1.25 !important;
       word-break: break-word !important;
       overflow-wrap: break-word !important;
-      font-family: 'Times New Roman', Times, serif !important;
+      font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
     }
     .table-mau-02 th, .table-mau-02 td {
       padding: 2.5px 3.5px !important;
       font-size: 14pt !important;
+    }
+    .table-mau-02 th span, .table-mau-02 th small {
+      font-size: 11pt !important;
+      font-weight: normal !important;
     }
     th {
       background-color: #f1f5f9 !important;
@@ -120,11 +158,26 @@ async function renderHtmlToPdf(html, options = {}) {
       display: table !important;
       width: 100% !important;
     }
+    .grid-cols-2 {
+      display: table !important;
+      width: 100% !important;
+    }
     .grid-cols-2 > div {
       display: table-cell !important;
       width: 50% !important;
       vertical-align: top !important;
     }
+    .text-center { text-align: center !important; }
+    .text-right { text-align: right !important; }
+    .text-left { text-align: left !important; }
+    .font-bold, b, strong { font-weight: bold !important; }
+    .font-semibold { font-weight: 600 !important; }
+    .italic { font-style: italic !important; }
+    .uppercase { text-transform: uppercase !important; }
+    .w-24 { width: 96px !important; }
+    .mx-auto { margin-left: auto !important; margin-right: auto !important; }
+    .border-b { border-bottom-width: 1px !important; }
+    .border-black { border-color: #000000 !important; }
     .signature-block, .stats-summary-container {
       page-break-inside: avoid !important;
       break-inside: avoid !important;

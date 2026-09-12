@@ -709,8 +709,8 @@ export default function ReportTab({
             A. NHÓM TIÊU CHÍ CHUNG (30 ĐIỂM)
           </p>
 
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-[14pt] border-collapse border border-black font-times text-black">
+          <div className="overflow-x-auto print:overflow-visible">
+            <table className="w-full min-w-[980px] print:min-w-0 text-left text-[14pt] border-collapse border border-black font-times text-black">
               <thead>
                 <tr className="bg-slate-100 font-bold text-black text-center text-[14pt]">
                   <th className="border border-black p-2.5 w-14">TT</th>
@@ -1251,8 +1251,8 @@ export default function ReportTab({
             </div>
 
             {/* Tasks Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1300px] text-left text-[14pt] border-collapse border border-black font-times text-black">
+            <div className="overflow-x-auto print:overflow-visible">
+              <table className="w-full min-w-[1300px] print:min-w-0 text-left text-[14pt] border-collapse border border-black font-times text-black">
                 <thead>
                   <tr className="bg-slate-100 font-bold text-black border-b border-black text-center text-[14pt]">
                     <th className="border border-black p-2.5 text-center w-12">STT</th>
@@ -1694,26 +1694,26 @@ export default function ReportTab({
               <table className="table-mau-02 w-full table-fixed text-left border-collapse border border-black font-times text-black text-[14pt] leading-snug">
                 <thead>
                   <tr className="bg-slate-100 font-bold text-black text-center text-[14pt]">
-                    <th rowSpan="2" className="border border-black px-1 py-1 w-[3.5%] text-center">STT</th>
-                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[14.5%]">Họ và tên</th>
-                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[10.5%]">Chức vụ / Vị trí</th>
-                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[9%]">Đơn vị</th>
-                    <th colSpan="4" className="border border-black px-1 py-0.5 w-[18.5%]">Điểm đánh giá</th>
-                    <th colSpan="2" className="border border-black px-1 py-0.5 w-[17.5%]">Xếp loại</th>
-                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[13.5%]">Tóm tắt căn cứ, lý do</th>
-                    <th rowSpan="2" className="border border-black px-1.5 py-1 w-[8%]">Đề xuất cán bộ</th>
-                    <th rowSpan="2" className="border border-black px-1 py-1 w-[5%] text-center">
+                    <th rowSpan="2" style={{ width: '3.5%' }} className="border border-black px-1 py-1 w-[3.5%] text-center">STT</th>
+                    <th rowSpan="2" style={{ width: '14.5%' }} className="border border-black px-1.5 py-1 w-[14.5%]">Họ và tên</th>
+                    <th rowSpan="2" style={{ width: '10.5%' }} className="border border-black px-1.5 py-1 w-[10.5%]">Chức vụ / Vị trí</th>
+                    <th rowSpan="2" style={{ width: '9%' }} className="border border-black px-1.5 py-1 w-[9%]">Đơn vị</th>
+                    <th colSpan="4" style={{ width: '18.5%' }} className="border border-black px-1 py-0.5 w-[18.5%]">Điểm đánh giá</th>
+                    <th colSpan="2" style={{ width: '17.5%' }} className="border border-black px-1 py-0.5 w-[17.5%]">Xếp loại</th>
+                    <th rowSpan="2" style={{ width: '13.5%' }} className="border border-black px-1.5 py-1 w-[13.5%]">Tóm tắt căn cứ, lý do</th>
+                    <th rowSpan="2" style={{ width: '8%' }} className="border border-black px-1.5 py-1 w-[8%]">Đề xuất cán bộ</th>
+                    <th rowSpan="2" style={{ width: '5%' }} className="border border-black px-1 py-1 w-[5%] text-center">
                       <span className="no-print">Thao tác</span>
                       <span className="hidden print:inline">Ghi chú</span>
                     </th>
                   </tr>
                   <tr className="bg-slate-100 font-bold text-black text-center text-[13.5pt]">
-                    <th className="border border-black px-0.5 py-0.5 w-[4.5%]">Phần A<br /><span className="text-[11.5pt] font-normal">(30đ)</span></th>
-                    <th className="border border-black px-0.5 py-0.5 w-[4.5%]">Phần B<br /><span className="text-[11.5pt] font-normal">(70đ)</span></th>
-                    <th className="border border-black px-0.5 py-0.5 w-[4.5%]">Thưởng<br /><span className="text-[11.5pt] font-normal">(+5%)</span></th>
-                    <th className="border border-black px-0.5 py-0.5 w-[5%] text-red-900 font-bold">Tổng<br /><span className="text-[11.5pt] font-normal">(100đ)</span></th>
-                    <th className="border border-black px-1 py-0.5 w-[8.5%]">Cá nhân tự ĐX</th>
-                    <th className="border border-black px-1 py-0.5 w-[9%]">Lãnh đạo đề xuất</th>
+                    <th style={{ width: '4.5%' }} className="border border-black px-0.5 py-0.5 w-[4.5%]">Phần A<br /><span className="text-[11.5pt] font-normal">(30đ)</span></th>
+                    <th style={{ width: '4.5%' }} className="border border-black px-0.5 py-0.5 w-[4.5%]">Phần B<br /><span className="text-[11.5pt] font-normal">(70đ)</span></th>
+                    <th style={{ width: '4.5%' }} className="border border-black px-0.5 py-0.5 w-[4.5%]">Thưởng<br /><span className="text-[11.5pt] font-normal">(+5%)</span></th>
+                    <th style={{ width: '5%' }} className="border border-black px-0.5 py-0.5 w-[5%] text-red-900 font-bold">Tổng<br /><span className="text-[11.5pt] font-normal">(100đ)</span></th>
+                    <th style={{ width: '8.5%' }} className="border border-black px-1 py-0.5 w-[8.5%]">Cá nhân tự ĐX</th>
+                    <th style={{ width: '9%' }} className="border border-black px-1 py-0.5 w-[9%]">Lãnh đạo đề xuất</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black">

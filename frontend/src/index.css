@@ -123,8 +123,8 @@ html.dark ::-webkit-scrollbar-thumb:hover {
 /* ============================================================ */
 /* PRINT STYLES - CHUẨN NGHỊ ĐỊNH 30/2020/NĐ-CP & TIMES NEW ROMAN */
 /* ============================================================ */
-.font-times {
-  font-family: 'Times New Roman', Times, serif !important;
+.font-times, .font-times *, .print-document, .print-document * {
+  font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
 }
 
 @page {
