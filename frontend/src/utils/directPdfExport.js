@@ -1,6 +1,90 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
+// Canvas 2D phục vụ chuyển đổi màu sắc hiện đại (oklab, oklch, color) sang RGB chuẩn
+let _colorCanvas = null;
+let _colorCtx = null;
+
+function getColorContext() {
+  if (!_colorCtx && typeof document !== 'undefined') {
+    _colorCanvas = document.createElement('canvas');
+    _colorCanvas.width = 1;
+    _colorCanvas.height = 1;
+    _colorCtx = _colorCanvas.getContext('2d', { willReadFrequently: true });
+  }
+  return _colorCtx;
+}
+
+/**
+ * Chuyển đổi một màu CSS (kể cả oklab, oklch, color()) sang chuỗi rgb() / rgba() chuẩn
+ */
+export function convertColorToRgb(colorStr) {
+  if (!colorStr || typeof colorStr !== 'string') return '#000000';
+  
+  if (colorStr.includes('oklab') || colorStr.includes('oklch') || colorStr.includes('color(') || colorStr.includes('hwb')) {
+    const ctx = getColorContext();
+    if (ctx) {
+      try {
+        ctx.fillStyle = '#000000';
+        ctx.fillStyle = colorStr;
+        return ctx.fillStyle; // Trình duyệt tự động chuyển đổi sang rgb(...) hoặc #rrggbb
+      } catch (e) {
+        return '#000000';
+      }
+    }
+    return '#000000';
+  }
+  return colorStr;
+}
+
+/**
+ * Làm sạch một chuỗi CSS (như box-shadow, border, color) có chứa oklab/oklch
+ */
+export function sanitizeColorString(str) {
+  if (!str || typeof str !== 'string') return str;
+  if (!str.includes('oklab') && !str.includes('oklch') && !str.includes('color(') && !str.includes('hwb')) {
+    return str;
+  }
+  return str.replace(/(oklab|oklch|color|hwb)([^)]+)/g, (match) => {
+    return convertColorToRgb(match);
+  });
+}
+
+/**
+ * Bọc hàm getComputedStyle của cửa sổ để chặn đứng và chuyển đổi mọi giá trị màu oklab/oklch
+ * trước khi html2canvas đọc chúng.
+ */
+export function wrapComputedStyle(targetWindow) {
+  if (!targetWindow || !targetWindow.getComputedStyle) return () => {};
+  const original = targetWindow.getComputedStyle;
+  
+  targetWindow.getComputedStyle = function(el, pseudo) {
+    const style = original.call(targetWindow, el, pseudo);
+    return new Proxy(style, {
+      get(target, prop) {
+        const val = target[prop];
+        if (typeof val === 'function') {
+          if (prop === 'getPropertyValue') {
+            return function(propName) {
+              const v = target.getPropertyValue(propName);
+              return typeof v === 'string' ? sanitizeColorString(v) : v;
+            };
+          }
+          return val.bind(target);
+        }
+        if (typeof val === 'string') {
+          return sanitizeColorString(val);
+        }
+        return val;
+      }
+    });
+  };
+  
+  return () => {
+    targetWindow.getComputedStyle = original;
+  };
+}
+
 /**
  * Tự động dọn dẹp các lớp phủ hoặc container rác của html2canvas/html2pdf
  * để đảm bảo giao diện người dùng không bao giờ bị treo hoặc khóa click.
@@ -27,12 +111,6 @@ export function cleanupPdfArtifacts() {
 
 /**
  * CÔNG CỤ XUẤT BÁO CÁO PDF TRỰC TIẾP (CLIENT-SIDE DIRECT PDF EXPORTER)
- * 
- * - Hoạt động độc lập 100% trong trình duyệt người dùng, không cần qua máy chủ phụ.
- * - Cô lập hoàn toàn khỏi các cú pháp màu Tailwind CSS v4 (oklch) gây lỗi parser.
- * - Tự động tính toán phân trang A4 ngang (Landscape) hoặc A4 dọc (Portrait).
- * - Kết xuất độ nét cao (scale 2), chữ Times New Roman 14pt chuẩn văn bản hành chính.
- * - Tải file .pdf trực tiếp về máy tính người dùng.
  */
 export async function exportReportToPdfDirect(element, options = {}) {
   const {
@@ -45,7 +123,6 @@ export async function exportReportToPdfDirect(element, options = {}) {
     throw new Error('Không tìm thấy phần tử nội dung báo cáo để xuất PDF.');
   }
 
-  // Đảm bảo không còn lớp phủ cũ gây cản trở
   cleanupPdfArtifacts();
 
   onProgress('Đang chuẩn bị nội dung tài liệu...');
@@ -56,35 +133,39 @@ export async function exportReportToPdfDirect(element, options = {}) {
   const printableWidthMm = pageWidthMm - (marginMm * 2);
   const printableHeightMm = pageHeightMm - (marginMm * 2);
 
+  // Bọc getComputedStyle của cửa sổ chính
+  const restoreParentWindow = wrapComputedStyle(window);
+
   try {
     onProgress('Đang chuyển đổi bảng biểu và phông chữ...');
 
-    // Cấu hình html2canvas với bộ lọc CSS an toàn
     const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
       logging: false,
       backgroundColor: '#ffffff',
       onclone: (clonedDoc, clonedElement) => {
-        // 1. Loại bỏ tất cả style tag chứa hàm màu hiện đại (oklch) của Tailwind v4
-        const styles = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
-        styles.forEach(s => {
-          if (s.tagName === 'STYLE' && (s.textContent.includes('oklch') || s.textContent.includes('@theme'))) {
-            s.remove();
-          }
-        });
+        // 1. Bọc getComputedStyle của cửa sổ iframe clone
+        wrapComputedStyle(clonedDoc.defaultView);
 
-        // 2. Tiêm stylesheet chuẩn hành chính thuần túy, an toàn 100%
+        // 2. Xóa sạch TẤT CẢ style tag và link stylesheet ngoại lai (loại bỏ hoàn toàn Tailwind v4)
+        const styles = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
+        styles.forEach(s => s.remove());
+
+        // 3. Tiêm stylesheet chuẩn hành chính thuần túy, an toàn 100%
         const safeStyle = clonedDoc.createElement('style');
         safeStyle.id = 'direct-pdf-safe-style';
         safeStyle.textContent = `
           * {
             box-sizing: border-box !important;
+            box-shadow: none !important;
+            text-shadow: none !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
           body, html, .print-document, #report-print-content {
             background-color: #ffffff !important;
+            background-image: none !important;
             color: #000000 !important;
             font-family: 'Times New Roman', Times, serif !important;
             font-size: 14pt !important;
@@ -155,6 +236,15 @@ export async function exportReportToPdfDirect(element, options = {}) {
         clonedElement.style.margin = '0 auto';
         clonedElement.style.boxShadow = 'none';
         clonedElement.style.border = 'none';
+
+        // 4. Quét sạch mọi thuộc tính style inline chứa oklab/oklch
+        const allElements = clonedElement.querySelectorAll('*');
+        allElements.forEach(el => {
+          const s = el.getAttribute('style');
+          if (s && (s.includes('oklab') || s.includes('oklch') || s.includes('color(') || s.includes('hwb'))) {
+            el.setAttribute('style', sanitizeColorString(s));
+          }
+        });
       }
     });
 
@@ -215,6 +305,7 @@ export async function exportReportToPdfDirect(element, options = {}) {
     pdf.save(filename);
     return true;
   } finally {
+    restoreParentWindow();
     cleanupPdfArtifacts();
   }
 }
