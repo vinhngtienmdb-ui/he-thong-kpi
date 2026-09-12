@@ -509,30 +509,60 @@ export async function exportReportToPdfDirect(element, options = {}) {
         // THU THẬP TỌA ĐỘ RANH GIỚI HÀNG (TR) VÀ CÁC KHỐI ĐỂ CẮT TRANG CHUẨN XÁC 100%
         // ====================================================================
         const clonedRect = clonedElement.getBoundingClientRect();
-        const rawBreakpoints = [];
+        const safeCuts = [];
+        const sigRanges = [];
 
-        // 1. Ranh giới dưới của tất cả các dòng <tr> trong mọi bảng
-        const allRows = clonedElement.querySelectorAll('tr');
-        allRows.forEach(row => {
-          const r = row.getBoundingClientRect();
-          const bottom = r.bottom - clonedRect.top;
-          if (bottom > 0) {
-            rawBreakpoints.push({ y: bottom, type: 'tr' });
+        // 1. Ranh giới dưới của tất cả các dòng <tr> trong mọi bảng (trừ thead)
+        const allTables = Array.from(clonedElement.querySelectorAll('table'));
+        allTables.forEach(tbl => {
+          const tblRect = tbl.getBoundingClientRect();
+          const rows = Array.from(tbl.querySelectorAll('tr'));
+          
+          rows.forEach(row => {
+            const isHeaderRow = row.parentElement?.tagName === 'THEAD' || (row.querySelector('th') && !row.querySelector('td'));
+            if (!isHeaderRow) {
+              const r = row.getBoundingClientRect();
+              const bottom = r.bottom - clonedRect.top;
+              if (bottom > 0) {
+                safeCuts.push({ y: bottom, type: 'tr-bottom' });
+              }
+            }
+          });
+
+          const tblBottom = tblRect.bottom - clonedRect.top;
+          if (tblBottom > 0) {
+            safeCuts.push({ y: tblBottom + 2, type: 'table-bottom' });
           }
         });
 
-        // 2. Ranh giới trên và dưới của các khối nội dung, chữ ký, thống kê
-        const allBlocks = clonedElement.querySelectorAll('h1, h2, h3, h4, p, .signature-block, .stats-summary-container, .grid');
-        allBlocks.forEach(el => {
-          const r = el.getBoundingClientRect();
+        // 2. Thu thập các khối CHỮ KÝ (.signature-block) và THỐNG KÊ (.stats-summary-container)
+        // Lưu trữ cả khoảng (top, bottom) của khối chữ ký để TUYỆT ĐỐI KHÔNG BAO GIỜ CẮT VÀO GIỮA
+        const sigElements = Array.from(clonedElement.querySelectorAll('.signature-block, .stats-summary-container'));
+        sigElements.forEach(sig => {
+          const r = sig.getBoundingClientRect();
           const top = r.top - clonedRect.top;
           const bottom = r.bottom - clonedRect.top;
-          if (top > 0) rawBreakpoints.push({ y: top, type: 'block-top' });
-          if (bottom > 0) rawBreakpoints.push({ y: bottom, type: 'block-bottom' });
+          if (top > 0) {
+            sigRanges.push({ top: top - 8, bottom: bottom + 8 });
+            safeCuts.push({ y: top - 8, type: 'sig-top' });
+            safeCuts.push({ y: bottom + 6, type: 'sig-bottom' });
+          }
         });
 
-        rawBreakpoints.sort((a, b) => a.y - b.y);
-        domBreakpoints = rawBreakpoints;
+        // 3. Ranh giới TRƯỚC các tiêu đề lớn: h1, h2, h3, h4 hoặc p.font-bold (không nằm trong bảng hoặc chữ ký)
+        const headings = Array.from(clonedElement.querySelectorAll('h1, h2, h3, h4, p.font-bold'));
+        headings.forEach(h => {
+          if (!h.closest('table') && !h.closest('.signature-block')) {
+            const r = h.getBoundingClientRect();
+            const top = r.top - clonedRect.top;
+            if (top > 0) {
+              safeCuts.push({ y: top - 6, type: 'heading-top' });
+            }
+          }
+        });
+
+        safeCuts.sort((a, b) => a.y - b.y);
+        domBreakpoints = { safeCuts, sigRanges };
       }
     });
 
@@ -563,48 +593,67 @@ export async function exportReportToPdfDirect(element, options = {}) {
         const idealCutY = sourceY + pageCanvasHeight;
         let currentSliceHeight = Math.min(pageCanvasHeight, remainingHeight);
 
-        // Nếu còn trang tiếp theo, tìm điểm cắt thông minh chuẩn theo DOM (giữa các hàng <tr>)
+        // Nếu còn trang tiếp theo, tìm điểm cắt thông minh chuẩn theo DOM
         if (idealCutY < canvasHeight) {
-          // Vùng tìm kiếm: từ (sourceY + 60% chiều cao trang) đến idealCutY
-          const minAllowedY = sourceY + Math.floor(pageCanvasHeight * 0.60);
-          const candidates = domBreakpoints
-            .map(bp => Math.round(bp.y * canvasScale))
-            .filter(bpY => bpY <= idealCutY && bpY >= minAllowedY);
+          const { safeCuts = [], sigRanges = [] } = domBreakpoints;
 
-          if (candidates.length > 0) {
-            // Lấy điểm ngắt hợp lệ lớn nhất (sát đáy trang nhất) mà không vượt quá trang
-            const bestCutY = Math.max(...candidates);
-            currentSliceHeight = bestCutY - sourceY;
+          // 1. Kiểm tra xem idealCutY có đang rơi vào giữa một khối chữ ký nào không
+          let insideSig = null;
+          for (const s of sigRanges) {
+            const topCanvasY = Math.round(s.top * canvasScale);
+            const bottomCanvasY = Math.round(s.bottom * canvasScale);
+            if (idealCutY >= topCanvasY && idealCutY <= bottomCanvasY) {
+              insideSig = topCanvasY;
+              break;
+            }
+          }
+
+          if (insideSig !== null && insideSig > sourceY + Math.floor(pageCanvasHeight * 0.40)) {
+            // Nếu cắt vào giữa chữ ký: lùi lại cắt NGAY TRƯỚC khối chữ ký, chuyển toàn bộ khối chữ ký sang trang sau!
+            currentSliceHeight = insideSig - sourceY;
           } else {
-            // Dự phòng pixel scan nếu không có điểm ngắt DOM
-            const mainCtx = canvas.getContext('2d');
-            const scanWindow = Math.min(Math.floor(pageCanvasHeight * 0.20), 350);
-            const scanStartY = idealCutY - scanWindow;
-            try {
-              const imgDataObj = mainCtx.getImageData(0, scanStartY, canvasWidth, scanWindow);
-              const data = imgDataObj.data;
-              const maxBorderNoise = Math.ceil(canvasWidth / 120);
+            // 2. Tìm điểm cắt DOM an toàn hợp lệ (tr-bottom, heading-top, table-bottom, sig-top)
+            // Vùng tìm kiếm: từ (sourceY + 50% chiều cao trang) đến idealCutY
+            const minAllowedY = sourceY + Math.floor(pageCanvasHeight * 0.50);
+            const candidates = safeCuts
+              .map(bp => ({ ...bp, canvasY: Math.round(bp.y * canvasScale) }))
+              .filter(bp => bp.canvasY <= idealCutY && bp.canvasY >= minAllowedY);
 
-              let bestY = -1;
-              for (let r = scanWindow - 1; r >= 0; r--) {
-                let darkPixels = 0;
-                const rowOffset = r * canvasWidth * 4;
-                for (let x = 0; x < canvasWidth; x += 4) {
-                  const i = rowOffset + (x * 4);
-                  if (data[i] < 160 && data[i + 1] < 160 && data[i + 2] < 160) {
-                    darkPixels++;
+            if (candidates.length > 0) {
+              // Lấy điểm ngắt hợp lệ lớn nhất (sát đáy trang nhất) mà không vượt quá trang
+              candidates.sort((a, b) => b.canvasY - a.canvasY);
+              currentSliceHeight = candidates[0].canvasY - sourceY;
+            } else {
+              // Dự phòng pixel scan nếu không có điểm ngắt DOM trong phạm vi
+              const mainCtx = canvas.getContext('2d');
+              const scanWindow = Math.min(Math.floor(pageCanvasHeight * 0.20), 350);
+              const scanStartY = idealCutY - scanWindow;
+              try {
+                const imgDataObj = mainCtx.getImageData(0, scanStartY, canvasWidth, scanWindow);
+                const data = imgDataObj.data;
+                const maxBorderNoise = Math.ceil(canvasWidth / 120);
+
+                let bestY = -1;
+                for (let r = scanWindow - 1; r >= 0; r--) {
+                  let darkPixels = 0;
+                  const rowOffset = r * canvasWidth * 4;
+                  for (let x = 0; x < canvasWidth; x += 4) {
+                    const i = rowOffset + (x * 4);
+                    if (data[i] < 160 && data[i + 1] < 160 && data[i + 2] < 160) {
+                      darkPixels++;
+                    }
+                  }
+                  if (darkPixels <= maxBorderNoise) {
+                    bestY = r;
+                    break;
                   }
                 }
-                if (darkPixels <= maxBorderNoise) {
-                  bestY = r;
-                  break;
+                if (bestY !== -1 && bestY > 20) {
+                  currentSliceHeight = (scanStartY + bestY) - sourceY;
                 }
+              } catch (e) {
+                console.warn('Lỗi quét điểm cắt pixel dự phòng:', e);
               }
-              if (bestY !== -1 && bestY > 20) {
-                currentSliceHeight = (scanStartY + bestY) - sourceY;
-              }
-            } catch (e) {
-              console.warn('Lỗi quét điểm cắt pixel dự phòng:', e);
             }
           }
         }

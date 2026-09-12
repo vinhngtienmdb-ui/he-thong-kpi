@@ -1404,7 +1404,7 @@ export default function ReportTab({
             </div>
 
             {/* Bottom Signature Block */}
-            <div className="grid grid-cols-2 text-center pt-8 text-[14pt] text-black">
+            <div className="grid grid-cols-2 text-center pt-8 text-[14pt] text-black signature-block">
               <div className="space-y-20">
                 <div>
                   <p className="font-bold uppercase text-black">CÁ NHÂN TỰ ĐÁNH GIÁ</p>
