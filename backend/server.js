@@ -2185,16 +2185,25 @@ app.get('/api/standard-tasks', (req, res) => {
     params.push(dept_code);
   }
 
+  // Tuyệt đối không bao giờ hiển thị các nhiệm vụ/đề xuất đã bị từ chối trong danh mục công việc chuẩn
+  query += " AND (status IS NULL OR status = '' OR status NOT IN ('rejected', 'cancelled'))";
+
   // Quản lý hiển thị trạng thái đề xuất:
-  // - Nếu là CBQL/Admin hoặc yêu cầu include_proposals: hiển thị tất cả
-  // - Nếu là CBNV: hiển thị các nhiệm vụ Hoạt động/Khoá DÙNG CHUNG TOÀN CƠ QUAN, VÀ các đề xuất của chính CBNV đó
-  if (include_proposals === 'true' || isManager) {
-    // Show all
-  } else if (viewer?.id) {
-    query += " AND (status != 'pending_approval' OR proposed_by = ?)";
-    params.push(viewer.id);
+  // - Nếu include_proposals === 'true':
+  //     + CBQL/Admin: hiển thị công việc chuẩn và các đề xuất chờ duyệt (pending_approval)
+  //     + CBNV: hiển thị công việc chuẩn và các đề xuất của chính CBNV đó
+  // - Nếu include_proposals !== 'true' (khi giao việc, đăng ký việc, xem danh mục chuẩn): CHỈ hiển thị danh mục chuẩn chính thức
+  if (include_proposals === 'true') {
+    if (isManager) {
+      // Hiển thị công việc chuẩn và đề xuất chờ duyệt cho CBQL xem xét
+    } else if (viewer?.id) {
+      query += " AND (status != 'pending_approval' OR proposed_by = ?)";
+      params.push(viewer.id);
+    } else {
+      query += " AND (status IS NULL OR status = '' OR status = 'Hoạt động' OR status = 'Tạm khóa' OR status = 'Khoá')";
+    }
   } else {
-    query += " AND (status IS NULL OR status = 'Hoạt động' OR status = 'Tạm khóa' OR status = 'Khoá')";
+    query += " AND status != 'pending_approval'";
   }
 
   query += ' ORDER BY axis_code, deadline ASC';
@@ -2208,12 +2217,12 @@ app.post('/api/standard-tasks/propose', (req, res) => {
   const {
     period_id, dept_code, task_name, output_result, deadline,
     task_type, standard_score, difficulty_weight, expected_evidence, note, axis_code,
-    proposal_type, proposal_note, original_task_id
+    proposal_type, proposal_note, original_task_id, user_id
   } = req.body;
 
   const viewer = getViewer(req);
-  const viewerId = viewer?.id || getViewerId(req);
-  const proposerName = viewer?.full_name || 'Cán bộ';
+  const viewerId = user_id || viewer?.id || getViewerId(req);
+  const proposerName = viewer?.full_name || (viewerId ? db.prepare('SELECT full_name FROM users WHERE id = ?').get(viewerId)?.full_name : null) || 'Cán bộ';
 
   if (!task_name || !task_name.trim()) {
     return res.status(400).json({ success: false, message: 'Vui lòng nhập tên công việc chuẩn' });
@@ -2240,12 +2249,12 @@ app.post('/api/standard-tasks/propose', (req, res) => {
 
   triggerBackgroundSupabaseSync();
 
-  // Tự động gửi thông báo hệ thống tới Lãnh đạo phụ trách / CBQL
+  // Tự động gửi thông báo hệ thống tới tất cả Lãnh đạo phụ trách & CBQL
   try {
-    const leaderId = findDirectLeaderId(viewerId);
-    if (leaderId && leaderId !== viewerId) {
+    const managerIds = getManagersToNotify(viewerId);
+    for (const mgrId of managerIds) {
       createNotification({
-        userId: leaderId,
+        userId: mgrId,
         title: proposal_type === 'edit' ? '📝 Đề xuất sửa đổi công việc chuẩn' : '✨ Đề xuất công việc chuẩn mới',
         message: `${proposerName} đã gửi đề xuất ${proposal_type === 'edit' ? 'sửa đổi' : 'thêm mới'} công việc "${task_name.trim()}". Vui lòng xem xét phê duyệt.`,
         type: 'standard_task_proposal',
@@ -2357,24 +2366,15 @@ app.put('/api/standard-tasks/:id/reject-proposal', requireManagerOrAdmin, (req, 
 
   const finalReason = rejection_reason || 'Không phù hợp với tiêu chuẩn chung của đơn vị';
 
-  db.prepare(`
-    UPDATE standard_tasks
-    SET status = 'rejected',
-        rejection_reason = ?,
-        approved_by = ?,
-        approved_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(finalReason, viewerId, id);
-
-  // Gửi thông báo đến cán bộ đề xuất (nếu có)
+  // Gửi thông báo đến cán bộ đề xuất trước khi xóa bản ghi đề xuất
   try {
     if (proposal.proposed_by) {
       createNotification({
         userId: proposal.proposed_by,
         title: '❌ Đề xuất công việc chuẩn bị từ chối',
-        message: `Lãnh đạo đã từ chối đề xuất "${proposal.task_name}". Lý do: ${finalReason}`,
-        type: 'extension_rejected',
-        taskId: proposal.original_task_id || id,
+        message: `Lãnh đạo đã từ chối đề xuất "${proposal.task_name}". Lý do: ${finalReason}. Đề xuất này không được thêm vào danh mục công việc chuẩn.`,
+        type: 'task_rejected',
+        taskId: proposal.original_task_id || null,
         tab: 'standard'
       });
     }
@@ -2382,9 +2382,12 @@ app.put('/api/standard-tasks/:id/reject-proposal', requireManagerOrAdmin, (req, 
     console.error('[Standard Task Reject Notification Error]:', notifErr.message);
   }
 
+  // Xóa bản ghi đề xuất khỏi bảng standard_tasks để đảm bảo TUYỆT ĐỐI KHÔNG THÊM VÀO DANH MỤC CÔNG VIỆC CHUẨN
+  db.prepare('DELETE FROM standard_tasks WHERE id = ?').run(id);
+
   triggerBackgroundSupabaseSync();
 
-  res.json({ success: true, message: 'Đã từ chối đề xuất công việc chuẩn.' });
+  res.json({ success: true, message: 'Đã từ chối đề xuất và không thêm vào danh mục công việc chuẩn.' });
 });
 
 // Download template for standard tasks import
@@ -3369,13 +3372,13 @@ app.post('/api/assigned-tasks/register', (req, res) => {
 
   triggerBackgroundSupabaseSync();
 
-  // Tự động gửi thông báo hệ thống tới Lãnh đạo phụ trách / CBQL
+  // Tự động gửi thông báo hệ thống tới tất cả Lãnh đạo phụ trách & CBQL
   try {
-    const leaderId = findDirectLeaderId(user_id);
-    if (leaderId && leaderId !== user_id) {
-      const u = db.prepare('SELECT full_name FROM users WHERE id = ?').get(user_id);
+    const managerIds = getManagersToNotify(user_id);
+    const u = db.prepare('SELECT full_name FROM users WHERE id = ?').get(user_id);
+    for (const mgrId of managerIds) {
       createNotification({
-        userId: leaderId,
+        userId: mgrId,
         title: '📋 Đăng ký công việc mới chờ phê duyệt',
         message: `Cán bộ ${u?.full_name || 'Cán bộ'} đã đăng ký công việc mới: "${task_name.trim()}". Vui lòng xem xét phê duyệt.`,
         type: 'task_registered',
@@ -4392,6 +4395,56 @@ function findDirectLeaderId(userId) {
   } catch (err) {
     console.error('[findDirectLeaderId] Error:', err);
     return null;
+  }
+}
+
+function getManagersToNotify(userId) {
+  if (!userId) return [];
+  try {
+    const user = db.prepare('SELECT id, dept_id, manager_id FROM users WHERE id = ?').get(userId);
+    const managerIds = new Set();
+
+    // 1. Direct manager từ bảng users
+    if (user?.manager_id && user.manager_id !== userId) {
+      managerIds.add(user.manager_id);
+    }
+
+    // 2. Positions manager từ bảng user_positions
+    try {
+      const positions = db.prepare('SELECT manager_id FROM user_positions WHERE user_id = ? AND manager_id IS NOT NULL AND manager_id != ?').all(userId, userId);
+      positions.forEach(p => { if (p.manager_id) managerIds.add(p.manager_id); });
+    } catch (e) {}
+
+    // 3. Department leader
+    if (user?.dept_id) {
+      const dept = db.prepare('SELECT leader_id FROM departments WHERE id = ?').get(user.dept_id);
+      if (dept?.leader_id && dept.leader_id !== userId) {
+        managerIds.add(dept.leader_id);
+      }
+      // 4. Toàn bộ CBQL trong cùng phòng ban (role in 'cbql', 'admin' hoặc quan_ly, lanh_dao)
+      const deptCBQLs = db.prepare(`
+        SELECT id FROM users 
+        WHERE dept_id = ? 
+          AND id != ? 
+          AND is_active = 1 
+          AND (role IN ('cbql', 'admin') OR management_role IN ('quan_ly', 'lanh_dao'))
+      `).all(user.dept_id, userId);
+      deptCBQLs.forEach(u => managerIds.add(u.id));
+    }
+
+    // 5. Toàn bộ Lãnh đạo cơ quan và Quản trị viên
+    const unitLeaders = db.prepare(`
+      SELECT id FROM users 
+      WHERE (role = 'admin' OR management_role = 'lanh_dao') 
+        AND id != ? 
+        AND is_active = 1
+    `).all(userId);
+    unitLeaders.forEach(u => managerIds.add(u.id));
+
+    return Array.from(managerIds);
+  } catch (err) {
+    console.error('[getManagersToNotify] Error:', err);
+    return [];
   }
 }
 

@@ -172,7 +172,7 @@ export default function StandardTasksTab({
   async function loadTasks() {
     try {
       setLoading(true);
-      const params = {};
+      const params = { include_proposals: 'true' };
       if (selectedPeriod) params.period_id = selectedPeriod;
       if (selectedAxis) params.axis_code = selectedAxis;
       const vId = currentUser?.id || (api.getViewerId ? api.getViewerId() : null);
@@ -240,7 +240,9 @@ export default function StandardTasksTab({
       const payload = {
         ...proposeForm,
         output_result: finalOutput,
-        period_id: selectedPeriod
+        period_id: selectedPeriod,
+        user_id: currentUser?.id,
+        viewer_id: currentUser?.id
       };
 
       const res = await api.proposeStandardTask(payload);
@@ -821,7 +823,10 @@ export default function StandardTasksTab({
     } else if (proposalFilter === 'my_proposals') {
       matchesProposal = t.proposed_by === currentUser?.id;
     } else if (proposalFilter === 'official') {
-      matchesProposal = t.status !== 'pending_approval' && t.status !== 'rejected';
+      matchesProposal = t.status !== 'pending_approval' && t.status !== 'rejected' && t.status !== 'cancelled';
+    } else {
+      // Mọi bộ lọc khác đều không hiển thị nhiệm vụ đã bị từ chối
+      matchesProposal = t.status !== 'rejected' && t.status !== 'cancelled';
     }
 
     return matchesSearch && matchesOutput && matchesProposal;

@@ -118,6 +118,8 @@ export default function Header({
   };
 
   useEffect(() => {
+    shownToastNotifIdsRef.current.clear();
+    setActiveToastNotif(null);
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 10000); // Polling mỗi 10 giây để nhận thông báo tức thời
     return () => clearInterval(interval);
