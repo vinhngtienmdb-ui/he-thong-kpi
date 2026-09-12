@@ -1012,7 +1012,7 @@ export default function ReportTab({
                       {leaderSignerTitle || 'THỦ TRƯỞNG CƠ QUAN, ĐƠN VỊ'}
                     </p>
                     <p className="italic text-[14pt] text-slate-700 mt-0.5">
-                      (Xác lập thời điểm, ký, ghi rõ họ tên và đóng dấu)
+                      (Ký, ghi rõ họ tên và đóng dấu)
                     </p>
                   </div>
                   <div>
@@ -1067,7 +1067,7 @@ export default function ReportTab({
                       {leaderSignerTitle || 'XÁC NHẬN CỦA BAN THƯỜNG VỤ CẤP ỦY\nHOẶC TẬP THỂ LÃNH ĐẠO CƠ QUAN, ĐƠN VỊ'}
                     </p>
                     <p className="italic text-[14pt] text-slate-700 mt-0.5">
-                      (Xác lập thời điểm, ký, ghi rõ họ tên và đóng dấu)
+                      (Ký, ghi rõ họ tên và đóng dấu)
                     </p>
                   </div>
                   <div>
@@ -1432,7 +1432,7 @@ export default function ReportTab({
                     {leaderSignerTitle || 'XÁC NHẬN CỦA BAN THƯỜNG VỤ CẤP ỦY\nHOẶC TẬP THỂ LÃNH ĐẠO CƠ QUAN, ĐƠN VỊ'}
                   </p>
                   <p className="italic text-[14pt] text-slate-700 mt-0.5">
-                    (Xác lập thời điểm, ký, ghi rõ họ tên và đóng dấu)
+                    (Ký, ghi rõ họ tên và đóng dấu)
                   </p>
                 </div>
                 <div>

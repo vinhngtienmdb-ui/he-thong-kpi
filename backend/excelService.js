@@ -1460,7 +1460,7 @@ async function exportCBQLWorkbook(periodId, userId) {
   confHead.alignment = { horizontal: 'center', wrapText: true };
   ws.mergeCells(`D${confHead.number}:I${confHead.number}`);
 
-  const confSub = ws.addRow(['', '', '', '(Xác lập thời điểm, ký, ghi rõ họ tên và đóng dấu)']);
+  const confSub = ws.addRow(['', '', '', '(Ký, ghi rõ họ tên và đóng dấu)']);
   confSub.font = { name: 'Times New Roman', size: 14, italic: true };
   confSub.alignment = { horizontal: 'center' };
   ws.mergeCells(`D${confSub.number}:I${confSub.number}`);
@@ -1684,7 +1684,7 @@ async function exportCBQLWorkbook(periodId, userId) {
 
   const s2SigSub = wsTasks.addRow([
     '', '(Ký, ghi rõ họ tên)', '', '', '', '', '', '', '', '', '',
-    '(Xác lập thời điểm, ký, ghi rõ họ tên và đóng dấu)'
+    '(Ký, ghi rõ họ tên và đóng dấu)'
   ]);
   s2SigSub.font = { name: 'Times New Roman', size: 14, italic: true };
   wsTasks.mergeCells(`B${s2SigSub.number}:E${s2SigSub.number}`);

@@ -1011,7 +1011,7 @@ async function exportCBQLDocx(periodId, userId) {
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: '(Ký, đóng dấu, ghi rõ họ tên)', italics: true, size: 28, font: 'Times New Roman' })]
+                children: [new TextRun({ text: '(Ký, ghi rõ họ tên và đóng dấu)', italics: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({ spacing: { before: 1200 } }),
               new Paragraph({
@@ -1057,7 +1057,7 @@ async function exportCBQLDocx(periodId, userId) {
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: '(Ký, đóng dấu, ghi rõ họ tên)', italics: true, size: 28, font: 'Times New Roman' })]
+                children: [new TextRun({ text: '(Ký, ghi rõ họ tên và đóng dấu)', italics: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({ spacing: { before: 1200 } }),
               new Paragraph({
