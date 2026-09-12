@@ -213,6 +213,13 @@ export default function ReportTab({
   const criteria = evalData?.criteria || [];
   const exportUrl = api.getExportUrl(activePeriodId, selectedUser);
   const exportMau02Url = api.getExportMau02Url(activePeriodId);
+  const exportDocxUrl = api.getExportDocxUrl(activePeriodId, selectedUser);
+  const exportDocxTasksUrl = api.getExportDocxTasksUrl(activePeriodId, selectedUser);
+  const exportDocxMau02Url = api.getExportDocxMau02Url(activePeriodId);
+
+  const currentDocxUrl = (canViewAllReports && activeReportView === 'mau_02')
+    ? exportDocxMau02Url
+    : (activeReportView === 'execution_report' ? exportDocxTasksUrl : exportDocxUrl);
 
   const part1Score = criteria.reduce((sum, c) => sum + (c.is_satisfied === 1 ? c.max_score : 0), 0);
   const part2Score = evaluation.part2_score !== undefined && evaluation.part2_score !== null ? evaluation.part2_score : 0;
@@ -362,13 +369,13 @@ export default function ReportTab({
               </div>
             )}
 
-            {/* Unified Export & Print Button (Gộp In báo cáo / Xuất PDF / Tải Excel) */}
+            {/* Unified Export & Print Button (Gộp In báo cáo / Xuất PDF / Xuất Word / Tải Excel) */}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setShowExportMenu(prev => !prev)}
                 className="flex items-center space-x-2 bg-slate-900 hover:bg-black text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm transition-colors cursor-pointer"
-                title="In báo cáo, Xuất file PDF khổ A4 hoặc Tải file Excel"
+                title="In báo cáo, Xuất file PDF, Xuất file Word (.docx) hoặc Tải file Excel"
               >
                 <Printer className="w-4 h-4 text-slate-200" />
                 <span>In & Xuất Báo cáo</span>
@@ -422,7 +429,30 @@ export default function ReportTab({
                       </div>
                     </button>
 
-                    {/* 3. Xuất Excel */}
+                    {/* 3. Xuất Word (.docx) */}
+                    <a
+                      href={currentDocxUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => setShowExportMenu(false)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-slate-700 hover:bg-slate-100 font-semibold text-left transition cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-900">Xuất Word (.docx)</div>
+                        <div className="text-[11px] text-slate-500 font-normal">
+                          {canViewAllReports && activeReportView === 'mau_02' 
+                            ? 'Tải file Word Mẫu 02 (Toàn cơ quan, A4 ngang)' 
+                            : activeReportView === 'execution_report'
+                            ? 'Tải file Word Báo cáo công việc (Khổ A4)'
+                            : `Tải file Word (${isCbnv ? 'Mẫu 01-B' : 'Mẫu 01-A'} & Công việc)`}
+                        </div>
+                      </div>
+                    </a>
+
+                    {/* 4. Xuất Excel */}
                     <a
                       href={canViewAllReports && activeReportView === 'mau_02' ? exportMau02Url : exportUrl}
                       target="_blank"

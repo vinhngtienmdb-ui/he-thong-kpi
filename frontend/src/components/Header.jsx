@@ -1247,12 +1247,49 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 5.3 */}
+              {/* Version 5.4 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 5.3</span>
-                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 08:50 (Bản phát hành mới nhất - Xuất Excel Người dùng, Gộp Nút Báo cáo & Khổ A4 14pt, Đổi tên Cấu hình & Nhật ký hoạt động (Logs))</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 5.4</span>
+                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 09:10 (Bản phát hành mới nhất - Bổ sung Xuất Báo cáo theo file Word .docx chuẩn A4 Times New Roman 14pt)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Bổ Sung Tính Năng Xuất Báo Cáo Theo File Word (DOCX) Cho Toàn Bộ Các Trường Xuất Báo Cáo, Tuân Thủ Tuyệt Đối Quy Chuẩn Thể Thức Văn Bản Quản Lý Nhà Nước
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Xuất file Word (.docx) cho Bản tự đánh giá (Mẫu 01-A cho CBQL, Mẫu 01-B cho CBNV):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Tự động nhận diện đối tượng cán bộ (Lãnh đạo quản lý &rarr; Mẫu 01-A, Chuyên viên/Nhân viên &rarr; Mẫu 01-B).</li>
+                      <li>Trình bày đầy đủ thể thức: Quốc hiệu, Tiêu ngữ, Cơ quan cấp trên, Tên cơ quan, Ngày tháng hành chính, Thông tin cán bộ và 17 tiêu chuẩn chính trị, đạo đức, tác phong (30 điểm).</li>
+                      <li>Kèm bảng tổng hợp kết quả công việc (70 điểm) theo công thức Hướng dẫn 06-HD/BTCTU, điểm thưởng (+5%), danh sách chi tiết các nhiệm vụ trong quý, ý kiến nhận xét của cấp quản lý và phần chữ ký 2 bên.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Xuất file Word (.docx) Báo cáo kết quả thực hiện nhiệm vụ công việc:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Trình bày phân nhóm chi tiết toàn bộ các nhiệm vụ theo 6 trục kết quả, thống kê số lượng nhiệm vụ thường xuyên / đột xuất, điểm quy đổi, điểm thưởng và trạng thái hoàn thành.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Xuất file Word (.docx) Báo cáo Mẫu 02 (Tổng hợp xếp loại toàn cơ quan):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Định dạng khổ giấy <strong>A4 nằm ngang (Landscape)</strong> dàn đều 13 cột tiêu chuẩn, phân tách 3 khối đối tượng: <em>Khối Công chức, Khối Viên chức, Khối Người lao động</em>.</li>
+                      <li>Bao gồm bảng tổng hợp tỷ lệ xếp loại theo từng khối đối tượng và kiểm soát trần khống chế <strong>≤ 20%</strong> Hoàn thành xuất sắc nhiệm vụ.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Tích hợp vào nút menu gộp "🖨️ In & Xuất Báo cáo ▾":</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Người dùng có thể dễ dàng chọn <strong>"📝 Xuất Word (.docx)"</strong> ngay cạnh các chức năng <em>In báo cáo, Xuất PDF, Xuất Excel</em>, tự động tải đúng mẫu biểu tương ứng với màn hình đang xem.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 5.3 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-400 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 5.3</span>
+                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 08:50 (Xuất Excel Người dùng, Gộp Nút Báo cáo & Khổ A4 14pt, Đổi tên Cấu hình & Nhật ký hoạt động (Logs))</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Xuất File Excel Danh Sách Người Dùng, Tối Ưu Nút Báo Cáo & Định Dạng Khổ Giấy A4 Times New Roman 14pt, Chuẩn Hóa Tên Chức Năng Cấu Hình & Nhật Ký Hoạt Động (Logs)

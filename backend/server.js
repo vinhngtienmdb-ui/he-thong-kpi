@@ -25,6 +25,11 @@ const {
   exportDirectoryWorkbook,
   exportUsersWorkbook
 } = require('./excelService');
+const {
+  exportCBQLDocx,
+  exportTasksDocx,
+  exportMau02Docx
+} = require('./docxService');
 const { compareUsersByPositionAndName } = require('./userSorting');
 const { 
   getSupabaseStatus, 
@@ -5951,6 +5956,106 @@ app.get('/api/reports/export-mau-02/:periodId', async (req, res) => {
     res.status(500).json({ error: 'Lỗi xuất Excel Mẫu 02: ' + err.message });
   }
 });
+
+// ============================================================================
+// WORD (.DOCX) EXPORT ENDPOINTS
+// ============================================================================
+
+// 1. Export Mẫu 01-A (CBQL) / Mẫu 01-B (CBNV) Word (.docx)
+app.get(['/api/reports/export-docx-cbql', '/api/reports/export-docx/:periodId/:userId'], async (req, res) => {
+  try {
+    const period_id = req.query.period_id || req.params.periodId;
+    const user_id = req.query.user_id || req.params.userId;
+
+    if (!period_id || !user_id) {
+      return res.status(400).json({ error: 'Thiếu tham số period_id hoặc user_id' });
+    }
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(user_id);
+    const isCbnv = user && ((user.target_role === 'cbnv') || (user.role === 'cbnv' && user.target_role !== 'cbql'));
+    const prefix = isCbnv ? 'Mau_01B_CBNV' : 'Mau_01A_CBQL';
+    const asciiName = user ? user.full_name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^a-zA-Z0-9]/g, '_') : 'CanBo';
+    const encodedName = user ? encodeURIComponent(user.full_name) : 'CanBo';
+
+    const docxBuffer = await exportCBQLDocx(period_id, user_id);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${prefix}_${asciiName}.docx"; filename*=UTF-8''${prefix}_${encodedName}.docx`);
+    res.setHeader('Content-Length', docxBuffer.length);
+
+    logSystemActivity(req, {
+      action: 'export_docx_mau01',
+      entity_type: 'evaluation',
+      entity_id: user_id,
+      description: `Xuất file Word ${prefix} cho cán bộ ${user?.full_name || user_id} (${period_id})`
+    });
+
+    res.send(docxBuffer);
+  } catch (error) {
+    console.error('Error exporting CBQL Word docx:', error);
+    res.status(500).json({ error: 'Lỗi xuất file Word: ' + error.message });
+  }
+});
+
+// 2. Export Báo cáo kết quả thực hiện nhiệm vụ công việc Word (.docx)
+app.get(['/api/reports/export-docx-tasks', '/api/reports/export-docx-tasks/:periodId/:userId'], async (req, res) => {
+  try {
+    const period_id = req.query.period_id || req.params.periodId;
+    const user_id = req.query.user_id || req.params.userId;
+
+    if (!period_id || !user_id) {
+      return res.status(400).json({ error: 'Thiếu tham số period_id hoặc user_id' });
+    }
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(user_id);
+    const asciiName = user ? user.full_name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^a-zA-Z0-9]/g, '_') : 'CanBo';
+    const encodedName = user ? encodeURIComponent(user.full_name) : 'CanBo';
+
+    const docxBuffer = await exportTasksDocx(period_id, user_id);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="Bao_cao_cong_viec_${asciiName}.docx"; filename*=UTF-8''Bao_cao_cong_viec_${encodedName}.docx`);
+    res.setHeader('Content-Length', docxBuffer.length);
+
+    logSystemActivity(req, {
+      action: 'export_docx_tasks',
+      entity_type: 'assigned_tasks',
+      entity_id: user_id,
+      description: `Xuất file Word Báo cáo công việc cho cán bộ ${user?.full_name || user_id} (${period_id})`
+    });
+
+    res.send(docxBuffer);
+  } catch (error) {
+    console.error('Error exporting tasks Word docx:', error);
+    res.status(500).json({ error: 'Lỗi xuất file Word báo cáo công việc: ' + error.message });
+  }
+});
+
+// 3. Export Mẫu 02 (Báo cáo tổng hợp toàn cơ quan) Word (.docx) - Khổ A4 Landscape
+app.get(['/api/reports/export-docx-mau-02', '/api/reports/export-docx-mau-02/:periodId'], async (req, res) => {
+  try {
+    const period_id = req.query.period_id || req.params.periodId || 'p-1';
+
+    const docxBuffer = await exportMau02Docx(period_id);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="Mau_02_Tong_hop_xep_loai_${period_id}.docx"`);
+    res.setHeader('Content-Length', docxBuffer.length);
+
+    logSystemActivity(req, {
+      action: 'export_docx_mau02',
+      entity_type: 'reports',
+      entity_id: period_id,
+      description: `Xuất file Word Mẫu 02 tổng hợp toàn cơ quan (${period_id})`
+    });
+
+    res.send(docxBuffer);
+  } catch (error) {
+    console.error('Error exporting Mau 02 Word docx:', error);
+    res.status(500).json({ error: 'Lỗi xuất file Word Mẫu 02: ' + error.message });
+  }
+});
+
 
 // ============================================================================
 // USER GROUPS MODULE (NHÓM NGƯỜI DÙNG / TỔ CÔNG TÁC TỰ TẠO)

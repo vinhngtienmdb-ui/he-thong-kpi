@@ -1,9 +1,36 @@
-﻿# LỊCH SỬ CẬP NHẬT HỆ THỐNG (CHANGELOG)
+# LỊCH SỬ CẬP NHẬT HỆ THỐNG (CHANGELOG)
 Hệ thống Đánh giá Hiệu quả Công việc (KPI) theo Quy định số 366-QĐ/TW & Hướng dẫn số 06-HD/BTCTU
 
 ---
 
-## [Phiên bản 5.2] - 12/09/2026 - 00:20 (Bản phát hành mới nhất)
+## [Phiên bản 5.4] - 12/09/2026 - 09:10 (Bản phát hành mới nhất)
+### Bổ sung Tính năng Xuất Báo cáo theo File Word (.docx) cho Toàn bộ các Trường Xuất Báo Cáo
+
+- **Xuất file Word (.docx) cho Bản tự đánh giá (Mẫu 01-A cho CBQL, Mẫu 01-B cho CBNV):**
+  - Tự động nhận diện đối tượng cán bộ (Lãnh đạo quản lý &rarr; Mẫu 01-A, Chuyên viên/Nhân viên &rarr; Mẫu 01-B).
+  - Trình bày đầy đủ thể thức: Quốc hiệu, Tiêu ngữ, Cơ quan cấp trên, Tên cơ quan, Ngày tháng hành chính, Thông tin cán bộ và 17 tiêu chuẩn chính trị, đạo đức, tác phong (30 điểm).
+  - Kèm bảng tổng hợp kết quả công việc (70 điểm) theo công thức Hướng dẫn 06-HD/BTCTU, điểm thưởng (+5%), danh sách chi tiết các nhiệm vụ trong quý, ý kiến nhận xét của cấp quản lý và phần chữ ký 2 bên.
+- **Xuất file Word (.docx) Báo cáo kết quả thực hiện nhiệm vụ công việc:**
+  - Trình bày phân nhóm chi tiết toàn bộ các nhiệm vụ theo 6 trục kết quả, thống kê số lượng nhiệm vụ thường xuyên / đột xuất, điểm quy đổi, điểm thưởng và trạng thái hoàn thành.
+- **Xuất file Word (.docx) Báo cáo Mẫu 02 (Tổng hợp xếp loại toàn cơ quan):**
+  - Định dạng khổ giấy **A4 nằm ngang (Landscape)** dàn đều 13 cột tiêu chuẩn, phân tách 3 khối đối tượng: *Khối Công chức, Khối Viên chức, Khối Người lao động*.
+  - Bao gồm bảng tổng hợp tỷ lệ xếp loại theo từng khối đối tượng và kiểm soát trần khống chế **≤ 20%** Hoàn thành xuất sắc nhiệm vụ.
+- **Tích hợp vào nút menu gộp "🖨️ In & Xuất Báo cáo ▾":**
+  - Người dùng có thể dễ dàng chọn **"📝 Xuất Word (.docx)"** ngay cạnh các chức năng *In báo cáo, Xuất PDF, Xuất Excel*, tự động tải đúng mẫu biểu tương ứng với màn hình đang xem.
+
+---
+
+## [Phiên bản 5.3] - 12/09/2026 - 08:50
+### Xuất File Excel Danh Sách Người Dùng, Tối Ưu Nút Báo Cáo & Định Dạng Khổ Giấy A4 Times New Roman 14pt, Chuẩn Hóa Tên Chức Năng Cấu Hình & Nhật Ký Hoạt Động (Logs)
+
+- **Xuất file Excel danh sách người dùng & cán bộ nhân viên:** Hỗ trợ xuất đầy đủ 14 cột tiêu chuẩn thông tin cán bộ theo bộ lọc hiện hành.
+- **Gộp tính năng Báo cáo & Chuẩn hóa Khổ A4 14pt:** Gộp nút In & Xuất Báo cáo với menu xổ xuống, dàn đều hàng ngang không tràn mép.
+- **Chuẩn hóa Tên chức năng Cấu hình:** Quản lý đơn vị, Quản lý phân quyền, Quản lý chu kỳ đánh giá, Backup.
+- **Nhật ký hoạt động (Logs):** Bổ sung phân hệ 5. Nhật ký hoạt động (Logs) cập nhật thời gian thực ● LIVE (3s).
+
+---
+
+## [Phiên bản 5.2] - 12/09/2026 - 00:20
 ### Cập nhật Trạng thái Hoàn thành Văn bản, Cơ chế Gán Quyền Văn thư, Khắc phục Phân quyền Động CBQL, Chuẩn hóa Danh mục theo Quý & Sắp xếp Cây Đơn vị Thứ bậc
 
 - **Xử lý Hoàn thành văn bản sau khi kết thúc công việc:**

@@ -483,6 +483,17 @@ export const api = {
     return `${BASE_URL}/reports/export-mau-02?period_id=${periodId}`;
   },
 
+  // Word (.docx) Export URLs
+  getExportDocxUrl: (periodId, userId) => {
+    return `${BASE_URL}/reports/export-docx-cbql?period_id=${periodId}&user_id=${userId}`;
+  },
+  getExportDocxTasksUrl: (periodId, userId) => {
+    return `${BASE_URL}/reports/export-docx-tasks?period_id=${periodId}&user_id=${userId}`;
+  },
+  getExportDocxMau02Url: (periodId) => {
+    return `${BASE_URL}/reports/export-docx-mau-02?period_id=${periodId}`;
+  },
+
   // 6-Step Workflow Transition
   transitionStep: (data) => {
     return fetchApi('/evaluations/step', {
