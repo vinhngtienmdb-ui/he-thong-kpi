@@ -214,6 +214,8 @@ function initDatabase() {
       rank_proposed TEXT,
       superior_rank TEXT,
       superior_comment TEXT,
+      superior_evaluator_id TEXT,
+      superior_evaluated_at DATETIME,
       status TEXT DEFAULT 'draft', -- 'draft', 'submitted', 'approved'
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(period_id, user_id),
@@ -505,6 +507,8 @@ function initDatabase() {
     "ALTER TABLE evaluations ADD COLUMN final_classification TEXT;",
     "ALTER TABLE evaluations ADD COLUMN skip_level_reviewer_id TEXT;",
     "ALTER TABLE evaluations ADD COLUMN skip_level_status TEXT DEFAULT 'approved';",
+    "ALTER TABLE evaluations ADD COLUMN superior_evaluator_id TEXT;",
+    "ALTER TABLE evaluations ADD COLUMN superior_evaluated_at TEXT;",
     "ALTER TABLE users ADD COLUMN employee_type TEXT DEFAULT 'vien_chuc';"
   ];
 

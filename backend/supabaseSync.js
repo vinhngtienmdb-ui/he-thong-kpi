@@ -393,14 +393,16 @@ async function pushToSupabase() {
           'summary_reason', 'cadre_proposal_note', 'return_reason', 'returned_at',
           'returned_by', 'submitted_at', 'advisory_rank', 'advisory_comment',
           'advisory_by', 'advisory_submitted_at', 'is_advisory_submitted',
-          'final_classification', 'skip_level_reviewer_id', 'skip_level_status'
+          'final_classification', 'skip_level_reviewer_id', 'skip_level_status',
+          'superior_evaluator_id', 'superior_evaluated_at'
         ],
         ['period_id', 'user_id'],
-        null, // Cập nhật TOÀN BỘ 28 cột còn lại
+        null, // Cập nhật TOÀN BỘ các cột còn lại
         evaluations.map(ev => ({
           ...ev,
           returned_by: validUserIds.has(ev.returned_by) ? ev.returned_by : null,
           advisory_by: validUserIds.has(ev.advisory_by) ? ev.advisory_by : null,
+          superior_evaluator_id: validUserIds.has(ev.superior_evaluator_id) ? ev.superior_evaluator_id : null,
           is_advisory_submitted: ev.is_advisory_submitted ?? 0,
           skip_level_status: ev.skip_level_status || 'approved'
         }))
@@ -795,7 +797,7 @@ async function pullFromSupabase() {
     })();
     stats.document_dispatches = supDispatches.rows.length;
 
-    // 12. evaluations (ĐẦY ĐỦ 30 CỘT)
+    // 12. evaluations (ĐẦY ĐỦ 32 CỘT)
     const supEvals = await client.query('SELECT * FROM evaluations');
     const insEval = db.prepare(`
       INSERT OR REPLACE INTO evaluations (
@@ -805,8 +807,9 @@ async function pullFromSupabase() {
         summary_reason, cadre_proposal_note, return_reason, returned_at,
         returned_by, submitted_at, advisory_rank, advisory_comment,
         advisory_by, advisory_submitted_at, is_advisory_submitted,
-        final_classification, skip_level_reviewer_id, skip_level_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        final_classification, skip_level_reviewer_id, skip_level_status,
+        superior_evaluator_id, superior_evaluated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
       for (const e of supEvals.rows) {
@@ -821,7 +824,8 @@ async function pullFromSupabase() {
           toSqliteVal(e.advisory_rank), toSqliteVal(e.advisory_comment), toSqliteVal(e.advisory_by),
           toSqliteVal(e.advisory_submitted_at), e.is_advisory_submitted ? 1 : 0,
           toSqliteVal(e.final_classification), toSqliteVal(e.skip_level_reviewer_id),
-          toSqliteVal(e.skip_level_status || 'approved')
+          toSqliteVal(e.skip_level_status || 'approved'),
+          toSqliteVal(e.superior_evaluator_id), toSqliteVal(e.superior_evaluated_at)
         );
       }
     })();

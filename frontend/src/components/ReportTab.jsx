@@ -224,6 +224,28 @@ export default function ReportTab({
   const canEditMau02 = currentUser?.role === 'admin' || currentUser?.role === 'cbql' || (currentUser?.data_scope && currentUser?.data_scope !== 'personal');
   const evaluation = evalData?.evaluation || {};
   const criteria = evalData?.criteria || [];
+
+  // Xác định người đánh giá CBNV ở Bước 4 (Chức danh & Họ tên)
+  // Chỉ hiển thị khi hồ sơ ĐÃ ĐƯỢC ĐÁNH GIÁ Ở BƯỚC 4
+  // Nếu chưa có thì BỎ TRỐNG ở chỗ ghi Trưởng đơn vị
+  const step4Evaluator = evalData?.step4Evaluator || (evaluation.step4_evaluator_name ? {
+    full_name: evaluation.step4_evaluator_name,
+    title: evaluation.step4_evaluator_title
+  } : null);
+
+  const hasStep4Evaluator = Boolean(
+    step4Evaluator?.full_name && (
+      evaluation.superior_evaluator_id ||
+      evaluation.superior_rank ||
+      (evaluation.status === 'approved' && evaluation.step !== 'step_1_register' && evaluation.step !== 'step_2_evidence' && evaluation.step !== 'step_3_self_eval') ||
+      evaluation.step === 'step_6_advisory' ||
+      evaluation.step === 'step_7_voting'
+    )
+  );
+
+  const step4EvaluatorTitle = hasStep4Evaluator ? (step4Evaluator?.title || '') : '';
+  const step4EvaluatorName = hasStep4Evaluator ? (step4Evaluator?.full_name || '') : '';
+
   const exportUrl = api.getExportUrl(activePeriodId, selectedUser);
   const exportMau02Url = api.getExportMau02Url(activePeriodId);
   const exportDocxUrl = api.getExportDocxUrl(activePeriodId, selectedUser);
@@ -971,10 +993,21 @@ export default function ReportTab({
                   </p>
                   <p className="italic text-[14pt] text-slate-700">(Ký, ghi rõ họ tên)</p>
                 </div>
-                <div>
-                  <p className="font-bold text-[14pt] text-black uppercase">
-                    {deptLeaderTitle}
-                  </p>
+                <div className="min-h-[3rem]">
+                  {hasStep4Evaluator ? (
+                    <div className="space-y-1">
+                      {step4EvaluatorTitle && (
+                        <p className="font-bold text-[14pt] text-black uppercase leading-snug">
+                          {step4EvaluatorTitle}
+                        </p>
+                      )}
+                      {step4EvaluatorName && (
+                        <p className="font-bold text-[14pt] text-black leading-snug">
+                          {step4EvaluatorName}
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>

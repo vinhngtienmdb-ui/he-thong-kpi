@@ -133,6 +133,26 @@ async function exportCBQLDocx(periodId, userId) {
     superior_comment: ''
   };
 
+  // Xác định người đánh giá Bước 4 (Chức danh & Họ tên)
+  const isStep4Evaluated = Boolean(
+    evaluation.superior_evaluator_id ||
+    evaluation.superior_rank ||
+    (evaluation.status === 'approved' && evaluation.step !== 'step_1_register' && evaluation.step !== 'step_2_evidence' && evaluation.step !== 'step_3_self_eval') ||
+    evaluation.step === 'step_6_advisory' ||
+    evaluation.step === 'step_7_voting'
+  );
+  let step4Evaluator = null;
+  if (isStep4Evaluated) {
+    if (evaluation.superior_evaluator_id) {
+      step4Evaluator = db.prepare('SELECT full_name, gov_title, party_title, role, management_role FROM users WHERE id = ?').get(evaluation.superior_evaluator_id);
+    }
+    if (!step4Evaluator && user.manager_id) {
+      step4Evaluator = db.prepare('SELECT full_name, gov_title, party_title, role, management_role FROM users WHERE id = ?').get(user.manager_id);
+    }
+  }
+  const step4EvaluatorTitle = (step4Evaluator?.gov_title || step4Evaluator?.party_title || '').trim();
+  const step4EvaluatorName = step4Evaluator?.full_name || '';
+
   // Fetch criteria
   const criteriaList = db.prepare(`
     SELECT c.*, COALESCE(d.is_satisfied, 1) as is_satisfied, COALESCE(d.score, c.max_score) as score, d.note
@@ -988,17 +1008,25 @@ async function exportCBQLDocx(periodId, userId) {
             children: [
               new Paragraph({
                 alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: 'LÃNH ĐẠO TRỰC TIẾP', bold: true, size: 28, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'LÃNH ĐẠO / QUẢN LÝ ĐƠN VỊ TRỰC TIẾP', bold: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({
                 alignment: AlignmentType.CENTER,
                 children: [new TextRun({ text: '(Ký, ghi rõ họ tên)', italics: true, size: 28, font: 'Times New Roman' })]
               }),
               new Paragraph({ spacing: { before: 1200 } }),
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [new TextRun({ text: user.manager_title || 'TRƯỞNG ĐƠN VỊ', bold: true, size: 28, font: 'Times New Roman' })]
-              })
+              ...(step4EvaluatorTitle ? [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [new TextRun({ text: step4EvaluatorTitle.toUpperCase(), bold: true, size: 28, font: 'Times New Roman' })]
+                })
+              ] : []),
+              ...(step4EvaluatorName ? [
+                new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [new TextRun({ text: step4EvaluatorName, bold: true, size: 28, font: 'Times New Roman' })]
+                })
+              ] : [])
             ]
           }),
           new TableCell({

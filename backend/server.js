@@ -4715,6 +4715,71 @@ setInterval(() => {
 // -------------------------------------------------------------
 // 4. KPI Evaluations & Common Criteria (Quy trình 6 bước HD.06)
 // -------------------------------------------------------------
+/**
+ * Helper: Xác định Người đánh giá CBNV ở Bước 4 (Chức danh & Họ tên)
+ * Quy định:
+ * - Chỉ trả về thông tin người đánh giá khi hồ sơ ĐÃ ĐƯỢC ĐÁNH GIÁ Ở BƯỚC 4
+ *   (có superior_evaluator_id, hoặc superior_rank, hoặc status = 'approved', hoặc đã qua Bước 4).
+ * - Nếu CHƯA CÓ người đánh giá ở Bước 4 thì trả về null (để biểu mẫu Mẫu 01-B bỏ trống ở chỗ ghi Trưởng đơn vị).
+ */
+function resolveStep4Evaluator(database, evaluation, targetUser, periodId) {
+  if (!evaluation) return null;
+
+  const isStep4Evaluated = Boolean(
+    evaluation.superior_evaluator_id ||
+    evaluation.superior_rank ||
+    (evaluation.status === 'approved' && evaluation.step !== 'step_1_register' && evaluation.step !== 'step_2_evidence' && evaluation.step !== 'step_3_self_eval') ||
+    evaluation.step === 'step_6_advisory' ||
+    evaluation.step === 'step_7_voting'
+  );
+
+  if (!isStep4Evaluated) {
+    return null;
+  }
+
+  let evaluatorUser = null;
+  // 1. Ưu tiên: Người trực tiếp kết luận đánh giá Bước 4 (lưu trong superior_evaluator_id)
+  if (evaluation.superior_evaluator_id) {
+    evaluatorUser = database.prepare('SELECT id, full_name, gov_title, party_title, role, management_role FROM users WHERE id = ?').get(evaluation.superior_evaluator_id);
+  }
+
+  // 2. Fallback: Cán bộ quản lý trực tiếp của CBNV (manager_id)
+  if (!evaluatorUser && targetUser?.manager_id) {
+    evaluatorUser = database.prepare('SELECT id, full_name, gov_title, party_title, role, management_role FROM users WHERE id = ?').get(targetUser.manager_id);
+  }
+
+  // 3. Fallback: Người đã chấm điểm / giao các nhiệm vụ được phê duyệt trong kỳ
+  if (!evaluatorUser && periodId && targetUser?.id) {
+    const taskWithEvaluator = database.prepare(`
+      SELECT evaluator_id, assigned_by FROM assigned_tasks 
+      WHERE period_id = ? AND user_id = ? AND status = 'approved' AND (evaluator_id IS NOT NULL OR assigned_by IS NOT NULL)
+      ORDER BY updated_at DESC LIMIT 1
+    `).get(periodId, targetUser.id);
+    const evalUserId = taskWithEvaluator?.evaluator_id || taskWithEvaluator?.assigned_by;
+    if (evalUserId) {
+      evaluatorUser = database.prepare('SELECT id, full_name, gov_title, party_title, role, management_role FROM users WHERE id = ?').get(evalUserId);
+    }
+  }
+
+  if (!evaluatorUser) return null;
+
+  // Xác định Chức danh người đánh giá
+  let title = (evaluatorUser.gov_title || '').trim();
+  if (!title) {
+    title = (evaluatorUser.party_title || '').trim();
+  }
+  if (!title) {
+    if (evaluatorUser.management_role === 'lanh_dao') title = 'LÃNH ĐẠO ĐƠN VỊ';
+    else if (evaluatorUser.management_role === 'quan_ly') title = 'CÁN BỘ QUẢN LÝ';
+  }
+
+  return {
+    id: evaluatorUser.id,
+    full_name: evaluatorUser.full_name,
+    title: title
+  };
+}
+
 app.get('/api/evaluations', (req, res) => {
   const { period_id, user_id } = req.query;
   if (!period_id || !user_id) return res.status(400).json({ message: 'Thiếu period_id hoặc user_id' });
@@ -4933,6 +4998,8 @@ app.get('/api/evaluations', (req, res) => {
     savedRankProposed, currentStep, evaluation.id
   );
 
+  const step4Evaluator = resolveStep4Evaluator(db, evaluation, targetUser, period_id);
+
   res.json({
     user: targetUser,
     evaluation: {
@@ -4946,8 +5013,13 @@ app.get('/api/evaluations', (req, res) => {
       executed_total_conv_score: executedTotalConvScore,
       rank_proposed: isEvaluated ? autoRank : 'Chưa tự đánh giá',
       preview_rank: autoRank,
-      step: currentStep
+      step: currentStep,
+      step4_evaluator_id: step4Evaluator?.id || null,
+      step4_evaluator_name: step4Evaluator?.full_name || null,
+      step4_evaluator_title: step4Evaluator?.title || null,
+      has_step4_evaluator: Boolean(step4Evaluator)
     },
+    step4Evaluator,
     criteria,
     axesSummary,
     stats: {
@@ -5145,9 +5217,9 @@ app.post('/api/evaluations/conclude', requireManagerOrAdmin, (req, res) => {
 
   db.prepare(`
     UPDATE evaluations
-    SET superior_rank = ?, superior_comment = ?, status = ?, step = 'step_6_advisory', updated_at = CURRENT_TIMESTAMP
+    SET superior_rank = ?, superior_comment = ?, superior_evaluator_id = ?, superior_evaluated_at = CURRENT_TIMESTAMP, status = ?, step = 'step_6_advisory', updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
-  `).run(superior_rank, superior_comment, status || 'approved', evaluation_id);
+  `).run(superior_rank, superior_comment, viewerId, status || 'approved', evaluation_id);
 
   res.json({ success: true, message: 'Đã lưu kết luận đánh giá Bước 5 thành công! Hồ sơ đã được chuyển tiếp lên Bước 6 (Tổng hợp tham mưu).' });
 });
@@ -5246,12 +5318,15 @@ app.post('/api/evaluations/two-tier-review', requireManagerOrAdmin, (req, res) =
       SET skip_level_status = ?,
           skip_level_reviewer_id = ?,
           superior_comment = COALESCE(?, superior_comment),
+          superior_evaluator_id = COALESCE(superior_evaluator_id, ?),
+          superior_evaluated_at = COALESCE(superior_evaluated_at, CURRENT_TIMESTAMP),
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(
       action === 'approve' ? 'level_1_approved' : 'revision_requested',
       viewerId,
       comment || null,
+      viewerId,
       evaluation_id
     );
     triggerBackgroundSupabaseSync(300);

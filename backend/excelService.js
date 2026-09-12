@@ -1409,25 +1409,80 @@ async function exportCBQLWorkbook(periodId, userId) {
   ws.mergeCells(`B${rPropNote2.number}:I${rPropNote2.number}`);
   rPropNote2.height = 55;
 
-  // Cá nhân tự đánh giá signature
-  ws.addRow([]);
-  const sigHead = ws.addRow(['', '', '', '', '', 'CÁ NHÂN TỰ ĐÁNH GIÁ']);
-  sigHead.font = { name: 'Times New Roman', size: 14, bold: true };
-  sigHead.getCell(6).alignment = { horizontal: 'center' };
-  ws.mergeCells(`F${sigHead.number}:I${sigHead.number}`);
+  // Xác định người đánh giá Bước 4 (Chức danh & Họ tên)
+  const isStep4Evaluated = Boolean(
+    evaluation.superior_evaluator_id ||
+    evaluation.superior_rank ||
+    (evaluation.status === 'approved' && evaluation.step !== 'step_1_register' && evaluation.step !== 'step_2_evidence' && evaluation.step !== 'step_3_self_eval') ||
+    evaluation.step === 'step_6_advisory' ||
+    evaluation.step === 'step_7_voting'
+  );
+  let step4Evaluator = null;
+  if (isStep4Evaluated) {
+    if (evaluation.superior_evaluator_id) {
+      step4Evaluator = db.prepare('SELECT full_name, gov_title, party_title, role, management_role FROM users WHERE id = ?').get(evaluation.superior_evaluator_id);
+    }
+    if (!step4Evaluator && user.manager_id) {
+      step4Evaluator = db.prepare('SELECT full_name, gov_title, party_title, role, management_role FROM users WHERE id = ?').get(user.manager_id);
+    }
+  }
+  const step4EvaluatorTitle = (step4Evaluator?.gov_title || step4Evaluator?.party_title || '').trim();
+  const step4EvaluatorName = step4Evaluator?.full_name || '';
 
-  const sigSub = ws.addRow(['', '', '', '', '', '(Ký, ghi rõ họ tên)']);
-  sigSub.font = { name: 'Times New Roman', size: 14, italic: true };
-  sigSub.getCell(6).alignment = { horizontal: 'center' };
-  ws.mergeCells(`F${sigSub.number}:I${sigSub.number}`);
+  if (isCbnv) {
+    // MẪU 01-B (CBNV): 2 bên ký (Cá nhân tự đánh giá & Lãnh đạo/Quản lý trực tiếp)
+    ws.addRow([]);
+    const sigHead = ws.addRow(['', 'CÁ NHÂN TỰ ĐÁNH GIÁ', '', '', '', 'LÃNH ĐẠO / QUẢN LÝ ĐƠN VỊ TRỰC TIẾP']);
+    sigHead.font = { name: 'Times New Roman', size: 14, bold: true };
+    sigHead.getCell(2).alignment = { horizontal: 'center' };
+    sigHead.getCell(6).alignment = { horizontal: 'center' };
+    ws.mergeCells(`B${sigHead.number}:E${sigHead.number}`);
+    ws.mergeCells(`F${sigHead.number}:I${sigHead.number}`);
 
-  ws.addRow([]);
-  ws.addRow([]);
+    const sigSub = ws.addRow(['', '(Ký, ghi rõ họ tên)', '', '', '', '(Ký, ghi rõ họ tên)']);
+    sigSub.font = { name: 'Times New Roman', size: 14, italic: true };
+    sigSub.getCell(2).alignment = { horizontal: 'center' };
+    sigSub.getCell(6).alignment = { horizontal: 'center' };
+    ws.mergeCells(`B${sigSub.number}:E${sigSub.number}`);
+    ws.mergeCells(`F${sigSub.number}:I${sigSub.number}`);
 
-  const sigName = ws.addRow(['', '', '', '', '', user.full_name]);
-  sigName.font = { name: 'Times New Roman', size: 14, bold: true };
-  sigName.getCell(6).alignment = { horizontal: 'center' };
-  ws.mergeCells(`F${sigName.number}:I${sigName.number}`);
+    ws.addRow([]);
+    ws.addRow([]);
+
+    if (step4EvaluatorTitle) {
+      const sigTitle = ws.addRow(['', '', '', '', '', step4EvaluatorTitle.toUpperCase()]);
+      sigTitle.font = { name: 'Times New Roman', size: 14, bold: true };
+      sigTitle.getCell(6).alignment = { horizontal: 'center' };
+      ws.mergeCells(`F${sigTitle.number}:I${sigTitle.number}`);
+    }
+
+    const sigName = ws.addRow(['', user.full_name, '', '', '', step4EvaluatorName || '']);
+    sigName.font = { name: 'Times New Roman', size: 14, bold: true };
+    sigName.getCell(2).alignment = { horizontal: 'center' };
+    sigName.getCell(6).alignment = { horizontal: 'center' };
+    ws.mergeCells(`B${sigName.number}:E${sigName.number}`);
+    ws.mergeCells(`F${sigName.number}:I${sigName.number}`);
+  } else {
+    // Cá nhân tự đánh giá signature (Mẫu 01-A)
+    ws.addRow([]);
+    const sigHead = ws.addRow(['', '', '', '', '', 'CÁ NHÂN TỰ ĐÁNH GIÁ']);
+    sigHead.font = { name: 'Times New Roman', size: 14, bold: true };
+    sigHead.getCell(6).alignment = { horizontal: 'center' };
+    ws.mergeCells(`F${sigHead.number}:I${sigHead.number}`);
+
+    const sigSub = ws.addRow(['', '', '', '', '', '(Ký, ghi rõ họ tên)']);
+    sigSub.font = { name: 'Times New Roman', size: 14, italic: true };
+    sigSub.getCell(6).alignment = { horizontal: 'center' };
+    ws.mergeCells(`F${sigSub.number}:I${sigSub.number}`);
+
+    ws.addRow([]);
+    ws.addRow([]);
+
+    const sigName = ws.addRow(['', '', '', '', '', user.full_name]);
+    sigName.font = { name: 'Times New Roman', size: 14, bold: true };
+    sigName.getCell(6).alignment = { horizontal: 'center' };
+    ws.mergeCells(`F${sigName.number}:I${sigName.number}`);
+  }
 
   // III. Nhận xét, đánh giá của cấp có thẩm quyền
   ws.addRow([]);
