@@ -83,7 +83,7 @@ async function renderHtmlToPdf(html, options = {}) {
       border: none !important;
       width: 100% !important;
     }
-    p, span, div, td, th, li, a, label, strong, b, em, i, tr, thead, tbody {
+    p, span, div, td, th, li, a, label, strong, b, em, i {
       font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
       font-size: 14pt !important;
       line-height: 1.35 !important;

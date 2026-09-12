@@ -45,7 +45,7 @@ export function sanitizeColorString(str) {
   if (!str.includes('oklab') && !str.includes('oklch') && !str.includes('color(') && !str.includes('hwb')) {
     return str;
   }
-  return str.replace(/(oklab|oklch|color|hwb)([^)]+)/g, (match) => {
+  return str.replace(/(oklab|oklch|color|hwb)\([^)]+\)/g, (match) => {
     return convertColorToRgb(match);
   });
 }
@@ -59,7 +59,7 @@ export function sanitizeCssText(cssText) {
   if (!cssText.includes('oklab') && !cssText.includes('oklch') && !cssText.includes('color(') && !cssText.includes('hwb')) {
     return cssText;
   }
-  return cssText.replace(/(oklab|oklch|color|hwb)([^)]+)/g, (match) => {
+  return cssText.replace(/(oklab|oklch|color|hwb)\([^)]+\)/g, (match) => {
     return convertColorToRgb(match);
   });
 }
@@ -177,7 +177,8 @@ export function cleanupPdfArtifacts() {
  * - Giữ trọn vẹn toàn bộ các cột, dữ liệu, bảng biểu, không bị cắt xén lề phải hoặc lề dưới.
  * - Phông chữ: Chuẩn 100% Times New Roman.
  * - Cỡ chữ: Chuẩn 14pt (tiêu đề chính 16pt đậm).
- * - Không bị co kéo, không bị vỡ cột, không bị treo trình duyệt.
+ * - Không bị co kéo, không bị đè chữ (overlapping), không bị sập dòng bảng, không bị treo trình duyệt.
+ * - Cắt trang thông minh: Không bao giờ cắt ngang qua dòng chữ hoặc ô bảng.
  */
 export async function exportReportToPdfDirect(element, options = {}) {
   const {
@@ -212,16 +213,15 @@ export async function exportReportToPdfDirect(element, options = {}) {
   const tables = element.querySelectorAll('table');
   let maxTableWidth = 0;
   tables.forEach(tbl => {
-    maxTableWidth = Math.max(maxTableWidth, tbl.scrollWidth, tbl.offsetWidth);
+    maxTableWidth = Math.max(maxTableWidth, tbl.scrollWidth || 0, tbl.offsetWidth || 0);
   });
 
   const naturalWidth = Math.max(
-    element.scrollWidth,
-    element.offsetWidth,
+    element.scrollWidth || 0,
+    element.offsetWidth || 0,
     maxTableWidth,
-    1150
+    1250 // Đảm bảo đủ độ rộng thoải mái cho A4 ngang và bảng biểu 17 cột
   );
-  const naturalHeight = Math.max(element.scrollHeight, element.offsetHeight);
 
   onProgress('Đang chuẩn hóa giao diện báo cáo chuẩn Times New Roman...');
   const sanitizedAppCss = await collectAllAppStyles();
@@ -232,6 +232,10 @@ export async function exportReportToPdfDirect(element, options = {}) {
   try {
     onProgress('Đang kết xuất hình ảnh báo cáo nguyên mẫu...');
 
+    // LƯU Ý CỰC KỲ QUAN TRỌNG:
+    // TUYỆT ĐỐI KHÔNG truyền 'height' hoặc 'width' vào options của html2canvas!
+    // Truyền 'height' sẽ ép canvas phải co xẹp theo chiều cao màn hình khiến các dòng bảng bị đè lên nhau (squished/overlap)!
+    // Để html2canvas tự động lấy toàn bộ chiều dài tự nhiên của clonedElement.
     const canvas = await html2canvas(element, {
       scale: 2,
       useCORS: true,
@@ -239,10 +243,8 @@ export async function exportReportToPdfDirect(element, options = {}) {
       backgroundColor: '#ffffff',
       scrollX: 0,
       scrollY: 0,
-      width: naturalWidth,
-      height: naturalHeight,
       windowWidth: naturalWidth + 60,
-      windowHeight: naturalHeight + 100,
+      windowHeight: 25000, // Cửa sổ ảo đủ cao để render toàn bộ văn bản nhiều trang
       onclone: (clonedDoc, clonedElement) => {
         // Bọc getComputedStyle của cửa sổ iframe clone
         wrapComputedStyle(clonedDoc.defaultView);
@@ -278,11 +280,13 @@ export async function exportReportToPdfDirect(element, options = {}) {
             color: #000000 !important;
             font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
             font-size: 14pt !important;
-            line-height: 1.35 !important;
             margin: 0 !important;
             padding: 0 !important;
             width: ${naturalWidth}px !important;
             min-width: ${naturalWidth}px !important;
+            height: auto !important;
+            min-height: auto !important;
+            overflow: visible !important;
           }
 
           .print-document, #report-print-content {
@@ -291,29 +295,34 @@ export async function exportReportToPdfDirect(element, options = {}) {
             color: #000000 !important;
             font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
             font-size: 14pt !important;
-            line-height: 1.35 !important;
             width: ${naturalWidth}px !important;
             min-width: ${naturalWidth}px !important;
             max-width: none !important;
             margin: 0 auto !important;
-            padding: 24px !important;
+            padding: 20px 24px !important;
             overflow: visible !important;
             box-shadow: none !important;
             border: none !important;
+            height: auto !important;
+            min-height: auto !important;
+            max-height: none !important;
           }
 
-          /* Không bao giờ để bất kỳ bảng hay container nào bị ẩn cuộn ngang */
+          /* Không bao giờ để bất kỳ bảng hay container nào bị ẩn hoặc giới hạn cuộn */
           .overflow-x-auto, .overflow-y-auto, .overflow-hidden {
             overflow: visible !important;
             max-width: none !important;
+            max-height: none !important;
             width: 100% !important;
           }
 
-          /* Áp dụng triệt để font Times New Roman và cỡ chữ 14pt */
-          p, span, div, td, th, li, a, label, strong, b, em, i, tr, thead, tbody {
+          /* Áp dụng chuẩn Times New Roman và cỡ 14pt cho tất cả các thẻ văn bản */
+          /* TUYỆT ĐỐI KHÔNG ĐƯA tr, thead, tbody VÀO ĐÂY vì sẽ làm sập tính toán chiều cao dòng trong html2canvas! */
+          p, span, div, li, a, label, strong, b, em, i {
             font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
             font-size: 14pt !important;
-            line-height: 1.35 !important;
+            line-height: 1.4 !important;
+            color: #000000 !important;
           }
 
           /* Tiêu đề văn bản: 16pt đậm chữ hoa */
@@ -323,49 +332,112 @@ export async function exportReportToPdfDirect(element, options = {}) {
             font-weight: bold !important;
             text-align: center !important;
             text-transform: uppercase !important;
-            margin: 8px 0 !important;
+            margin: 10px 0 !important;
             line-height: 1.3 !important;
+            color: #000000 !important;
           }
 
           h2, h3, h4 {
             font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
             font-size: 14pt !important;
             font-weight: bold !important;
-            margin: 6px 0 !important;
+            margin: 8px 0 !important;
+            line-height: 1.3 !important;
+            color: #000000 !important;
           }
 
-          /* Bảng biểu hiển thị trọn vẹn */
+          /* Bảng biểu hiển thị trọn vẹn, từng ô có viền đen rõ nét */
           table {
             width: 100% !important;
-            max-width: none !important;
+            max-width: 100% !important;
             border-collapse: collapse !important;
             font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
             font-size: 14pt !important;
+            margin: 8px 0 !important;
+          }
+
+          tr {
+            background-color: transparent !important;
           }
 
           th, td {
+            border: 1px solid #000000 !important;
+            color: #000000 !important;
             font-family: 'Times New Roman', Times, 'Liberation Serif', serif !important;
             font-size: 14pt !important;
-            border-color: #000000 !important;
+            line-height: 1.35 !important;
+            padding: 6px 8px !important;
+            vertical-align: middle !important;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
+            box-sizing: border-box !important;
           }
 
           th {
             background-color: #f1f5f9 !important;
             font-weight: bold !important;
+            text-align: center !important;
+          }
+
+          /* Bảng Mẫu 02 với 17 cột */
+          .table-mau-02 th, .table-mau-02 td {
+            padding: 3px 4px !important;
+            font-size: 14pt !important;
+          }
+
+          .table-mau-02 th span, .table-mau-02 th small {
+            font-size: 11pt !important;
+            font-weight: normal !important;
+          }
+
+          .table-mau-02 {
+            table-layout: fixed !important;
+            width: 100% !important;
+          }
+
+          /* Đảm bảo Tiêu ngữ và Chữ ký hiển thị thành 2 cột đều đặn */
+          .grid {
+            display: table !important;
+            width: 100% !important;
+          }
+
+          .grid-cols-2 {
+            display: table !important;
+            width: 100% !important;
+          }
+
+          .grid-cols-2 > div {
+            display: table-cell !important;
+            width: 50% !important;
+            vertical-align: top !important;
+          }
+
+          /* Đảm bảo các khối chữ ký không bị chia cắt */
+          .signature-block, .stats-summary-container {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+
+          /* Ẩn triệt để nút bấm, thanh điều hướng và input */
+          .no-print, button, select, input, textarea {
+            display: none !important;
           }
         `;
         clonedDoc.head.appendChild(printOverrideTag);
 
-        // Đảm bảo clonedElement và các container con bung rộng đầy đủ
+        // Đảm bảo clonedElement và các container con bung rộng đầy đủ tự nhiên
         clonedElement.style.width = `${naturalWidth}px`;
         clonedElement.style.minWidth = `${naturalWidth}px`;
         clonedElement.style.maxWidth = 'none';
         clonedElement.style.overflow = 'visible';
         clonedElement.style.height = 'auto';
+        clonedElement.style.minHeight = 'auto';
+        clonedElement.style.maxHeight = 'none';
 
         clonedElement.querySelectorAll('.overflow-x-auto, .overflow-y-auto, .overflow-hidden').forEach(el => {
           el.style.overflow = 'visible';
           el.style.maxWidth = 'none';
+          el.style.maxHeight = 'none';
           el.style.width = '100%';
         });
 
@@ -391,24 +463,70 @@ export async function exportReportToPdfDirect(element, options = {}) {
 
     const canvasWidth = canvas.width;
     const canvasHeight = canvas.height;
-    const pageCanvasHeight = (printableHeightMm / printableWidthMm) * canvasWidth;
+    const pageCanvasHeight = Math.floor((printableHeightMm / printableWidthMm) * canvasWidth);
 
     if (canvasHeight <= pageCanvasHeight) {
       const imgHeightMm = (canvasHeight * printableWidthMm) / canvasWidth;
       const imgData = canvas.toDataURL('image/jpeg', 0.98);
       pdf.addImage(imgData, 'JPEG', marginMm, marginMm, printableWidthMm, imgHeightMm);
     } else {
+      const mainCtx = canvas.getContext('2d');
       let remainingHeight = canvasHeight;
       let sourceY = 0;
       let pageIndex = 0;
 
       while (remainingHeight > 0) {
-        const currentSliceHeight = Math.min(pageCanvasHeight, remainingHeight);
+        let currentSliceHeight = Math.min(pageCanvasHeight, remainingHeight);
+
+        // Nếu còn trang tiếp theo, tìm điểm cắt thông minh (không cắt ngang chữ hay dòng bảng)
+        if (remainingHeight > pageCanvasHeight) {
+          const scanWindow = Math.min(Math.floor(pageCanvasHeight * 0.18), 320);
+          const scanStartY = sourceY + currentSliceHeight - scanWindow;
+
+          try {
+            const imgDataObj = mainCtx.getImageData(0, scanStartY, canvasWidth, scanWindow);
+            const data = imgDataObj.data;
+            const maxBorderNoise = Math.ceil(canvasWidth / 120);
+
+            let bestY = -1;
+            let minDark = 999999;
+            let minDarkY = -1;
+
+            for (let r = scanWindow - 1; r >= 0; r--) {
+              let darkPixels = 0;
+              const rowOffset = r * canvasWidth * 4;
+              // Sample every 4th pixel for high speed
+              for (let x = 0; x < canvasWidth; x += 4) {
+                const i = rowOffset + (x * 4);
+                if (data[i] < 160 && data[i + 1] < 160 && data[i + 2] < 160) {
+                  darkPixels++;
+                }
+              }
+              // Dòng này hoàn toàn sạch không chứa chữ (chỉ chứa khoảng trắng hoặc vạch dọc bảng)
+              if (darkPixels <= maxBorderNoise) {
+                bestY = r;
+                break;
+              }
+              if (darkPixels < minDark) {
+                minDark = darkPixels;
+                minDarkY = r;
+              }
+            }
+
+            const chosenY = bestY !== -1 ? bestY : minDarkY;
+            if (chosenY !== -1 && chosenY > 20) {
+              currentSliceHeight = (scanStartY + chosenY) - sourceY;
+            }
+          } catch (e) {
+            console.warn('Không thể quét điểm cắt thông minh:', e);
+          }
+        }
+
         const pageCanvas = document.createElement('canvas');
         pageCanvas.width = canvasWidth;
         pageCanvas.height = currentSliceHeight;
         const pctx = pageCanvas.getContext('2d');
-        
+
         pctx.fillStyle = '#ffffff';
         pctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
 
@@ -428,7 +546,7 @@ export async function exportReportToPdfDirect(element, options = {}) {
         pdf.addImage(pageImgData, 'JPEG', marginMm, marginMm, printableWidthMm, sliceHeightMm);
 
         sourceY += currentSliceHeight;
-        remainingHeight -= currentSliceHeight;
+        remainingHeight = canvasHeight - sourceY;
         pageIndex++;
       }
     }

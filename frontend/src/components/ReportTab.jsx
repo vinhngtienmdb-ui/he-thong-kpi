@@ -281,15 +281,7 @@ export default function ReportTab({
       // 1. Thử gửi lên máy chủ (nếu môi trường máy chủ hỗ trợ headless Chromium)
       let exported = false;
       try {
-        const res = await fetch('/api/reports/render-pdf', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            html: element.outerHTML,
-            isLandscape,
-            filename
-          })
-        });
+        const res = await api.renderPdf(element.outerHTML, isLandscape, filename);
 
         if (res.ok && res.headers.get('content-type')?.includes('application/pdf')) {
           const blob = await res.blob();
@@ -305,7 +297,7 @@ export default function ReportTab({
           return;
         }
       } catch (serverErr) {
-        console.warn('Kết xuất PDF máy chủ không khả dụng, chuyển sang công cụ xuất trực tiếp:', serverErr);
+        console.warn('Kết xuất PDF máy chủ không khả dụng hoặc quá hạn, chuyển sang công cụ xuất trực tiếp:', serverErr);
       }
 
       // 2. Xuất trực tiếp bằng công cụ nội bộ client-side (chống xung đột Tailwind v4, không treo màn hình)

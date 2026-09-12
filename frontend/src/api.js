@@ -494,6 +494,15 @@ export const api = {
     return `${BASE_URL}/reports/export-docx-mau-02?period_id=${periodId}`;
   },
 
+  renderPdf: async (html, isLandscape, filename) => {
+    return fetch(`${BASE_URL}/reports/render-pdf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ html, isLandscape, filename }),
+      signal: AbortSignal.timeout(6000)
+    });
+  },
+
   // 6-Step Workflow Transition
   transitionStep: (data) => {
     return fetchApi('/evaluations/step', {
