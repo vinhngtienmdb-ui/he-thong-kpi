@@ -60,6 +60,8 @@ export default function ReportTab({
   const [axisFilter, setAxisFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [pdfProgressMsg, setPdfProgressMsg] = useState('');
 
   useEffect(() => {
     if (currentUser) {
@@ -220,6 +222,66 @@ export default function ReportTab({
   const currentDocxUrl = (canViewAllReports && activeReportView === 'mau_02')
     ? exportDocxMau02Url
     : (activeReportView === 'execution_report' ? exportDocxTasksUrl : exportDocxUrl);
+
+  const handlePrint = () => {
+    setShowExportMenu(false);
+    // Force A4 landscape print orientation in browser
+    let styleEl = document.getElementById('dynamic-print-landscape-style');
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'dynamic-print-landscape-style';
+      document.head.appendChild(styleEl);
+    }
+    styleEl.innerHTML = '@media print { @page { size: A4 landscape !important; margin: 8mm 10mm 8mm 12mm !important; } }';
+    setTimeout(() => {
+      window.print();
+    }, 60);
+  };
+
+  const handleExportPdf = async () => {
+    setShowExportMenu(false);
+    const element = document.getElementById('report-print-content') || document.querySelector('.print-document');
+    if (!element) {
+      handlePrint();
+      return;
+    }
+
+    setIsExportingPdf(true);
+    setPdfProgressMsg('Đang xuất dữ liệu ra file PDF (khổ A4 ngang)...');
+
+    try {
+      const html2pdfModule = await import('html2pdf.js');
+      const html2pdf = html2pdfModule.default || html2pdfModule;
+
+      const isMau02 = canViewAllReports && activeReportView === 'mau_02';
+      const cleanTargetName = targetUser?.full_name 
+        ? targetUser.full_name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^a-zA-Z0-9]/g, '_') 
+        : 'CanBo';
+
+      const filename = isMau02
+        ? `Mau_02_Tong_hop_xep_loai_${activePeriodId}.pdf`
+        : (activeReportView === 'execution_report'
+          ? `Bao_cao_cong_viec_${cleanTargetName}_${activePeriodId}.pdf`
+          : `Bao_cao_danh_gia_${cleanTargetName}_${activePeriodId}.pdf`);
+
+      const opt = {
+        margin: [8, 10, 8, 12],
+        filename: filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false, letterRendering: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      };
+
+      await html2pdf().set(opt).from(element).save();
+    } catch (err) {
+      console.error('Lỗi khi xuất PDF:', err);
+      handlePrint();
+    } finally {
+      setIsExportingPdf(false);
+      setPdfProgressMsg('');
+    }
+  };
 
   const part1Score = criteria.reduce((sum, c) => sum + (c.is_satisfied === 1 ? c.max_score : 0), 0);
   const part2Score = evaluation.part2_score !== undefined && evaluation.part2_score !== null ? evaluation.part2_score : 0;
@@ -393,13 +455,10 @@ export default function ReportTab({
                       Tùy chọn In & Xuất file
                     </div>
 
-                    {/* 1. In báo cáo */}
+                    {/* 1. In báo cáo (A4 Ngang) */}
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowExportMenu(false);
-                        window.print();
-                      }}
+                      onClick={handlePrint}
                       className="w-full flex items-center gap-2.5 px-3 py-2.5 text-slate-700 hover:bg-slate-100 font-semibold text-left transition cursor-pointer"
                     >
                       <div className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700">
@@ -407,25 +466,27 @@ export default function ReportTab({
                       </div>
                       <div>
                         <div className="font-bold text-slate-900">In báo cáo</div>
-                        <div className="text-[11px] text-slate-500 font-normal">In trực tiếp ra máy in khổ giấy A4</div>
+                        <div className="text-[11px] text-slate-500 font-normal">In trực tiếp khổ A4 ngang (Times New Roman)</div>
                       </div>
                     </button>
 
-                    {/* 2. Xuất PDF */}
+                    {/* 2. Xuất PDF (A4 Ngang) */}
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowExportMenu(false);
-                        window.print();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-slate-700 hover:bg-slate-100 font-semibold text-left transition cursor-pointer"
+                      disabled={isExportingPdf}
+                      onClick={handleExportPdf}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 font-semibold text-left transition cursor-pointer ${
+                        isExportingPdf ? 'opacity-60 bg-slate-50 cursor-wait' : 'text-slate-700 hover:bg-slate-100'
+                      }`}
                     >
                       <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center text-red-700">
                         <FileText className="w-4 h-4" />
                       </div>
                       <div>
-                        <div className="font-bold text-slate-900">Xuất PDF</div>
-                        <div className="text-[11px] text-slate-500 font-normal">Lưu file PDF khổ A4 (Times New Roman 14pt)</div>
+                        <div className="font-bold text-slate-900">
+                          {isExportingPdf ? 'Đang tạo file PDF...' : 'Xuất PDF'}
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-normal">Tải file PDF khổ A4 ngang về máy</div>
                       </div>
                     </button>
 
@@ -528,7 +589,7 @@ export default function ReportTab({
 
       {/* DOCUMENT PREVIEW CONTAINER (MẪU 01-A hoặc MẪU 01-B) */}
       {activeReportView === 'self_eval' && (
-        <div className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-3.5 sm:p-6 md:p-10 font-times text-[14pt] leading-relaxed w-full space-y-6 text-black">
+        <div id="report-print-content" className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-3.5 sm:p-6 md:p-10 font-times text-[14pt] leading-relaxed w-full space-y-6 text-black">
           
           {/* Top Header: Mẫu 01-A vs Mẫu 01-B */}
           <div className="text-right text-[14pt] font-bold text-black">
@@ -1090,7 +1151,7 @@ export default function ReportTab({
           </div>
 
           {/* Official Document Container (Bảng 1 - Phụ lục 5) */}
-          <div className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-3.5 sm:p-6 md:p-10 font-times text-[14pt] text-black space-y-6">
+          <div id="report-print-content" className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-3.5 sm:p-6 md:p-10 font-times text-[14pt] text-black space-y-6">
             
             {/* Agency & National Title Header */}
             <div className="grid grid-cols-2 text-center text-[14pt]">
@@ -1545,7 +1606,7 @@ export default function ReportTab({
           )}
 
           {/* Document Container */}
-          <div className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-3.5 sm:p-5 lg:p-6 print:p-6 font-times text-xs sm:text-[13px] print:text-[11pt] space-y-4 text-black w-full overflow-hidden print:overflow-visible">
+          <div id="report-print-content" className="print-document bg-white rounded-xl border border-slate-300 shadow-md p-3.5 sm:p-5 lg:p-6 print:p-6 font-times text-xs sm:text-[13px] print:text-[11pt] space-y-4 text-black w-full overflow-hidden print:overflow-visible">
             {/* Header Mẫu 02 */}
             <div className="text-right text-[12pt] sm:text-[14pt] font-bold text-black">
               Mẫu 02
@@ -1571,11 +1632,12 @@ export default function ReportTab({
               </div>
             </div>
 
+            {/* Title */}
             <div className="text-center space-y-1 pt-1">
-              <h1 className="text-sm sm:text-base lg:text-lg font-bold uppercase text-black tracking-tight">
+              <h1 className="text-sm sm:text-base lg:text-[15pt] print:text-[14pt] font-bold uppercase text-red-900 tracking-tight">
                 BẢNG TỔNG HỢP KẾT QUẢ ĐÁNH GIÁ, XẾP LOẠI VÀ ĐỀ XUẤT CÔNG TÁC CÁN BỘ
               </h1>
-              <p className="text-xs sm:text-[13px] italic text-black">
+              <p className="text-[11px] sm:text-xs italic text-slate-700">
                 (Ban hành kèm theo Hướng dẫn số 06-HD/BTCTU ngày 12 tháng 8 năm 2026 của Ban Tổ chức Thành ủy)
               </p>
               <p className="text-xs sm:text-[13px] italic text-black">
@@ -1585,7 +1647,7 @@ export default function ReportTab({
 
             {/* Table Mẫu 02 (Dàn đều 100% không kéo ngang) */}
             <div className="w-full overflow-x-auto lg:overflow-x-visible pt-2">
-              <table className="w-full table-fixed text-left border-collapse border border-black font-times text-black text-[10.5px] sm:text-[11.5px] xl:text-[12.5px] print:text-[9pt] leading-tight">
+              <table className="table-mau-02 w-full table-fixed text-left border-collapse border border-black font-times text-black text-[10.5px] sm:text-[11.5px] xl:text-[12.5px] print:text-[9pt] leading-tight">
                 <thead>
                   <tr className="bg-slate-100 font-bold text-black text-center text-[10.5px] sm:text-xs print:text-[9pt]">
                     <th rowSpan="2" className="border border-black px-1 py-1.5 w-[3%] text-center">STT</th>
@@ -1914,6 +1976,17 @@ export default function ReportTab({
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Floating progress toast for PDF Export */}
+      {isExportingPdf && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900/95 text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3.5 backdrop-blur-sm animate-pulse">
+          <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin shrink-0"></div>
+          <div>
+            <div className="font-bold text-sm text-white">Đang xử lý xuất PDF...</div>
+            <div className="text-xs text-slate-300">{pdfProgressMsg || 'Hệ thống đang kết xuất tài liệu chuẩn khổ A4 ngang'}</div>
           </div>
         </div>
       )}

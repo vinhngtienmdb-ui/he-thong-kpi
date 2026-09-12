@@ -5962,10 +5962,10 @@ app.get('/api/reports/export-mau-02/:periodId', async (req, res) => {
 // ============================================================================
 
 // 1. Export Mẫu 01-A (CBQL) / Mẫu 01-B (CBNV) Word (.docx)
-app.get(['/api/reports/export-docx-cbql', '/api/reports/export-docx/:periodId/:userId'], async (req, res) => {
+const handleExportDocxMau01 = async (req, res) => {
   try {
-    const period_id = req.query.period_id || req.params.periodId;
-    const user_id = req.query.user_id || req.params.userId;
+    const period_id = req.query.period_id || req.query.periodId || req.params.periodId;
+    const user_id = req.query.user_id || req.query.userId || req.params.userId;
 
     if (!period_id || !user_id) {
       return res.status(400).json({ error: 'Thiếu tham số period_id hoặc user_id' });
@@ -5995,13 +5995,16 @@ app.get(['/api/reports/export-docx-cbql', '/api/reports/export-docx/:periodId/:u
     console.error('Error exporting CBQL Word docx:', error);
     res.status(500).json({ error: 'Lỗi xuất file Word: ' + error.message });
   }
-});
+};
+app.get('/api/reports/export-docx-cbql', handleExportDocxMau01);
+app.get('/api/reports/export-docx', handleExportDocxMau01);
+app.get('/api/reports/export-docx/:periodId/:userId', handleExportDocxMau01);
 
 // 2. Export Báo cáo kết quả thực hiện nhiệm vụ công việc Word (.docx)
-app.get(['/api/reports/export-docx-tasks', '/api/reports/export-docx-tasks/:periodId/:userId'], async (req, res) => {
+const handleExportDocxTasks = async (req, res) => {
   try {
-    const period_id = req.query.period_id || req.params.periodId;
-    const user_id = req.query.user_id || req.params.userId;
+    const period_id = req.query.period_id || req.query.periodId || req.params.periodId;
+    const user_id = req.query.user_id || req.query.userId || req.params.userId;
 
     if (!period_id || !user_id) {
       return res.status(400).json({ error: 'Thiếu tham số period_id hoặc user_id' });
@@ -6029,12 +6032,14 @@ app.get(['/api/reports/export-docx-tasks', '/api/reports/export-docx-tasks/:peri
     console.error('Error exporting tasks Word docx:', error);
     res.status(500).json({ error: 'Lỗi xuất file Word báo cáo công việc: ' + error.message });
   }
-});
+};
+app.get('/api/reports/export-docx-tasks', handleExportDocxTasks);
+app.get('/api/reports/export-docx-tasks/:periodId/:userId', handleExportDocxTasks);
 
 // 3. Export Mẫu 02 (Báo cáo tổng hợp toàn cơ quan) Word (.docx) - Khổ A4 Landscape
-app.get(['/api/reports/export-docx-mau-02', '/api/reports/export-docx-mau-02/:periodId'], async (req, res) => {
+const handleExportDocxMau02 = async (req, res) => {
   try {
-    const period_id = req.query.period_id || req.params.periodId || 'p-1';
+    const period_id = req.query.period_id || req.query.periodId || req.params.periodId || 'p-1';
 
     const docxBuffer = await exportMau02Docx(period_id);
 
@@ -6054,7 +6059,10 @@ app.get(['/api/reports/export-docx-mau-02', '/api/reports/export-docx-mau-02/:pe
     console.error('Error exporting Mau 02 Word docx:', error);
     res.status(500).json({ error: 'Lỗi xuất file Word Mẫu 02: ' + error.message });
   }
-});
+};
+app.get('/api/reports/export-docx-mau-02', handleExportDocxMau02);
+app.get('/api/reports/export-docx-mau-02/:periodId', handleExportDocxMau02);
+app.get('/api/reports/export-docx-mau02', handleExportDocxMau02);
 
 
 // ============================================================================
