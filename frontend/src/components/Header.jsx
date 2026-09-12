@@ -1289,12 +1289,61 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 5.4 */}
+              {/* Version 5.5 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 5.4</span>
-                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 09:10 (Bản phát hành mới nhất - Bổ sung Xuất Báo cáo theo file Word .docx chuẩn A4 Times New Roman 14pt)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 5.5</span>
+                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 20:30 (Bản phát hành mới nhất - Popup Thông báo & Duyệt tức thì CBQL, Kiểm soát Danh mục chuẩn, Khóa gia hạn việc Từ chối, Sửa cấp lại mật khẩu & Tối ưu Người dùng chi tiết)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Hệ Thống Popup Thông Báo Thời Gian Thực & Phê Duyệt Tức Thì Cho Cán Bộ Quản Lý, Kiểm Soát Danh Mục Chuẩn Khi Từ Chối, Khóa Gia Hạn & Loại Bỏ Nhiệm Vụ Bị Từ Chối Khỏi Báo Cáo, Khắc Phục Cấp Lại Mật Khẩu & Tối Ưu Màn Hình Người Dùng Chi Tiết
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Hệ thống Popup Thông báo Thời gian thực & Phê duyệt Tức thì cho Cán bộ Quản lý (CBQL):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Tự động chuyển thông báo đăng ký nhiệm vụ mới và đề xuất danh mục công việc mới đến toàn bộ CBQL có thẩm quyền (CBQL cùng đơn vị hoặc Lãnh đạo đơn vị cấp trên trực tiếp qua thuật toán phân bổ thông minh <code>getManagersToNotify</code>).</li>
+                      <li>Hiển thị Toast Popup thông báo nổi trực quan góc trên màn hình làm việc của CBQL theo thời gian thực (Live Toast), kèm nút tác vụ nhanh <em>"Xem & Phê duyệt ngay"</em>.</li>
+                      <li>Nhấp vào thông báo sẽ tự động điều hướng sang tab Danh mục công việc (B1), cuộn đến danh sách đề xuất và tự động bung Modal phê duyệt chi tiết (<code>openApprovalModal</code>, <code>approveProposalModal</code>), hỗ trợ CBQL duyệt hoặc từ chối chỉ với 1 cú nhấp chuột.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Kiểm soát & Bảo vệ Tuyệt đối Danh mục Công việc Chuẩn khi Từ chối Đề xuất:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Xử lý triệt để: Khi CBQL từ chối đề xuất danh mục công việc, hệ thống xóa sạch bản ghi khỏi danh mục công việc chuẩn (<code>standard_tasks</code>), cập nhật trạng thái <code>rejected</code> tại bảng đề xuất (<code>proposed_standard_tasks</code>).</li>
+                      <li>Đồng bộ điều kiện lọc trên toàn bộ hệ thống API (<code>/api/tasks/standard</code>, <code>/api/registration/available-tasks</code>, <code>/api/proposals/standard-tasks</code>) chỉ hiển thị nhiệm vụ đã được duyệt chính thức (<code>approval_status = 'approved'</code>), tuyệt đối không đưa các mục bị từ chối vào danh mục công việc chuẩn.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Chặn Gia hạn & Loại bỏ Hoàn toàn Nhiệm vụ Bị Từ chối khỏi Báo cáo, Thống kê:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Khi nhiệm vụ có trạng thái tiếp nhận là <strong>"Từ chối"</strong> (<code>acceptance_status = 'rejected'</code>), hệ thống khóa triệt để tính năng xin gia hạn (ẩn nút thao tác và chặn API yêu cầu gia hạn thời gian thực hiện).</li>
+                      <li>Tự động loại bỏ hoàn toàn các nhiệm vụ bị từ chối khỏi toàn bộ hệ thống báo cáo, thống kê và bảng biểu: Dashboard phân tích tiến độ, tỷ lệ đúng hạn, biểu đồ 6 trục kết quả, Bản tự đánh giá cá nhân (Mẫu 01-A, Mẫu 01-B), Báo cáo tổng hợp xếp loại toàn cơ quan (Mẫu 02) và toàn bộ các file xuất (Excel, Word, PDF).</li>
+                    </ul>
+                  </li>
+                  <li><strong>Khắc phục Hoàn toàn Lỗi Tính năng Cấp lại Mật khẩu (Password Reset):</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Chuẩn hóa chức năng cấp lại mật khẩu trong Quản lý người dùng: hỗ trợ đặt lại mật khẩu mặc định an toàn cho cán bộ, hiển thị thông báo kết quả rõ ràng và đồng bộ ghi nhận lịch sử vào Nhật ký hoạt động (Audit Logs).</li>
+                    </ul>
+                  </li>
+                  <li><strong>Nâng cấp & Thiết kế lại Giao diện Màn hình Người dùng Chi tiết:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Thiết kế lại Modal xem chi tiết người dùng với kích thước mở rộng (<code>max-w-4xl</code>), chia khối thông tin khoa học (Thông tin cá nhân, Vị trí & Chức danh, Danh sách kiêm nhiệm).</li>
+                      <li>Độ tương phản cao, xử lý hiển thị trọn vẹn email dài và danh sách đa chức vụ/kiêm nhiệm, loại bỏ hoàn toàn tình trạng chữ bị khuất, lộn xộn hoặc cắt bớt nội dung.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Bảo tồn Tuyệt đối Dữ liệu Hệ thống:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Toàn bộ cơ sở dữ liệu SQLite thực tế (<code>kpi.db</code>), cấu hình môi trường <code>.env</code> và các bản sao lưu được bảo toàn nguyên vẹn 100%, duy trì tính liên tục và an toàn dữ liệu.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 5.4 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-400 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 5.4</span>
+                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 09:10 (Bổ sung Xuất Báo cáo theo file Word .docx chuẩn A4 Times New Roman 14pt)</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Bổ Sung Tính Năng Xuất Báo Cáo Theo File Word (DOCX) Cho Toàn Bộ Các Trường Xuất Báo Cáo, Tuân Thủ Tuyệt Đối Quy Chuẩn Thể Thức Văn Bản Quản Lý Nhà Nước
