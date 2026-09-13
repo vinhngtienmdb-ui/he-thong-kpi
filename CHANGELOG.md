@@ -3,7 +3,27 @@ Hệ thống Đánh giá Hiệu quả Công việc (KPI) theo Quy định số 3
 
 ---
 
-## [Phiên bản 5.5] - 12/09/2026 - 20:30 (Bản phát hành mới nhất)
+## [Phiên bản 5.6] - 13/09/2026 - 16:00 (Bản phát hành mới nhất)
+### Chuẩn Hóa Toàn Diện Múi Giờ Ghi Nhật Ký Hoạt Động Hệ Thống (Logs) Sang Múi Giờ Việt Nam GMT+7 (Asia/Ho_Chi_Minh), Bảo Toàn 100% Dữ Liệu Lịch Sử
+
+- **Chuẩn hóa Múi giờ Ghi nhận Nhật ký Hệ thống sang GMT+7 (Giờ Việt Nam):**
+  - Khắc phục triệt để lỗi chênh lệch 7 tiếng so với thực tế do SQLite mặc định sử dụng UTC (`CURRENT_TIMESTAMP`).
+  - Tích hợp hàm `getVietnamTimestamp()` tại backend sử dụng múi giờ `Asia/Ho_Chi_Minh`, sinh chuỗi thời gian chuẩn xác theo giờ Việt Nam.
+  - Cập nhật định nghĩa bảng CSDL `system_logs` với giá trị mặc định `DATETIME DEFAULT (datetime('now', '+7 hours'))` bảo đảm đồng bộ thời gian máy chủ và cơ sở dữ liệu.
+- **Xây dựng Bộ Định dạng Thời gian Thông minh `formatVietnamDateTime` trên Giao diện:**
+  - Định dạng hiển thị hai dòng trực quan tại bảng Nhật ký hoạt động: dòng trên hiển thị giờ phút giây `HH:mm:ss`, dòng dưới hiển thị ngày tháng năm `DD/MM/YYYY`.
+  - Hiển thị nhãn cột rõ ràng: **"Thời gian (GMT+7)"** và thông tin chi tiết mốc thời gian kèm `(GMT+7)` trong Modal xem chi tiết log.
+  - Xử lý tương thích đa nền tảng, chống lỗi `Invalid Date` trên Safari/iOS và chống biến dạng múi giờ khi truy cập từ các thiết bị/khu vực khác nhau.
+- **Chuẩn hóa Bộ lọc Tìm kiếm Ngày và Cơ chế Dọn dẹp Log theo GMT+7:**
+  - Bộ lọc Từ ngày (`from_date`) và Đến ngày (`to_date`) so khớp chính xác từng ngày lịch theo giờ Việt Nam, không còn tình trạng sót dữ liệu log ghi nhận vào rạng sáng hoặc đêm muộn.
+  - Tính năng Dọn dẹp nhật ký cũ (`clearSystemLogs`) tính toán mốc thời gian xóa an toàn dựa trên `datetime('now', '+7 hours', '-30 days')`.
+- **Bảo tồn Tuyệt đối & Tự động Chuẩn hóa Toàn bộ Dữ liệu Lịch sử Hiện có:**
+  - Tích hợp cơ chế di trú (migration) an toàn: tự động đối soát mốc thời gian epoch thực tế từ ID bản ghi để cập nhật chính xác thời gian ghi log của toàn bộ các bản ghi hiện có mà không làm mất mát bất kỳ thông tin nào.
+  - Đồng bộ logic đẩy/kéo dữ liệu `system_logs` với Supabase Cloud (`pushToSupabase`, `pullFromSupabase`), đảm bảo trường `created_at` mang đầy đủ thông tin timezone `+07:00`.
+
+---
+
+## [Phiên bản 5.5] - 12/09/2026 - 20:30
 ### Hệ Thống Popup Thông Báo Thời Gian Thực & Phê Duyệt Tức Thì Cho Cán Bộ Quản Lý, Kiểm Soát Danh Mục Chuẩn Khi Từ Chối, Khóa Gia Hạn & Loại Bỏ Nhiệm Vụ Bị Từ Chối Khỏi Báo Cáo, Khắc Phục Cấp Lại Mật Khẩu & Tối Ưu Màn Hình Người Dùng Chi Tiết
 
 - **Hệ thống Popup Thông báo Thời gian thực & Phê duyệt Tức thì cho Cán bộ Quản lý (CBQL):**

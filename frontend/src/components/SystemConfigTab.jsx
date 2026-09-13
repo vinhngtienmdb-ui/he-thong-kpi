@@ -191,6 +191,30 @@ export default function SystemConfigTab({
     }
   };
 
+  const formatVietnamDateTime = (dateInput) => {
+    if (!dateInput) return { time: '--:--', date: '--/--/----', full: '---' };
+    if (typeof dateInput === 'string') {
+      const match = dateInput.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
+      if (match) {
+        const [, y, m, d, hh, mm, ss] = match;
+        return {
+          time: `${hh}:${mm}:${ss}`,
+          date: `${d}/${m}/${y}`,
+          full: `${hh}:${mm}:${ss} ${d}/${m}/${y}`
+        };
+      }
+    }
+    const dateObj = new Date(dateInput);
+    if (isNaN(dateObj.getTime())) {
+      return { time: String(dateInput), date: '', full: String(dateInput) };
+    }
+    return {
+      time: dateObj.toLocaleTimeString('vi-VN', { hour12: false, timeZone: 'Asia/Ho_Chi_Minh' }),
+      date: dateObj.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+      full: dateObj.toLocaleString('vi-VN', { hour12: false, timeZone: 'Asia/Ho_Chi_Minh' })
+    };
+  };
+
   const getActionBadge = (action) => {
     switch (action) {
       case 'LOGIN':
@@ -1962,7 +1986,7 @@ export default function SystemConfigTab({
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[11px]">
-                    <th className="py-3 px-4 w-40">Thời gian</th>
+                    <th className="py-3 px-4 w-40">Thời gian (GMT+7)</th>
                     <th className="py-3 px-4 w-48">Người thực hiện</th>
                     <th className="py-3 px-4 w-36">Thao tác</th>
                     <th className="py-3 px-4">Nội dung hoạt động</th>
@@ -1988,15 +2012,16 @@ export default function SystemConfigTab({
                   ) : (
                     logs.map((log) => {
                       const badge = getActionBadge(log.action);
+                      const logTime = formatVietnamDateTime(log.created_at);
                       return (
                         <tr key={log.id} className="hover:bg-slate-50/75 transition">
                           {/* Thời gian */}
                           <td className="py-3 px-4 whitespace-nowrap">
                             <div className="font-mono text-slate-800 font-semibold">
-                              {new Date(log.created_at).toLocaleTimeString('vi-VN', { hour12: false })}
+                              {logTime.time}
                             </div>
                             <div className="text-[10px] text-slate-400">
-                              {new Date(log.created_at).toLocaleDateString('vi-VN')}
+                              {logTime.date}
                             </div>
                           </td>
 
@@ -2107,7 +2132,7 @@ export default function SystemConfigTab({
                   <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
                     <div>
                       <span className="text-slate-400 block text-[11px]">Thời gian thực hiện:</span>
-                      <span className="font-bold text-slate-800">{new Date(selectedLogDetail.created_at).toLocaleString('vi-VN')}</span>
+                      <span className="font-bold text-slate-800">{formatVietnamDateTime(selectedLogDetail.created_at).full} (GMT+7)</span>
                     </div>
                     <div>
                       <span className="text-slate-400 block text-[11px]">Người thực hiện:</span>

@@ -389,7 +389,7 @@ function initDatabase() {
       ip_address TEXT,
       user_agent TEXT,
       details TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT (datetime('now', '+7 hours'))
     );
 
     CREATE INDEX IF NOT EXISTS idx_user_positions_user ON user_positions(user_id);
@@ -569,6 +569,36 @@ function initDatabase() {
       }
     }
   } catch (e) {}
+
+  // Chuẩn hóa múi giờ Việt Nam GMT+7 cho bảng system_logs
+  try {
+    const logs = db.prepare("SELECT id, created_at FROM system_logs WHERE id LIKE 'log-%'").all();
+    const updateLog = db.prepare("UPDATE system_logs SET created_at = ? WHERE id = ?");
+    for (const l of logs) {
+      const match = l.id.match(/^log-(\d+)-/);
+      if (match) {
+        const epoch = parseInt(match[1]);
+        if (!isNaN(epoch) && epoch > 1500000000000) {
+          const d = new Date(epoch);
+          const vnTime = new Intl.DateTimeFormat('sv-SE', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+          }).format(d).replace('T', ' ');
+          if (l.created_at !== vnTime) {
+            updateLog.run(vnTime, l.id);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[Migration Error - system_logs timezone]', e.message);
+  }
 
   // Khởi tạo chức vụ chính (primary position) cho toàn bộ người dùng hiện có trong bảng user_positions
   ensureUserPositionsPopulated();

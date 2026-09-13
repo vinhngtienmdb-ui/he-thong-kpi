@@ -1289,12 +1289,52 @@ export default function Header({
             {/* Body Timeline */}
             <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
               
-              {/* Version 5.5 */}
+              {/* Version 5.6 */}
               <div className="relative pl-6 border-l-2 border-red-600 space-y-2">
                 <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-xs"></span>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 5.5</span>
-                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 20:30 (Bản phát hành mới nhất - Popup Thông báo & Duyệt tức thì CBQL, Kiểm soát Danh mục chuẩn, Khóa gia hạn việc Từ chối, Sửa cấp lại mật khẩu & Tối ưu Người dùng chi tiết)</span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold">Phiên bản 5.6</span>
+                  <span className="text-xs text-slate-500 font-medium">13/09/2026 - 16:00 (Bản phát hành mới nhất - Chuẩn hóa Múi giờ Logs sang GMT+7 Việt Nam & Bảo toàn 100% dữ liệu)</span>
+                </div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  Chuẩn Hóa Toàn Diện Múi Giờ Ghi Nhật Ký Hoạt Động Hệ Thống (Logs) Sang Múi Giờ Việt Nam GMT+7 (Asia/Ho_Chi_Minh), Tự Động Di Trú & Bảo Toàn Dữ Liệu Lịch Sử
+                </h4>
+                <ul className="text-xs text-slate-600 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <li><strong>Chuẩn hóa Múi giờ Ghi nhận Nhật ký Hệ thống sang GMT+7:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Khắc phục triệt để lỗi chênh lệch 7 tiếng do SQLite mặc định lưu UTC (<code>CURRENT_TIMESTAMP</code>).</li>
+                      <li>Tích hợp hàm <code>getVietnamTimestamp()</code> tại backend theo múi giờ <code>Asia/Ho_Chi_Minh</code>, lưu chính xác từng giây giờ Việt Nam.</li>
+                      <li>Cập nhật định nghĩa bảng CSDL <code>system_logs</code> với giá trị mặc định <code>DATETIME DEFAULT (datetime('now', '+7 hours'))</code>.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Bộ Định dạng Thời gian Thông minh <code>formatVietnamDateTime</code> trên Giao diện:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Bảng Nhật ký hoạt động hiển thị trực quan hai dòng: giờ phút giây <code>HH:mm:ss</code> và ngày tháng năm <code>DD/MM/YYYY</code>.</li>
+                      <li>Đổi tiêu đề cột thành <strong>"Thời gian (GMT+7)"</strong> và hiển thị rõ thông tin <code>(GMT+7)</code> trong Modal chi tiết bản ghi.</li>
+                      <li>Khắc phục triệt để lỗi phân tích ngày giờ trên Safari/iOS, chống lệch múi giờ trên mọi thiết bị người dùng.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Chuẩn hóa Bộ lọc Theo Ngày & Dọn dẹp Log theo GMT+7:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Bộ lọc Từ ngày và Đến ngày so khớp chuẩn xác từng ngày theo giờ Việt Nam, không sót log rạng sáng hay đêm muộn.</li>
+                      <li>Cơ chế dọn dẹp log cũ tính toán mốc xóa chuẩn xác theo <code>datetime('now', '+7 hours', '-30 days')</code>.</li>
+                    </ul>
+                  </li>
+                  <li><strong>Bảo tồn Tuyệt đối & Tự động Chuẩn hóa Toàn bộ Dữ liệu Lịch sử:</strong>
+                    <ul className="list-[circle] pl-4 mt-1 space-y-0.5 text-slate-500">
+                      <li>Cơ chế migration tự động đối soát mốc epoch từ mã ID để cập nhật chính xác thời gian ghi nhận của toàn bộ dữ liệu lịch sử.</li>
+                      <li>Đồng bộ logic đẩy/kéo với Supabase Cloud kèm timezone offset <code>+07:00</code>.</li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Version 5.5 */}
+              <div className="relative pl-6 border-l-2 border-slate-300 space-y-2">
+                <span className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-400 border-2 border-white shadow-xs"></span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-xs font-bold">Phiên bản 5.5</span>
+                  <span className="text-xs text-slate-500 font-medium">12/09/2026 - 20:30 (Popup Thông báo & Duyệt tức thì CBQL, Kiểm soát Danh mục chuẩn, Khóa gia hạn việc Từ chối, Sửa cấp lại mật khẩu & Tối ưu Người dùng chi tiết)</span>
                 </div>
                 <h4 className="text-sm font-bold text-slate-900">
                   Hệ Thống Popup Thông Báo Thời Gian Thực & Phê Duyệt Tức Thì Cho Cán Bộ Quản Lý, Kiểm Soát Danh Mục Chuẩn Khi Từ Chối, Khóa Gia Hạn & Loại Bỏ Nhiệm Vụ Bị Từ Chối Khỏi Báo Cáo, Khắc Phục Cấp Lại Mật Khẩu & Tối Ưu Màn Hình Người Dùng Chi Tiết

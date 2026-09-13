@@ -214,8 +214,23 @@ function checkCanManageUsers(viewer) {
   }
 }
 
-// Helper ghi nhật ký hoạt động hệ thống realtime
-function logSystemActivity(req, { action, entity_type, entity_id, description, details, user }) {
+// Helper lấy chuỗi thời gian hiện tại chuẩn múi giờ Việt Nam GMT+7 (Asia/Ho_Chi_Minh)
+function getVietnamTimestamp(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).format(d).replace('T', ' ');
+}
+
+// Helper ghi nhật ký hoạt động hệ thống realtime theo múi giờ Việt Nam (GMT+7)
+function logSystemActivity(req, { action, entity_type, entity_id, description, details, user, created_at }) {
   try {
     const activeUser = user || (req ? getViewer(req) : null);
     const userId = activeUser ? activeUser.id : null;
@@ -230,11 +245,12 @@ function logSystemActivity(req, { action, entity_type, entity_id, description, d
 
     const logId = `log-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     const detailsStr = details ? (typeof details === 'object' ? JSON.stringify(details) : String(details)) : null;
+    const createdAt = created_at || getVietnamTimestamp();
 
     db.prepare(`
       INSERT INTO system_logs (id, user_id, username, full_name, action, entity_type, entity_id, description, ip_address, user_agent, details, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `).run(logId, userId, username, fullName, action, entity_type || null, entity_id ? String(entity_id) : null, description, ipAddress, userAgent, detailsStr);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(logId, userId, username, fullName, action, entity_type || null, entity_id ? String(entity_id) : null, description, ipAddress, userAgent, detailsStr, createdAt);
   } catch (err) {
     console.error('[System Log Error]', err.message);
   }
@@ -7589,7 +7605,7 @@ app.post('/api/system-logs/clear', (req, res) => {
 
     const info = db.prepare(`
       DELETE FROM system_logs 
-      WHERE created_at < datetime('now', '-' || ? || ' days')
+      WHERE created_at < datetime('now', '+7 hours', '-' || ? || ' days')
     `).run(days);
 
     logSystemActivity(req, {

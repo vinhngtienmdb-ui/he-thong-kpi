@@ -505,7 +505,12 @@ async function pushToSupabase() {
     stats.skip_level_authorizations = auths.length;
 
     // 20. system_logs
-    const logs = db.prepare('SELECT * FROM system_logs ORDER BY created_at DESC LIMIT 1000').all();
+    const logs = db.prepare('SELECT * FROM system_logs ORDER BY created_at DESC LIMIT 1000').all().map(l => ({
+      ...l,
+      created_at: l.created_at && !l.created_at.includes('+') && !l.created_at.endsWith('Z')
+        ? `${l.created_at.replace(' ', 'T')}+07:00`
+        : l.created_at
+    }));
     await batchUpsert(
       client, 'system_logs',
       ['id', 'user_id', 'username', 'full_name', 'action', 'entity_type', 'entity_id', 'description', 'ip_address', 'user_agent', 'details', 'created_at'],
@@ -955,10 +960,30 @@ async function pullFromSupabase() {
       `);
       db.transaction(() => {
         for (const l of supLogs.rows) {
+          let createdAtVal = l.created_at;
+          if (l.created_at) {
+            try {
+              const d = new Date(l.created_at);
+              if (!isNaN(d.getTime())) {
+                createdAtVal = new Intl.DateTimeFormat('sv-SE', {
+                  timeZone: 'Asia/Ho_Chi_Minh',
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: false
+                }).format(d).replace('T', ' ');
+              }
+            } catch (err) {
+              createdAtVal = toSqliteVal(l.created_at);
+            }
+          }
           insLog.run(
             toSqliteVal(l.id), toSqliteVal(l.user_id), toSqliteVal(l.username), toSqliteVal(l.full_name),
             toSqliteVal(l.action), toSqliteVal(l.entity_type), toSqliteVal(l.entity_id), toSqliteVal(l.description),
-            toSqliteVal(l.ip_address), toSqliteVal(l.user_agent), toSqliteVal(l.details), toSqliteVal(l.created_at)
+            toSqliteVal(l.ip_address), toSqliteVal(l.user_agent), toSqliteVal(l.details), toSqliteVal(createdAtVal)
           );
         }
       })();
