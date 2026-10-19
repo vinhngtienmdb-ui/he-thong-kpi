@@ -20,7 +20,9 @@ import {
   X,
   Files,
   ClipboardCheck,
-  BookUser
+  ClipboardList,
+  BookUser,
+  FolderArchive
 } from 'lucide-react';
 import { getUserPermissions } from '../permissions';
 
@@ -36,6 +38,7 @@ export default function Sidebar({
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedGroups, setExpandedGroups] = useState({
     eval: true,
+    internal: true,
     admin: true
   });
 
@@ -51,16 +54,22 @@ export default function Sidebar({
   const userPerms = getUserPermissions(currentUser);
 
   const evalModules = [
-    { id: 'standard', label: 'Danh mục công việc chuẩn', icon: FileSpreadsheet, show: true },
-    { id: 'documents', label: 'Quản lý & Phân bổ văn bản', icon: Files, show: true },
-    { id: 'assignment', label: 'B1. Giao & Tiếp nhận việc', icon: UserCheck, show: true },
-    { id: 'execution', label: 'B2. Nộp sản phẩm công việc', icon: CheckSquare, show: true },
-    { id: 'self_eval', label: 'B3. Tự đánh giá cuối kỳ', icon: Award, show: true },
-    { id: 'grading', label: 'B4. Đánh giá, nhận xét (CBQL)', icon: ShieldCheck, show: userPerms.canGradeTasks },
-    { id: 'advisory', label: 'B5. Tổng hợp tham mưu', icon: ClipboardCheck, show: userPerms.canConcludeEvaluation },
-    { id: 'voting', label: 'B6. Biểu quyết xếp loại', icon: Vote, show: userPerms.canConcludeEvaluation },
+    { id: 'tasks_todo', label: 'Công việc cần xử lý', icon: ClipboardList, show: true },
+    { id: 'standard', label: 'Danh mục công việc đơn vị', icon: FileSpreadsheet, show: true },
+    { id: 'assignment', label: 'Quản lý nhiệm vụ', icon: UserCheck, show: true },
+    { id: 'execution', label: 'Nộp sản phẩm công việc', icon: CheckSquare, show: true },
+    { id: 'self_eval', label: 'Tự đánh giá cuối quý', icon: Award, show: true },
+    { id: 'grading', label: 'Đánh giá, nhận xét', icon: ShieldCheck, show: userPerms.canGradeTasks },
+    { id: 'voting', label: 'Biểu quyết', icon: Vote, show: userPerms.canConcludeEvaluation },
     { id: 'charts', label: 'Biểu đồ thống kê', icon: BarChart3, show: true },
-    { id: 'reports', label: 'Xuất báo cáo & biểu mẫu', icon: FileText, show: true }
+    { id: 'reports', label: 'Xuất báo cáo', icon: FileText, show: true },
+    { id: 'documents', label: 'Quản lý & Phân bổ văn bản', icon: Files, show: true },
+    { id: 'advisory', label: 'Tổng hợp tham mưu', icon: ClipboardCheck, show: userPerms.canConcludeEvaluation }
+  ].filter(m => m.show);
+
+  const internalModules = [
+    { id: 'party_members', label: 'Hồ sơ Đảng viên', icon: Award, show: true },
+    { id: 'digitization', label: 'Chỉnh lý số hóa tài liệu', icon: FolderArchive, show: true }
   ].filter(m => m.show);
 
   const adminModules = [
@@ -69,6 +78,10 @@ export default function Sidebar({
   ].filter(m => m.show);
 
   const filteredEvalModules = evalModules.filter(m => 
+    !searchTerm.trim() || m.label.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredInternalModules = internalModules.filter(m =>
     !searchTerm.trim() || m.label.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -221,6 +234,61 @@ export default function Sidebar({
             {(expandedGroups.eval || isCollapsed) && (
               <div className="space-y-0.5 pl-1">
                 {filteredEvalModules.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleTabClick(item.id)}
+                      className={`
+                        w-full flex items-center gap-3 px-3.5 py-2 rounded-xl text-sm transition-all text-left group
+                        ${isCollapsed ? 'justify-center px-0' : ''}
+                        ${isActive 
+                          ? 'bg-white text-slate-900 shadow-md font-semibold' 
+                          : 'text-white/85 hover:bg-white/15 hover:text-white font-normal'
+                        }
+                      `}
+                      title={isCollapsed ? item.label : undefined}
+                    >
+                      <Icon className={`w-4.5 h-4.5 shrink-0 transition-transform group-hover:scale-110 ${isActive ? 'text-[#db131a]' : 'text-red-100'}`} />
+                      {!isCollapsed && (
+                        <span className={`truncate flex-1 leading-snug text-xs sm:text-sm ${isActive ? 'font-medium' : 'font-normal'}`}>{item.label}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 3. CÁC PHÂN HỆ NỘI NGHIỆP (Hồ sơ Đảng viên & Chỉnh lý số hóa) */}
+          <div className="space-y-1 pt-1">
+            <button
+              type="button"
+              onClick={() => toggleGroup('internal')}
+              className={`
+                w-full flex items-center justify-between px-3.5 py-2 rounded-xl text-sm font-semibold text-white hover:bg-white/15 transition
+                ${isCollapsed ? 'justify-center px-0' : ''}
+              `}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <FolderArchive className="w-5 h-5 text-amber-300 shrink-0" />
+                {!isCollapsed && (
+                  <span className="uppercase tracking-wider truncate font-semibold text-amber-200 text-xs">
+                    CÁC PHÂN HỆ NỘI NGHIỆP
+                  </span>
+                )}
+              </div>
+              {!isCollapsed && (
+                expandedGroups.internal ? <ChevronUp className="w-4 h-4 text-red-200" /> : <ChevronDown className="w-4 h-4 text-red-200" />
+              )}
+            </button>
+
+            {/* Sub-items list (Hồ sơ Đảng viên & Chỉnh lý số hóa) */}
+            {(expandedGroups.internal || isCollapsed) && (
+              <div className="space-y-0.5 pl-1">
+                {filteredInternalModules.map((item) => {
                   const Icon = item.icon;
                   const isActive = currentTab === item.id;
                   return (

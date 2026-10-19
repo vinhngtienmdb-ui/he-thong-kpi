@@ -62,11 +62,8 @@ function parseExcelNumber(cell, fallback = 0) {
   return num;
 }
 
-// Normalize task type to DB constraint
+// Normalize task type: Thống nhất chỉ còn loại công việc Thường xuyên theo Công văn số 3818-CV/BTCTU
 function normalizeTaskType(val) {
-  if (!val) return 'Thường xuyên';
-  const s = normalizeStr(val);
-  if (s.includes('dot xuat') || s === 'dx') return 'Đột xuất';
   return 'Thường xuyên';
 }
 
@@ -410,10 +407,8 @@ async function importStandardTasksFromExcel(fileOrPath, targetPeriodId = null, o
       const rawTaskType = mapping.task_type ? extractCellText(row.getCell(mapping.task_type)).trim() : '';
       const taskType = normalizeTaskType(rawTaskType);
 
-      // Standard score
-      const stdCell = mapping.standard_score ? row.getCell(mapping.standard_score) : null;
-      let standardScore = parseExcelNumber(stdCell, taskType === 'Đột xuất' ? 12 : 10);
-      if (standardScore <= 0) standardScore = (taskType === 'Đột xuất' ? 12 : 10);
+      // Standard score: Thống nhất 10 điểm cho mọi công việc theo Công văn 3818-CV/BTCTU
+      let standardScore = 10;
 
       // Difficulty weight
       const diffCell = mapping.difficulty_weight ? row.getCell(mapping.difficulty_weight) : null;
@@ -575,8 +570,7 @@ async function importStandardTasksFromData(rawTasks = [], targetPeriodId = null,
       const outputResult = normalizeOutputResult(item.output_result || item['Kết quả đầu ra'] || '');
       const deadline = formatDate(item.deadline || item['Thời hạn hoàn thành']) || '2026-09-30';
       const taskType = normalizeTaskType(item.task_type || item['Loại công việc'] || '');
-      let standardScore = parseFloat(item.standard_score || item['Điểm chuẩn']) || (taskType === 'Đột xuất' ? 12 : 10);
-      if (standardScore <= 0) standardScore = (taskType === 'Đột xuất' ? 12 : 10);
+      let standardScore = 10;
 
       let difficultyWeight = parseFloat(item.difficulty_weight || item['Hệ số độ khó']) || 1.0;
       if (difficultyWeight > 10 && difficultyWeight <= 200) difficultyWeight /= 100;
@@ -824,6 +818,123 @@ async function generateUserImportTemplate() {
     { width: 45 },
     { width: 25 }
   ];
+
+  return workbook;
+}
+
+// Tạo tệp mẫu Excel nhập Danh mục công việc chuẩn động bằng ExcelJS
+async function generateStandardTaskTemplate() {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Hệ thống Quản lý Đánh giá KPI';
+  workbook.created = new Date();
+
+  // Sheet 1: 01. Mẫu import
+  const ws = workbook.addWorksheet('01. Mẫu import', {
+    views: [{ showGridLines: true }]
+  });
+
+  // Tiêu đề
+  ws.mergeCells('A1:N1');
+  const titleCell = ws.getCell('A1');
+  titleCell.value = 'DANH MỤC SẢN PHẨM CHUẨN (Áp dụng theo Công văn số 3818-CV/BTCTU ngày 10/10/2026)';
+  titleCell.font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF991B1B' } };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 32;
+
+  // Dòng tiêu đề cột
+  const headers = [
+    'TT',
+    'Mã đơn vị *',
+    'Tên công việc *',
+    'Kết quả đầu ra *',
+    'Thời hạn hoàn thành *',
+    'Loại công việc *',
+    'Điểm chuẩn *',
+    'Hệ số độ khó *',
+    'Điểm quy đổi tối đa *',
+    'Minh chứng',
+    'Ghi chú',
+    'Trục kết quả trọng tâm *',
+    'Trạng thái *',
+    'Kỳ đánh giá *'
+  ];
+
+  const headerRow = ws.addRow(headers);
+  headerRow.height = 30;
+  headerRow.eachCell((cell) => {
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1E3A8A' }
+    };
+    cell.font = { name: 'Times New Roman', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+  });
+
+  // Dữ liệu mẫu
+  const sampleData = [
+    [1, 'A29.123.22', 'Báo cáo kết quả thực hiện nhiệm vụ quý IV của phòng', 'Báo cáo định kỳ', '2026-12-15', 'Thường xuyên', 10, 1.0, 10, 'Báo cáo quý kèm số ký hiệu', '', 'TRUC_1', 'Hoạt động', 'p-1'],
+    [2, 'A29.123.22', 'Tờ trình Ban Thường vụ Đảng ủy về kế hoạch công tác', 'Tờ trình chuyên môn', '2026-12-10', 'Thường xuyên', 10, 1.1, 11, 'Tờ trình đã ký ban hành', '', 'TRUC_2', 'Hoạt động', 'p-1'],
+    [3, 'A29.123.22', 'Lãnh đạo thực hiện các nhiệm vụ trọng tâm chuyển đổi số', 'Kế hoạch/ Báo cáo', '2026-12-15', 'Thường xuyên', 10, 1.2, 12, 'Hồ sơ triển khai, văn bản chỉ đạo', '', 'TRUC_3', 'Hoạt động', 'p-1']
+  ];
+
+  sampleData.forEach((rowValues) => {
+    const row = ws.addRow(rowValues);
+    row.height = 24;
+    row.eachCell((cell, colNumber) => {
+      cell.font = { name: 'Times New Roman', size: 11 };
+      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      if ([1, 2, 5, 6, 7, 8, 9, 12, 13, 14].includes(colNumber)) {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      } else {
+        cell.alignment = { vertical: 'middle' };
+      }
+    });
+  });
+
+  ws.columns = [
+    { width: 8 },
+    { width: 16 },
+    { width: 42 },
+    { width: 24 },
+    { width: 20 },
+    { width: 16 },
+    { width: 14 },
+    { width: 14 },
+    { width: 20 },
+    { width: 30 },
+    { width: 20 },
+    { width: 22 },
+    { width: 16 },
+    { width: 16 }
+  ];
+
+  // Sheet 2: 02. Hướng dẫn
+  const guideWs = workbook.addWorksheet('02. Hướng dẫn', { views: [{ showGridLines: true }] });
+  guideWs.addRow(['HƯỚNG DẪN NHẬP DANH MỤC CÔNG VIỆC CHUẨN THEO CÔNG VĂN SỐ 3818-CV/BTCTU']).font = { name: 'Times New Roman', size: 14, bold: true };
+  guideWs.addRow([]);
+  const guideLines = [
+    '1. Loại công việc: Thống nhất chỉ còn loại "Thường xuyên" cho mọi công việc (kể cả việc phát sinh).',
+    '2. Điểm chuẩn: Thống nhất là 10 điểm cho mọi công việc.',
+    '3. Hệ số độ khó: Gồm 3 mức: 100% (1.0 - thông thường), 110% (1.1 - phối hợp nhiều đơn vị/khối lượng chuyên môn cao), 120% (1.2 - việc trọng tâm, then chốt, đặc biệt quan trọng).',
+    '4. Điểm quy đổi tối đa = Điểm chuẩn (10) × Hệ số độ khó.',
+    '5. Trục kết quả trọng tâm: Nhập mã từ TRUC_1 đến TRUC_6 (xem chi tiết tại Sheet 03).'
+  ];
+  guideLines.forEach(line => {
+    const r = guideWs.addRow([line]);
+    r.font = { name: 'Times New Roman', size: 11 };
+  });
+  guideWs.columns = [{ width: 100 }];
+
+  // Sheet 3: 03. Trục kết quả trọng tâm
+  const axisWs = workbook.addWorksheet('03. Trục kết quả trọng tâm', { views: [{ showGridLines: true }] });
+  axisWs.addRow(['Mã trục', 'Tên trục kết quả trọng tâm']).font = { name: 'Times New Roman', size: 11, bold: true };
+  const axes = db.prepare('SELECT code, name FROM axes ORDER BY code ASC').all();
+  axes.forEach(a => {
+    axisWs.addRow([a.code, a.name]).font = { name: 'Times New Roman', size: 11 };
+  });
+  axisWs.columns = [{ width: 16 }, { width: 70 }];
 
   return workbook;
 }
@@ -1496,7 +1607,7 @@ async function exportCBQLWorkbook(periodId, userId) {
   rPropNote1.height = 26;
   ws.mergeCells(`B${rPropNote1.number}:I${rPropNote1.number}`);
 
-  const rPropNote2 = ws.addRow(['', 'Tiêu chí đánh giá, xếp loại chất lượng thực hiện theo Hướng dẫn số 06-HD/BTCTU ngày 12/8/2026 của Ban Tổ chức Thành ủy; trong đó, trường hợp cá nhân “Hoàn thành xuất sắc nhiệm vụ” ngoài kết quả tổng điểm đạt từ 90 điểm trở lên, phải hoàn thành 100% nhiệm vụ được giao; trong đó có ít nhất 30% số nhiệm vụ hoàn thành vượt mức tiến độ hoặc chất lượng xuất sắc.']);
+  const rPropNote2 = ws.addRow(['', 'Tiêu chí đánh giá, xếp loại chất lượng thực hiện theo Công văn số 3818-CV/BTCTU ngày 10/10/2026 và Hướng dẫn số 06-HD/BTCTU của Ban Tổ chức Thành ủy; trong đó: Xuất sắc (≥ 90 điểm + 100% đúng hạn + ≥ 30% việc vượt mức tiến độ và chất lượng); Tốt (70 đến dưới 90 điểm + 100% đúng hạn); Hoàn thành (50 đến dưới 70 điểm + chậm tiến độ không quá 20%); Không hoàn thành (dưới 50 điểm hoặc chậm tiến độ quá 20%).']);
   rPropNote2.font = { name: 'Times New Roman', size: 14, italic: true };
   rPropNote2.alignment = { wrapText: true };
   ws.mergeCells(`B${rPropNote2.number}:I${rPropNote2.number}`);
@@ -1672,7 +1783,7 @@ async function exportCBQLWorkbook(periodId, userId) {
   t1.alignment = { horizontal: 'center' };
   wsTasks.mergeCells(`A1:O1`);
 
-  const t2 = wsTasks.addRow([`(Theo Phụ lục 5 - Hướng dẫn 06-HD/BTCTU Ban Tổ chức Thành ủy)`]);
+  const t2 = wsTasks.addRow([`(Theo Phụ lục 4, 5 - Công văn số 3818-CV/BTCTU ngày 10/10/2026 và Hướng dẫn số 06-HD/BTCTU Ban Tổ chức Thành ủy)`]);
   t2.font = { name: 'Times New Roman', size: 14, italic: true };
   t2.alignment = { horizontal: 'center' };
   wsTasks.mergeCells(`A2:O2`);
@@ -2479,6 +2590,7 @@ async function exportUsersWorkbook(usersList = [], options = {}) {
 module.exports = {
   importStandardTasksFromExcel,
   importStandardTasksFromData,
+  generateStandardTaskTemplate,
   generateUserImportTemplate,
   importUsersFromExcel,
   exportCBQLWorkbook,

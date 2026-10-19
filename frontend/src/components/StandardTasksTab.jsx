@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   FileSpreadsheet, 
   Upload, 
@@ -21,7 +21,11 @@ import {
   X,
   UserCheck,
   Eye,
-  RefreshCw
+  RefreshCw,
+  BarChart3,
+  Info,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { api } from '../api';
 import { OUTPUT_RESULT_OPTIONS, formatDate, toInputDateFormat } from '../constants';
@@ -41,6 +45,8 @@ export default function StandardTasksTab({
   const userPerms = getUserPermissions(currentUser);
   const isCBQL = Boolean(userPerms.isManager || userPerms.isAdmin || userPerms.canAssignTasks);
   const [tasks, setTasks] = useState([]);
+  const [assignedTasksList, setAssignedTasksList] = useState([]);
+  const [showStatsCards, setShowStatsCards] = useState(true);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAxis, setSelectedAxis] = useState('');
@@ -177,8 +183,12 @@ export default function StandardTasksTab({
       if (selectedAxis) params.axis_code = selectedAxis;
       const vId = currentUser?.id || (api.getViewerId ? api.getViewerId() : null);
       if (vId) params.viewer_id = vId;
-      const data = await api.getStandardTasks(params);
+      const [data, assignedData] = await Promise.all([
+        api.getStandardTasks(params),
+        api.getAssignedTasks(selectedPeriod ? { period_id: selectedPeriod } : {}).catch(() => [])
+      ]);
       setTasks(data);
+      setAssignedTasksList(Array.isArray(assignedData) ? assignedData : []);
     } catch (err) {
       console.error('Error fetching standard tasks:', err);
     } finally {
@@ -875,6 +885,43 @@ export default function StandardTasksTab({
     return [str];
   }
 
+  // Thống kê Danh mục công việc đơn vị (4 Thẻ chuẩn theo Ảnh 2)
+  const stats = useMemo(() => {
+    const total = tasks.length;
+    const assignedIds = new Set();
+    const completedIds = new Set();
+    assignedTasksList.forEach(a => {
+      if (a.standard_task_id) {
+        assignedIds.add(a.standard_task_id);
+        if (a.status === 'completed' || a.status === 'evaluated') {
+          completedIds.add(a.standard_task_id);
+        }
+      }
+    });
+
+    let assigned = 0;
+    let completed = 0;
+    tasks.forEach(t => {
+      if (assignedIds.has(t.id)) assigned++;
+      if (completedIds.has(t.id)) completed++;
+    });
+
+    const unassigned = Math.max(0, total - assigned);
+    const unassignedPct = total > 0 ? ((unassigned / total) * 100).toFixed(1).replace('.', ',') : '0';
+    const assignedPct = total > 0 ? ((assigned / total) * 100).toFixed(1).replace('.', ',') : '0';
+    const completedPct = total > 0 ? ((completed / total) * 100).toFixed(1).replace('.', ',') : '0';
+
+    return {
+      total,
+      unassigned,
+      unassignedPct,
+      assigned,
+      assignedPct,
+      completed,
+      completedPct
+    };
+  }, [tasks, assignedTasksList]);
+
   return (
     <div className="space-y-4">
       {/* Toast / Notification Banner */}
@@ -924,7 +971,7 @@ export default function StandardTasksTab({
               Trang chủ
             </span>
             <span className="text-slate-400">&gt;</span>
-            <span className="text-red-700 font-bold">Danh mục sản phẩm công việc chuẩn đơn vị</span>
+            <span className="text-red-700 font-bold">Danh mục công việc đơn vị</span>
           </div>
         </div>
 
@@ -1032,7 +1079,110 @@ export default function StandardTasksTab({
         </div>
       </div>
 
-      {/* 2. Filter & Search Bar */}
+      {/* 2. Thống kê Danh mục công việc đơn vị (4 Thẻ chuẩn theo Ảnh 2) */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => setShowStatsCards(!showStatsCards)}
+            className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-slate-800 transition cursor-pointer"
+          >
+            {showStatsCards ? (
+              <>
+                <ChevronUp className="w-3.5 h-3.5" />
+                <span>Thu gọn thống kê</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown className="w-3.5 h-3.5" />
+                <span>Mở rộng thống kê</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {showStatsCards && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Card 1: Tổng công việc */}
+            <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/60 shadow-2xs relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                  Tổng công việc
+                  <Info className="w-3.5 h-3.5 text-slate-400" />
+                </span>
+              </div>
+              <div className="text-2xl font-black text-slate-800 mt-1">
+                {stats.total}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                100% tổng danh mục
+              </div>
+              <div className="absolute right-3 bottom-3 opacity-20 pointer-events-none text-blue-800">
+                <BarChart3 className="w-6 h-6" />
+              </div>
+            </div>
+
+            {/* Card 2: Chưa giao */}
+            <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/60 shadow-2xs relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                  Chưa giao
+                  <Info className="w-3.5 h-3.5 text-slate-400" />
+                </span>
+              </div>
+              <div className="text-2xl font-black text-slate-800 mt-1">
+                {stats.unassigned}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                {stats.unassignedPct}% tổng công việc
+              </div>
+              <div className="absolute right-3 bottom-3 opacity-20 pointer-events-none text-amber-800">
+                <BarChart3 className="w-6 h-6" />
+              </div>
+            </div>
+
+            {/* Card 3: Đã giao */}
+            <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/60 shadow-2xs relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                  Đã giao
+                  <Info className="w-3.5 h-3.5 text-slate-400" />
+                </span>
+              </div>
+              <div className="text-2xl font-black text-slate-800 mt-1">
+                {stats.assigned}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                {stats.assignedPct}% tổng công việc
+              </div>
+              <div className="absolute right-3 bottom-3 opacity-20 pointer-events-none text-emerald-800">
+                <BarChart3 className="w-6 h-6" />
+              </div>
+            </div>
+
+            {/* Card 4: Đã hoàn thành */}
+            <div className="p-3.5 rounded-xl border border-rose-200 bg-rose-50/60 shadow-2xs relative overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-600 flex items-center gap-1">
+                  Đã hoàn thành
+                  <Info className="w-3.5 h-3.5 text-slate-400" />
+                </span>
+              </div>
+              <div className="text-2xl font-black text-slate-800 mt-1">
+                {stats.completed}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                {stats.completedPct}% tổng công việc
+              </div>
+              <div className="absolute right-3 bottom-3 opacity-20 pointer-events-none text-rose-800">
+                <BarChart3 className="w-6 h-6" />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 3. Filter & Search Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
         
         {/* Search text input */}
@@ -1249,7 +1399,6 @@ export default function StandardTasksTab({
                 </tr>
               ) : (
                 filteredTasks.map((t, idx) => {
-                  const isDotXuat = t.task_type === 'Đột xuất';
                   const convScore = Number((t.max_converted_score !== undefined && t.max_converted_score !== null 
                     ? t.max_converted_score 
                     : (t.standard_score * (t.difficulty_weight || 1.0))).toFixed(2));
@@ -1316,17 +1465,11 @@ export default function StandardTasksTab({
                         {formatDate(t.deadline)}
                       </td>
 
-                      {/* Loại (⚡ Đột xuất / ● Thường xuyên) */}
+                      {/* Loại (● Thường xuyên) */}
                       <td className="px-2 py-3 text-center">
-                        {isDotXuat ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#fff2e8] text-[#e05626]">
-                            <span className="font-bold">⚡</span> Đột xuất
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#eef4ff] text-[#3b66d1]">
-                            <span className="font-bold">●</span> Thường xuyên
-                          </span>
-                        )}
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#eef4ff] text-[#3b66d1]">
+                          <span className="font-bold">●</span> Thường xuyên
+                        </span>
                       </td>
 
                       {/* Điểm chuẩn */}
@@ -1514,7 +1657,6 @@ export default function StandardTasksTab({
             </div>
           ) : (
             filteredTasks.map((t, idx) => {
-              const isDotXuat = t.task_type === 'Đột xuất';
               const convScore = Number((t.max_converted_score !== undefined && t.max_converted_score !== null 
                 ? t.max_converted_score 
                 : (t.standard_score * (t.difficulty_weight || 1.0))).toFixed(2));
@@ -1544,15 +1686,9 @@ export default function StandardTasksTab({
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {isDotXuat ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#fff2e8] text-[#e05626]">
-                          ⚡ Đột xuất
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#eef4ff] text-[#3b66d1]">
-                          ● Thường xuyên
-                        </span>
-                      )}
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#eef4ff] text-[#3b66d1]">
+                        ● Thường xuyên
+                      </span>
 
                       {t.status === 'pending_approval' ? (
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
@@ -2204,17 +2340,15 @@ A29.123.22	Báo cáo tổng kết công tác năm	Báo cáo	2026-09-30	Thường
                   <select
                     value={newTask.task_type}
                     onChange={(e) => {
-                      const type = e.target.value;
                       setNewTask({
                         ...newTask,
-                        task_type: type,
-                        standard_score: type === 'Đột xuất' ? 12 : 10
+                        task_type: e.target.value,
+                        standard_score: 10
                       });
                     }}
-                    className="w-full text-xs p-2 border border-slate-300 rounded-md"
+                    className="w-full text-xs p-2 border border-slate-300 rounded-md bg-slate-50"
                   >
                     <option value="Thường xuyên">Thường xuyên (10đ)</option>
-                    <option value="Đột xuất">Đột xuất (12đ)</option>
                   </select>
                 </div>
 
@@ -2390,17 +2524,15 @@ A29.123.22	Báo cáo tổng kết công tác năm	Báo cáo	2026-09-30	Thường
                   <select
                     value={proposeForm.task_type}
                     onChange={(e) => {
-                      const type = e.target.value;
                       setProposeForm({
                         ...proposeForm,
-                        task_type: type,
-                        standard_score: type === 'Đột xuất' ? 12 : 10
+                        task_type: e.target.value,
+                        standard_score: 10
                       });
                     }}
-                    className="w-full text-xs p-2 border border-slate-300 rounded-md"
+                    className="w-full text-xs p-2 border border-slate-300 rounded-md bg-slate-50"
                   >
                     <option value="Thường xuyên">Thường xuyên (10đ)</option>
-                    <option value="Đột xuất">Đột xuất (12đ)</option>
                   </select>
                 </div>
 
@@ -2802,17 +2934,15 @@ A29.123.22	Báo cáo tổng kết công tác năm	Báo cáo	2026-09-30	Thường
                   <select
                     value={editForm.task_type}
                     onChange={(e) => {
-                      const type = e.target.value;
                       setEditForm({
                         ...editForm,
-                        task_type: type,
-                        standard_score: type === 'Đột xuất' ? 12 : 10
+                        task_type: e.target.value,
+                        standard_score: 10
                       });
                     }}
-                    className="w-full text-xs p-2 border border-slate-300 rounded-lg"
+                    className="w-full text-xs p-2 border border-slate-300 rounded-lg bg-slate-50"
                   >
                     <option value="Thường xuyên">Thường xuyên (10đ)</option>
-                    <option value="Đột xuất">Đột xuất (12đ)</option>
                   </select>
                 </div>
 
@@ -3449,15 +3579,9 @@ A29.123.22	Báo cáo tổng kết công tác năm	Báo cáo	2026-09-30	Thường
                 <div className="p-3 bg-white rounded-xl border border-slate-200">
                   <div className="text-[11px] font-bold text-slate-500 mb-1">Loại công việc</div>
                   <div>
-                    {viewingTask.task_type === 'Đột xuất' ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#fff2e8] text-[#e05626]">
-                        ⚡ Đột xuất
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#eef4ff] text-[#3b66d1]">
-                        ● Thường xuyên
-                      </span>
-                    )}
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-[#eef4ff] text-[#3b66d1]">
+                      ● Thường xuyên
+                    </span>
                   </div>
                 </div>
 

@@ -27,11 +27,13 @@ import {
   BarChart3,
   ShieldAlert,
   Lock,
-  Unlock
+  Unlock,
+  Edit3
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate } from '../constants';
 import FinalizePeriodModal from './FinalizePeriodModal';
+import EditPeriodModal from './EditPeriodModal';
 
 export default function DashboardTab({ 
   selectedPeriod, 
@@ -52,6 +54,7 @@ export default function DashboardTab({
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'table'
   const [isFinalizeModalOpen, setIsFinalizeModalOpen] = useState(false);
+  const [isEditPeriodModalOpen, setIsEditPeriodModalOpen] = useState(false);
 
   // Permissions
   const isAdminOrLeader = currentUser?.role === 'admin' || currentUser?.role === 'lanh_dao' || currentUser?.data_scope === 'all';
@@ -303,8 +306,19 @@ export default function DashboardTab({
               <Sparkles className="w-3.5 h-3.5 text-red-600" />
               <span>BẢNG GIÁM SÁT & BÁO CÁO KPI</span>
             </span>
-            <span className="text-xs font-normal text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
-              Kỳ: <span className="font-semibold text-slate-700">{currentPeriodObj?.name || selectedPeriod}</span>
+            <span className="text-xs font-normal text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200 inline-flex items-center gap-1.5">
+              <span>Kỳ: <span className="font-semibold text-slate-700">{currentPeriodObj?.name || selectedPeriod}</span></span>
+              {!isPeriodLocked && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditPeriodModalOpen(true)}
+                  className="text-red-700 hover:text-red-900 font-bold hover:underline inline-flex items-center gap-0.5 ml-1 cursor-pointer"
+                  title="Chỉnh sửa kỳ đánh giá đang mở"
+                >
+                  <Edit3 className="w-3 h-3" />
+                  <span className="text-[11px]">Sửa kỳ</span>
+                </button>
+              )}
             </span>
             <span className="text-xs font-normal text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
               Đơn vị: <span className="font-semibold text-slate-700">{currentUser?.dept_name}</span>
@@ -1790,6 +1804,17 @@ export default function DashboardTab({
           loadData();
         }}
         currentUser={currentUser}
+      />
+
+      {/* Modal Chỉnh sửa kỳ đánh giá đang mở */}
+      <EditPeriodModal
+        isOpen={isEditPeriodModalOpen}
+        onClose={() => setIsEditPeriodModalOpen(false)}
+        period={currentPeriodObj}
+        onUpdated={async () => {
+          if (onReloadPeriods) await onReloadPeriods();
+          loadData();
+        }}
       />
 
     </div>

@@ -681,7 +681,7 @@ async function exportCBQLDocx(periodId, userId) {
             width: { size: 70, type: WidthType.PERCENTAGE },
             children: [
               new Paragraph({
-                children: [new TextRun({ text: 'Chỉ số đánh giá công việc (theo Hướng dẫn 06-HD/BTCTU)', bold: true, size: 28, font: 'Times New Roman' })]
+                children: [new TextRun({ text: 'Chỉ số đánh giá công việc (theo Công văn số 3818-CV/BTCTU và Hướng dẫn 06-HD/BTCTU)', bold: true, size: 28, font: 'Times New Roman' })]
               })
             ]
           }),

@@ -144,10 +144,10 @@ export default function Header({
 
       const days = ['CHỦ NHẬT', 'THỨ HAI', 'THỨ BA', 'THỨ TƯ', 'THỨ NĂM', 'THỨ SÁU', 'THỨ BẢY'];
       const dayName = days[now.getDay()];
-      const day = String(now.getDate()).padStart(2, '0');
-      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = now.getDate();
+      const month = now.getMonth() + 1;
       const year = now.getFullYear();
-      setDateStr(`${dayName}, ${day}/${month}/${year}`);
+      setDateStr(`${dayName}, ${day} THÁNG ${month}, ${year}`);
     };
 
     updateTime();
@@ -484,21 +484,18 @@ export default function Header({
           </button>
 
           {/* Brand Crest & Texts */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            {/* Star Crest */}
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 text-white flex items-center justify-center text-base sm:text-xl font-bold shadow-md border-2 border-white/40 shrink-0">
-              ★
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            {/* Round Logo Crest with Red background & emblem */}
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-white text-red-600 flex items-center justify-center text-lg sm:text-xl font-bold shadow-md border-2 border-white/60 shrink-0">
+              <span className="text-red-700 font-serif font-black tracking-tighter">🇻🇳</span>
             </div>
 
             <div className="min-w-0">
-              <div className="text-[10px] sm:text-xs font-medium text-amber-200 uppercase tracking-wider drop-shadow-xs truncate max-w-[140px] xs:max-w-[200px] sm:max-w-[340px] md:max-w-none">
+              <div className="text-xs sm:text-sm font-bold text-white uppercase tracking-tight drop-shadow-xs truncate max-w-[200px] xs:max-w-[280px] sm:max-w-[420px] md:max-w-none">
                 {unitName}
               </div>
-              <h1 className="hidden sm:block text-xs sm:text-base font-semibold text-white drop-shadow-md leading-tight truncate tracking-tight">
-                Hệ thống quản lý công việc và chấm điểm hiệu suất
-              </h1>
-              <div className="sm:hidden text-[11px] font-bold text-white truncate drop-shadow-sm">
-                Quản lý KPI Ban Tổ chức
+              <div className="text-[11px] font-medium text-white/90 drop-shadow-xs truncate">
+                ICPV - TP. HCM
               </div>
             </div>
           </div>
@@ -507,29 +504,27 @@ export default function Header({
         {/* Right Controls & Profile Area */}
         <div className="flex items-center gap-1.5 sm:gap-3 relative z-10">
           
-          {/* Realtime Clock & Vietnamese Date in Frosted Glass Pill */}
-          <div className="hidden md:flex flex-col items-end px-3.5 py-1 rounded-xl bg-white/85 backdrop-blur-sm border border-white/90 shadow-2xs">
-            <div className="text-sm font-semibold text-red-950 tracking-wider font-mono leading-tight">
-              {timeStr || '09:16:22'}
+          {/* Realtime Clock & Vietnamese Date matching screenshot */}
+          <div className="hidden md:flex flex-col items-end text-white pr-1">
+            <div className="text-sm font-semibold tracking-wide font-mono leading-tight">
+              {timeStr || '16:24:48'}
             </div>
-            <div className="text-[10px] font-medium text-red-700 uppercase tracking-tight">
-              {dateStr || 'THỨ TƯ, 09/09/2026'}
+            <div className="text-[10.5px] font-medium text-white/90 uppercase tracking-tight">
+              {dateStr || 'THỨ HAI, 19 THÁNG 10, 2026'}
             </div>
           </div>
 
-          {/* Action Icons in Frosted Glass */}
-          <div className="flex items-center gap-1 sm:gap-1.5">
+          {/* Action Icons matching screenshot */}
+          <div className="flex items-center gap-1 sm:gap-2">
             
             {/* 1. DARK MODE TOGGLE BUTTON */}
             <button 
               type="button"
               onClick={toggleDarkMode}
-              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/85 hover:bg-white border border-white/90 shadow-2xs flex items-center justify-center transition ${
-                isDark ? 'text-amber-500 hover:text-amber-600' : 'text-slate-700 hover:text-slate-900'
-              }`}
+              className="w-8 h-8 rounded-full text-white/90 hover:text-white hover:bg-white/10 flex items-center justify-center transition cursor-pointer"
               title={isDark ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Ban đêm (Dark Mode)'}
             >
-              {isDark ? <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
 
             {/* 2. NOTIFICATIONS BELL WITH DROPDOWN */}
@@ -537,14 +532,12 @@ export default function Header({
               <button 
                 type="button"
                 onClick={() => setShowNotificationsDropdown(!showNotificationsDropdown)}
-                className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/85 hover:bg-white text-red-900 hover:text-red-950 border border-white/90 shadow-2xs flex items-center justify-center transition relative ${
-                  showNotificationsDropdown ? 'ring-2 ring-red-500 bg-white' : ''
-                }`}
+                className="w-8 h-8 rounded-full text-white/90 hover:text-white hover:bg-white/10 flex items-center justify-center transition relative cursor-pointer"
                 title="Thông báo hệ thống"
               >
-                <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <Bell className="w-4 h-4" />
                 {unreadNotifsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[16px] sm:min-w-[18px] h-[16px] sm:h-[18px] px-1 bg-red-600 text-white text-[9px] sm:text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-xs animate-pulse">
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-[16px] px-1 bg-amber-400 text-red-950 text-[9px] font-black rounded-full flex items-center justify-center shadow-xs">
                     {unreadNotifsCount}
                   </span>
                 )}
@@ -677,28 +670,26 @@ export default function Header({
             </button>
           </div>
 
-          {/* User Profile Card & Dropdown */}
+          {/* User Profile Card matching screenshot */}
           <div className="relative" ref={userMenuRef}>
             <button
               type="button"
               onClick={() => setShowUserDropdown(!showUserDropdown)}
-              className="flex items-center gap-2.5 p-1 pl-3 bg-white/90 hover:bg-white border border-white/95 rounded-xl shadow-2xs transition backdrop-blur-sm cursor-pointer"
+              className="flex items-center gap-2.5 p-1 text-white hover:opacity-90 transition cursor-pointer"
             >
               <div className="text-right hidden sm:block">
-                <div className="text-sm font-semibold text-slate-900 leading-tight">
-                  {currentUser?.full_name || 'Thái Thị Bích Liên'}
+                <div className="text-xs sm:text-sm font-bold text-white leading-tight">
+                  {currentUser?.full_name || 'Nguyễn Diễm Trang'}
                 </div>
-                <div className="text-xs font-normal text-slate-500 truncate max-w-[170px]">
-                  {currentUser?.gov_title || currentUser?.party_title || 'Phó Trưởng ban Thường trực'}
+                <div className="text-[11px] text-white/80 font-normal truncate max-w-[170px]">
+                  {currentUser?.gov_title || currentUser?.party_title || 'Hiệu trưởng'}
                 </div>
               </div>
 
-              {/* Dark Navy Avatar Circle */}
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-red-900 to-slate-900 text-white flex items-center justify-center font-semibold text-sm shadow-xs border border-white shrink-0">
+              {/* Black / Deep Navy Circle Avatar with letter */}
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#111827] text-white flex items-center justify-center font-bold text-xs sm:text-sm shadow-md border border-white/20 shrink-0">
                 {userInitial}
               </div>
-
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 hidden sm:block ${showUserDropdown ? 'rotate-180' : ''}`} />
             </button>
 
             {/* Dropdown Menu - EXACTLY as shown in the uploaded screenshot plus Switch User */}

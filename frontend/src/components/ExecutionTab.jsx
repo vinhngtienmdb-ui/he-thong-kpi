@@ -35,10 +35,12 @@ import {
   ArrowRight,
   ShieldCheck,
   FileSpreadsheet,
-  Zap
+  Zap,
+  UserPlus
 } from 'lucide-react';
 import { api } from '../api';
 import { formatDate, toInputDateFormat, parseDateOnly } from '../constants';
+import DelegateToSubordinateModal from './DelegateToSubordinateModal';
 
 export function compareTasksByAxisAndDeadline(a, b) {
   // 1. Ưu tiên 1: Sắp xếp theo Trục (TRUC_1 -> TRUC_6 -> Khác)
@@ -81,7 +83,7 @@ export default function ExecutionTab({
   // 'ALL' | 'IN_PROGRESS' | 'OVERDUE' | 'REJECTED' | 'COMPLETED'
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
-  const [taskTypeFilter, setTaskTypeFilter] = useState('ALL'); // 'ALL' | 'Thường xuyên' | 'Đột xuất' | TRUC_1..6
+  const [taskTypeFilter, setTaskTypeFilter] = useState('ALL'); // 'ALL' | 'Thường xuyên' | TRUC_1..6
 
   // Inline Accordion Expand State: ID of task currently expanded
   const [expandedTaskId, setExpandedTaskId] = useState(null);
@@ -117,6 +119,9 @@ export default function ExecutionTab({
   const [requestedDeadline, setRequestedDeadline] = useState('');
   const [extensionReason, setExtensionReason] = useState('');
   const [isSubmittingExtension, setIsSubmittingExtension] = useState(false);
+
+  // Delegate to Subordinate Modal State (Giao việc cho cấp dưới)
+  const [delegatingTask, setDelegatingTask] = useState(null);
 
   const todayStr = useMemo(() => {
     return new Date(Date.now() + 7 * 3600000).toISOString().split('T')[0];
@@ -451,8 +456,8 @@ export default function ExecutionTab({
 
       // 3. Task Type / Axis Filter
       if (taskTypeFilter !== 'ALL') {
-        if (taskTypeFilter === 'Thường xuyên' || taskTypeFilter === 'Đột xuất') {
-          if (t.task_type !== taskTypeFilter) return false;
+        if (taskTypeFilter === 'Thường xuyên') {
+          if (t.task_type !== 'Thường xuyên') return false;
         } else if (taskTypeFilter.startsWith('TRUC_')) {
           if ((t.axis_code || 'TRUC_1') !== taskTypeFilter) return false;
         }
@@ -644,7 +649,7 @@ export default function ExecutionTab({
               >
                 <option value="ALL">Loại nhiệm vụ: Tất cả</option>
                 <option value="Thường xuyên">● Thường xuyên</option>
-                <option value="Đột xuất">⚡ Đột xuất</option>
+                
                 {axes && axes.map(ax => (
                   <option key={ax.code} value={ax.code}>
                     {ax.name.includes(' - ') ? ax.name.split(' - ')[0] : ax.code}
@@ -700,7 +705,10 @@ export default function ExecutionTab({
 
             // Realtime calculation for expanded panel
             const currentPreviewProg = calculatePreviewProgress(task.deadline, finishDate);
-            const liveCalculatedScore = (maxScore * currentPreviewProg.pct * parseFloat(selfQualityPct || 1.0)).toFixed(1);
+            const stdScore = task.standard_score || 10;
+            const diffWeight = task.difficulty_weight || 1.0;
+            const liveExecScore = stdScore * (0.30 * currentPreviewProg.pct + 0.70 * parseFloat(selfQualityPct || 1.0));
+            const liveCalculatedScore = Math.min(maxScore, Number((liveExecScore * diffWeight).toFixed(2))).toFixed(1);
 
             return (
               <div 
@@ -725,17 +733,12 @@ export default function ExecutionTab({
                       <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                           {/* Task Type Badge */}
-                          {task.task_type === 'Đột xuất' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                              <Star className="w-3 h-3 text-amber-600 fill-amber-600" />
-                              <span>Đột xuất</span>
-                            </span>
-                          ) : (
+                          
                             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
                               <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
                               <span>Thường xuyên</span>
                             </span>
-                          )}
+                          
 
                           {/* Status Badge */}
                           {isRejected ? (
@@ -770,6 +773,14 @@ export default function ExecutionTab({
                             <span className="text-[11px] font-bold text-amber-900 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300 inline-flex items-center gap-1">
                               <Clock className="w-3 h-3 text-amber-700" />
                               <span>Chờ duyệt gia hạn</span>
+                            </span>
+                          )}
+
+                          {/* Delegated to Subordinate Tag */}
+                          {task.delegated_to_user_name && (
+                            <span className="text-[11px] font-bold text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200 inline-flex items-center gap-1" title="Nhiệm vụ này đã được bạn chuyển giao cho cấp dưới thực hiện">
+                              <UserPlus className="w-3 h-3 text-indigo-600" />
+                              <span>↳ Đã giao cho: {task.delegated_to_user_name}</span>
                             </span>
                           )}
                         </div>
@@ -821,6 +832,19 @@ export default function ExecutionTab({
                         >
                           <MessageSquare className="w-4 h-4" />
                           <span>Phản hồi ĐG</span>
+                        </button>
+                      )}
+
+                      {/* Giao cho cấp dưới Button */}
+                      {!isApproved && task.status !== 'rejected' && (
+                        <button
+                          type="button"
+                          onClick={() => setDelegatingTask(task)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold text-indigo-700 bg-indigo-50 border border-indigo-300 hover:bg-indigo-100 transition shadow-2xs cursor-pointer active:scale-95"
+                          title="Giao nhiệm vụ này cho cán bộ cấp dưới thực hiện"
+                        >
+                          <UserPlus className="w-4 h-4 text-indigo-600" />
+                          <span className="hidden sm:inline">Giao cấp dưới</span>
                         </button>
                       )}
 
@@ -1014,10 +1038,11 @@ export default function ExecutionTab({
                             onChange={(e) => setSelfQualityPct(parseFloat(e.target.value))}
                             className="w-full p-2.5 text-xs sm:text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:outline-none bg-slate-50/50 font-semibold text-slate-800 cursor-pointer"
                           >
-                            <option value={1.0}>100% - Xuất sắc / Hoàn thành tốt chất lượng</option>
-                            <option value={0.8}>80% - Hoàn thành đạt yêu cầu</option>
-                            <option value={0.6}>60% - Hoàn thành nhưng còn thiếu sót/chậm</option>
-                            <option value={0.0}>0% - Không hoàn thành</option>
+                            <option value={1.0}>100% - Bảo đảm đúng chủ trương, yêu cầu, khả thi, chấp nhận ngay</option>
+                            <option value={0.75}>75% - Cơ bản đáp ứng yêu cầu, chỉnh sửa nhỏ không ảnh hưởng cốt lõi</option>
+                            <option value={0.5}>50% - Chưa đáp ứng đầy đủ, phải chỉnh sửa nội dung cơ bản</option>
+                            <option value={0.25}>25% - Sai sót nghiêm trọng nội dung, phải sửa cơ bản hoặc làm lại</option>
+                            <option value={0.0}>0% - Không bảo đảm yêu cầu, sai chủ trương/quan điểm, không chấp nhận</option>
                           </select>
                         </div>
                       </div>
@@ -1115,7 +1140,7 @@ export default function ExecutionTab({
                               <span>Chất lượng: {Math.round(selfQualityPct * 100)}%</span>
                             </div>
                             <p className="text-emerald-800 text-xs">
-                              Công thức: Điểm tối đa ({maxScore}đ) × Tiến độ ({Math.round(currentPreviewProg.pct * 100)}%) × Chất lượng ({Math.round(selfQualityPct * 100)}%)
+                              Công thức: Điểm chuẩn ({stdScore}đ) × (30% Tiến độ + 70% Chất lượng) × Hệ số ĐK ({Math.round(diffWeight * 100)}%)
                               {isBonusProposed ? ' + Điểm thưởng đề xuất' : ''}
                             </p>
                           </div>
@@ -1568,6 +1593,15 @@ export default function ExecutionTab({
         </div>
       )}
 
+      {/* Modal Giao việc cho cấp dưới */}
+      <DelegateToSubordinateModal
+        task={delegatingTask}
+        isOpen={Boolean(delegatingTask)}
+        onClose={() => setDelegatingTask(null)}
+        onDelegated={loadMyTasks}
+      />
+
     </div>
   );
 }
+

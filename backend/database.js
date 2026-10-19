@@ -147,7 +147,7 @@ function initDatabase() {
       task_name TEXT NOT NULL,
       output_result TEXT,
       deadline TEXT,
-      task_type TEXT CHECK(task_type IN ('Thường xuyên', 'Đột xuất')),
+      task_type TEXT DEFAULT 'Thường xuyên',
       standard_score REAL DEFAULT 10,
       difficulty_weight REAL DEFAULT 1.0,
       max_converted_score REAL,
@@ -401,9 +401,31 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_std_tasks_dept ON standard_tasks(dept_code);
     CREATE INDEX IF NOT EXISTS idx_assigned_tasks_user_period ON assigned_tasks(user_id, period_id);
     CREATE INDEX IF NOT EXISTS idx_assigned_tasks_period ON assigned_tasks(period_id);
-    CREATE INDEX IF NOT EXISTS idx_system_logs_created_at ON system_logs(created_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_system_logs_action ON system_logs(action);
-    CREATE INDEX IF NOT EXISTS idx_system_logs_user_id ON system_logs(user_id);
+    CREATE TABLE IF NOT EXISTS digitized_records (
+      id TEXT PRIMARY KEY,
+      record_code TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL,
+      retention_period TEXT NOT NULL,
+      year INTEGER,
+      start_date TEXT,
+      end_date TEXT,
+      total_pages INTEGER DEFAULT 0,
+      digital_status TEXT DEFAULT 'digitized',
+      storage_location TEXT,
+      file_url TEXT,
+      file_name TEXT,
+      file_size INTEGER DEFAULT 0,
+      scanned_by TEXT,
+      scanned_at DATETIME,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_digitized_records_year ON digitized_records(year);
+    CREATE INDEX IF NOT EXISTS idx_digitized_records_category ON digitized_records(category);
+    CREATE INDEX IF NOT EXISTS idx_digitized_records_status ON digitized_records(digital_status);
   `);
 
   const migrations = [
@@ -509,7 +531,16 @@ function initDatabase() {
     "ALTER TABLE evaluations ADD COLUMN skip_level_status TEXT DEFAULT 'approved';",
     "ALTER TABLE evaluations ADD COLUMN superior_evaluator_id TEXT;",
     "ALTER TABLE evaluations ADD COLUMN superior_evaluated_at TEXT;",
-    "ALTER TABLE users ADD COLUMN employee_type TEXT DEFAULT 'vien_chuc';"
+    "ALTER TABLE users ADD COLUMN employee_type TEXT DEFAULT 'vien_chuc';",
+    "ALTER TABLE users ADD COLUMN party_join_date TEXT;",
+    "ALTER TABLE users ADD COLUMN party_official_date TEXT;",
+    "ALTER TABLE users ADD COLUMN party_card_number TEXT;",
+    "ALTER TABLE users ADD COLUMN party_cell TEXT;",
+    "ALTER TABLE users ADD COLUMN party_status TEXT DEFAULT 'Chính thức';",
+    "ALTER TABLE users ADD COLUMN party_badge TEXT DEFAULT 'Không';",
+    "ALTER TABLE assigned_tasks ADD COLUMN delegated_to_user_id TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN delegated_to_user_name TEXT;",
+    "ALTER TABLE assigned_tasks ADD COLUMN subordinate_task_id TEXT;"
   ];
 
   for (const m of migrations) {
@@ -531,14 +562,178 @@ function initDatabase() {
     `).run();
   } catch (e) {}
 
-  // Backfill is_party_member
+  // Backfill is_party_member & chi tiết hồ sơ đảng viên
   try {
     db.prepare(`
       UPDATE users 
       SET is_party_member = 1 
       WHERE (party_title IS NOT NULL AND TRIM(party_title) != '' AND LOWER(TRIM(party_title)) != 'quần chúng' AND LOWER(TRIM(party_title)) != 'quan chung')
     `).run();
-  } catch (e) {}
+
+    // Điền dữ liệu chuẩn mực cho Đảng viên nếu chưa có
+    const pMembers = db.prepare('SELECT id, full_name, party_title, party_card_number FROM users WHERE is_party_member = 1').all();
+    const updatePartyInfo = db.prepare(`
+      UPDATE users 
+      SET party_card_number = COALESCE(NULLIF(party_card_number, ''), ?),
+          party_join_date = COALESCE(NULLIF(party_join_date, ''), ?),
+          party_official_date = COALESCE(NULLIF(party_official_date, ''), ?),
+          party_cell = COALESCE(NULLIF(party_cell, ''), ?),
+          party_status = COALESCE(NULLIF(party_status, ''), 'Chính thức'),
+          party_badge = COALESCE(NULLIF(party_badge, ''), ?)
+      WHERE id = ?
+    `);
+
+    let pIndex = 1;
+    for (const m of pMembers) {
+      const cardNum = `02.${String(45000 + pIndex).padStart(6, '0')}`;
+      const joinYear = 2012 + (pIndex % 10);
+      const joinDate = `${joinYear}-05-19`;
+      const offDate = `${joinYear + 1}-05-19`;
+      const cellName = 'Chi bộ Trường Mầm non Hoàng Yến';
+      const badge = joinYear <= 2014 ? '30 năm tuổi Đảng' : 'Không';
+      updatePartyInfo.run(cardNum, joinDate, offDate, cellName, badge, m.id);
+      pIndex++;
+    }
+  } catch (e) {
+    console.error('[Migration Error - party_members]', e.message);
+  }
+
+  // Khởi tạo dữ liệu mẫu cho Chỉnh lý số hóa tài liệu nếu bảng trống
+  try {
+    const recordCount = db.prepare('SELECT COUNT(*) as count FROM digitized_records').get().count;
+    if (recordCount === 0) {
+      const insertRec = db.prepare(`
+        INSERT INTO digitized_records (
+          id, record_code, title, category, retention_period, year, start_date, end_date, total_pages, digital_status, storage_location, file_name, file_size, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const sampleRecords = [
+        {
+          id: 'rec-01',
+          code: 'HS-2026-001',
+          title: 'Hồ sơ Đại hội Chi bộ Trường Mầm non Hoàng Yến nhiệm kỳ 2025 - 2027',
+          category: 'Đảng - Đoàn thể',
+          retention: 'Vĩnh viễn',
+          year: 2025,
+          start: '2025-01-10',
+          end: '2025-01-25',
+          pages: 148,
+          status: 'digitized',
+          location: 'Kho A - Giá 01 - Hộp 02',
+          fileName: 'Nghi_quyet_va_bien_ban_Dai_hoi_Chi_bo_2025.pdf',
+          fileSize: 12540000,
+          notes: 'Đã số hóa toàn văn kèm chữ ký số và đóng dấu bảo mật điện tử.'
+        },
+        {
+          id: 'rec-02',
+          code: 'HS-2026-002',
+          title: 'Hồ sơ Đánh giá Kiểm định chất lượng giáo dục và Chuẩn quốc gia Mức độ 2',
+          category: 'Chuyên môn nghiệp vụ',
+          retention: 'Vĩnh viễn',
+          year: 2026,
+          start: '2026-02-01',
+          end: '2026-04-30',
+          pages: 360,
+          status: 'digitized',
+          location: 'Kho A - Giá 02 - Hộp 05',
+          fileName: 'Bao_cao_tu_danh_gia_KĐCLGD_2026.pdf',
+          fileSize: 28900000,
+          notes: 'Đầy đủ minh chứng Tiêu chuẩn 1 đến Tiêu chuẩn 5.'
+        },
+        {
+          id: 'rec-03',
+          code: 'HS-2026-003',
+          title: 'Hồ sơ Quản lý viên chức, nâng lương định kỳ và phụ cấp thâm niên năm học 2025 - 2026',
+          category: 'Nhân sự - Cán bộ',
+          retention: '70 năm',
+          year: 2026,
+          start: '2025-09-01',
+          end: '2026-06-30',
+          pages: 215,
+          status: 'digitized',
+          location: 'Kho B - Giá 01 - Hộp 08',
+          fileName: 'Quyet_dinh_nang_luong_va_danh_sach_vien_chuc_2026.pdf',
+          fileSize: 18450000,
+          notes: 'Đã scan màu độ phân giải 300dpi chuẩn ISO.'
+        },
+        {
+          id: 'rec-04',
+          code: 'HS-2026-004',
+          title: 'Hồ sơ Quyết toán Ngân sách Nhà nước và Nguồn thu học phí năm tài chính 2025',
+          category: 'Tài chính - Kế toán',
+          retention: '20 năm',
+          year: 2025,
+          start: '2025-01-01',
+          end: '2025-12-31',
+          pages: 420,
+          status: 'digitized',
+          location: 'Kho C - Giá 03 - Hộp 12',
+          fileName: 'Bao_cao_tai_chinh_va_bien_ban_quyet_toan_2025.pdf',
+          fileSize: 34100000,
+          notes: 'Đã hoàn tất đối chiếu Kho bạc Nhà nước.'
+        },
+        {
+          id: 'rec-05',
+          code: 'HS-2026-005',
+          title: 'Tập lưu Quyết định, Kế hoạch và Quy chế hoạt động cơ quan năm 2026',
+          category: 'Hành chính - Quản trị',
+          retention: 'Vĩnh viễn',
+          year: 2026,
+          start: '2026-01-02',
+          end: '2026-10-15',
+          pages: 180,
+          status: 'digitized',
+          location: 'Kho A - Giá 01 - Hộp 01',
+          fileName: 'Tap_quyet_dinh_va_quy_che_2026.pdf',
+          fileSize: 15200000,
+          notes: 'Cập nhật thường xuyên theo từng quý.'
+        },
+        {
+          id: 'rec-06',
+          code: 'HS-2026-006',
+          title: 'Hồ sơ Công tác phòng cháy chữa cháy, an toàn vệ sinh trường học năm 2026',
+          category: 'Hành chính - Quản trị',
+          retention: '10 năm',
+          year: 2026,
+          start: '2026-01-15',
+          end: '2026-09-30',
+          pages: 95,
+          status: 'in_progress',
+          location: 'Kho B - Giá 02 - Hộp 04',
+          fileName: null,
+          fileSize: 0,
+          notes: 'Đang tiến hành phân loại và chỉnh lý tài liệu giấy trước khi scan số hóa.'
+        },
+        {
+          id: 'rec-07',
+          code: 'HS-2026-007',
+          title: 'Hồ sơ Theo dõi tiêm chủng và biểu đồ tăng trưởng dinh dưỡng trẻ em năm học 2025 - 2026',
+          category: 'Chuyên môn nghiệp vụ',
+          retention: '5 năm',
+          year: 2026,
+          start: '2025-09-05',
+          end: '2026-05-30',
+          pages: 130,
+          status: 'pending',
+          location: 'Kho B - Giá 03 - Hộp 09',
+          fileName: null,
+          fileSize: 0,
+          notes: 'Chờ bộ phận Y tế học đường bàn giao hồ sơ giấy để lập danh mục số hóa.'
+        }
+      ];
+
+      for (const r of sampleRecords) {
+        insertRec.run(
+          r.id, r.code, r.title, r.category, r.retention, r.year, r.start, r.end,
+          r.pages, r.status, r.location, r.fileName, r.fileSize, r.notes
+        );
+      }
+      console.log(`[Database Seed] Đã khởi tạo thành công ${sampleRecords.length} hồ sơ mẫu chỉnh lý số hóa tài liệu!`);
+    }
+  } catch (e) {
+    console.error('[Migration Error - digitized_records seed]', e.message);
+  }
 
   // Backfill parent_agency and location_name for departments if not set
   try {

@@ -1932,7 +1932,7 @@ export default function AssignmentTab({
                                                   <div className="text-[11px] text-slate-400 mt-0.5">Trục: {task.axis_code}</div>
                                                 </td>
                                                 <td className="py-2 px-3">
-                                                  <span className={`text-[11px] font-semibold ${task.task_type === 'Đột xuất' ? 'text-amber-700' : 'text-slate-600'}`}>
+                                                  <span className={`text-[11px] font-semibold ${'text-slate-600'}`}>
                                                     {task.task_type}
                                                   </span>
                                                 </td>
@@ -2457,7 +2457,7 @@ export default function AssignmentTab({
                                   {t.axis_code}
                                 </span>
                                 <span>•</span>
-                                <span className={t.task_type === 'Đột xuất' ? 'text-amber-700 font-bold' : 'text-slate-600'}>
+                                <span className={'text-slate-600'}>
                                   {t.task_type}
                                 </span>
                                 {t.document_id && (
@@ -2816,7 +2816,7 @@ export default function AssignmentTab({
                               {t.axis_code}
                             </span>
                             <span>•</span>
-                            <span className={t.task_type === 'Đột xuất' ? 'text-amber-700 font-bold text-[11px]' : 'text-slate-600 text-[11px]'}>
+                            <span className={'text-slate-600 text-[11px]'}>
                               {t.task_type}
                             </span>
                             <span>•</span>
@@ -3470,74 +3470,29 @@ export default function AssignmentTab({
                 />
               </div>
 
-              {/* Task Type: Thường xuyên / Đột xuất */}
+              {/* Task Type: Thường xuyên */}
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
-                    <Zap className="w-3.5 h-3.5 text-red-600" />
+                    <Calendar className="w-3.5 h-3.5 text-red-600" />
                     <span>Phân loại nhiệm vụ (Loại hình công việc) *</span>
                   </span>
                   <span className="text-[11px] text-slate-400 font-normal">
-                    Theo QĐ 366 & Hướng dẫn 06
+                    Theo Hướng dẫn BTCTU mới nhất
                   </span>
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div
-                    onClick={() => setFormData(prev => ({ 
-                      ...prev, 
-                      task_type: 'Thường xuyên',
-                      standard_score: prev.task_type === 'Đột xuất' && prev.standard_score === 12 ? 10 : prev.standard_score,
-                      difficulty_weight: prev.task_type === 'Đột xuất' && prev.difficulty_weight === 1.1 ? 1.0 : prev.difficulty_weight
-                    }))}
-                    className={`p-3 rounded-xl border-2 cursor-pointer transition flex items-start gap-2.5 ${
-                      formData.task_type === 'Thường xuyên'
-                        ? 'border-red-600 bg-red-50/80 shadow-xs'
-                        : 'border-slate-200 hover:border-slate-300 bg-white'
-                    }`}
-                  >
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                      formData.task_type === 'Thường xuyên' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-500'
-                    }`}>
-                      <Calendar className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                        <span>Thường xuyên</span>
-                        {formData.task_type === 'Thường xuyên' && <Check className="w-3.5 h-3.5 text-red-600" />}
-                      </div>
-                      <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">
-                        Nhiệm vụ định kỳ theo chức năng (ĐC: 10đ • HS: 1.0)
-                      </p>
-                    </div>
+                <div className="p-3 rounded-xl border-2 border-red-600 bg-red-50/80 shadow-xs flex items-start gap-2.5">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 bg-red-600 text-white">
+                    <Calendar className="w-4 h-4" />
                   </div>
-
-                  <div
-                    onClick={() => setFormData(prev => ({ 
-                      ...prev, 
-                      task_type: 'Đột xuất',
-                      standard_score: prev.task_type === 'Thường xuyên' && prev.standard_score === 10 ? 12 : prev.standard_score,
-                      difficulty_weight: prev.task_type === 'Thường xuyên' && prev.difficulty_weight === 1.0 ? 1.1 : prev.difficulty_weight
-                    }))}
-                    className={`p-3 rounded-xl border-2 cursor-pointer transition flex items-start gap-2.5 ${
-                      formData.task_type === 'Đột xuất'
-                        ? 'border-amber-600 bg-amber-50/80 shadow-xs'
-                        : 'border-slate-200 hover:border-slate-300 bg-white'
-                    }`}
-                  >
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                      formData.task_type === 'Đột xuất' ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500'
-                    }`}>
-                      <Zap className="w-4 h-4" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-slate-900 flex items-center justify-between">
+                      <span>Thường xuyên</span>
+                      <Check className="w-3.5 h-3.5 text-red-600" />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                        <span>Đột xuất</span>
-                        {formData.task_type === 'Đột xuất' && <Check className="w-3.5 h-3.5 text-amber-600" />}
-                      </div>
-                      <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">
-                        Nhiệm vụ phát sinh, cấp bách (ĐC: 12đ • HS: 1.1)
-                      </p>
-                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">
+                      Nhiệm vụ theo chức năng, nhiệm vụ của đơn vị (Điểm chuẩn cố định: 10đ)
+                    </p>
                   </div>
                 </div>
               </div>
@@ -3705,9 +3660,7 @@ export default function AssignmentTab({
                       {approvalModalTask.dept_name || 'Cơ quan'}
                     </span>
                     <span className={`px-2 py-0.5 rounded-md text-[11px] font-bold ${
-                      approvalModalTask.task_type === 'Đột xuất' 
-                        ? 'bg-amber-100 text-amber-800 border border-amber-300' 
-                        : 'bg-blue-100 text-blue-800 border border-blue-300'
+                      'bg-blue-100 text-blue-800 border border-blue-300'
                     }`}>
                       {approvalModalTask.task_type || 'Thường xuyên'}
                     </span>

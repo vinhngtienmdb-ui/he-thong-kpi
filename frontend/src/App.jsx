@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import DashboardTab from './components/DashboardTab';
+import TasksTodoTab from './components/TasksTodoTab';
 import StandardTasksTab from './components/StandardTasksTab';
 import DocumentManagementTab from './components/DocumentManagementTab';
 import AssignmentTab from './components/AssignmentTab';
@@ -15,6 +16,8 @@ import ReportTab from './components/ReportTab';
 import UsersManagementTab from './components/UsersManagementTab';
 import SystemConfigTab from './components/SystemConfigTab';
 import DirectoryTab from './components/DirectoryTab';
+import PartyMembersDashboardTab from './components/PartyMembersDashboardTab';
+import DigitizationDashboardTab from './components/DigitizationDashboardTab';
 import LoginScreen from './components/LoginScreen';
 import { api, setViewerId } from './api';
 import { compareUsersByPositionAndName } from './userSorting';
@@ -22,7 +25,7 @@ import { getUserPermissions } from './permissions';
 import { Calendar, CheckCircle2, LayoutDashboard, Files, UserCheck, Award, Menu, Layers } from 'lucide-react';
 
 const VALID_TABS = [
-  'dashboard', 'directory', 'standard', 'documents', 'assignment', 'execution',
+  'dashboard', 'tasks_todo', 'directory', 'party_members', 'digitization', 'standard', 'documents', 'assignment', 'execution',
   'self_eval', 'grading', 'advisory', 'voting', 'charts',
   'reports', 'users_mgmt', 'system_config'
 ];
@@ -481,6 +484,19 @@ export default function App() {
             />
           )}
 
+          {currentTab === 'tasks_todo' && (
+            <TasksTodoTab
+              selectedPeriod={selectedPeriod}
+              onPeriodChange={handlePeriodChange}
+              periods={periods}
+              currentUser={currentUser}
+              users={accessibleUsers.length > 0 ? accessibleUsers : users}
+              departments={departments}
+              axes={axes}
+              setCurrentTab={setCurrentTab}
+            />
+          )}
+
           {currentTab === 'directory' && (
             <DirectoryTab
               currentUser={currentUser}
@@ -488,6 +504,18 @@ export default function App() {
               onAssignToUser={(targetUser) => {
                 setCurrentTab('assignment');
               }}
+            />
+          )}
+
+          {currentTab === 'party_members' && (
+            <PartyMembersDashboardTab
+              currentUser={currentUser}
+            />
+          )}
+
+          {currentTab === 'digitization' && (
+            <DigitizationDashboardTab
+              currentUser={currentUser}
             />
           )}
 

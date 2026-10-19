@@ -1500,10 +1500,11 @@ export default function GradingTab({ selectedPeriod, currentUser, users, axes, p
                     onChange={(e) => setGradeForm({ ...gradeForm, quality_pct: parseFloat(e.target.value) })}
                     className="w-full text-xs p-2 border border-slate-300 rounded-md font-semibold"
                   >
-                    <option value="1.0">Đạt đầy đủ yêu cầu: 100%</option>
-                    <option value="0.8">Đạt yêu cầu, chỉnh sửa nhỏ: 80%</option>
-                    <option value="0.6">Hoàn thành cơ bản: 60%</option>
-                    <option value="0.0">Không đạt yêu cầu: 0%</option>
+                    <option value="1.0">100% - Bảo đảm đúng chủ trương, yêu cầu, khả thi, chấp nhận ngay</option>
+                    <option value="0.75">75% - Cơ bản đáp ứng yêu cầu, chỉnh sửa nhỏ không ảnh hưởng cốt lõi</option>
+                    <option value="0.5">50% - Chưa đáp ứng đầy đủ, phải chỉnh sửa nội dung cơ bản</option>
+                    <option value="0.25">25% - Sai sót nghiêm trọng nội dung, phải sửa cơ bản hoặc làm lại</option>
+                    <option value="0.0">0% - Không bảo đảm yêu cầu, sai chủ trương/quan điểm, không chấp nhận</option>
                   </select>
                 </div>
               </div>

@@ -18,6 +18,7 @@ const {
 const { 
   importStandardTasksFromExcel, 
   importStandardTasksFromData,
+  generateStandardTaskTemplate,
   generateUserImportTemplate,
   importUsersFromExcel,
   exportCBQLWorkbook, 
@@ -457,8 +458,18 @@ function countLateWorkingDays(deadlineStr, finishDateStr) {
 // Helper: Calculate Progress Percentage according to Regulations
 // + Hoàn thành đúng hoặc trước hạn: 100%
 // + Hoàn thành chậm 1 – 3 ngày làm việc: 80%
-// + Hoàn thành chậm 4 – 5 ngày làm việc: 60%
-// + Hoàn thành chậm trên 5 ngày làm việc: 0%
+// -------------------------------------------------------------
+// Hàm tính Điểm KPI theo Công văn số 3818-CV/BTCTU ngày 10/10/2026
+// và Hướng dẫn số 06-HD/BTCTU:
+// - Thống nhất chỉ còn loại công việc Thường xuyên, điểm chuẩn là 10.
+// - Tiến độ chiếm 30%:
+//   + Đúng hoặc trước hạn: 100%
+//   + Chậm 1 - 3 ngày làm việc: 80%
+//   + Chậm 4 - 5 ngày làm việc: 60%
+//   + Chậm trên 5 ngày làm việc hoặc không hoàn thành: 0%
+// - Chất lượng kết quả chiếm 70% (5 mức): 100%, 75%, 50%, 25%, 0%
+// - Điểm thực hiện = Điểm chuẩn * (30% Tiến độ + 70% Chất lượng)
+// - Điểm quy đổi thực tế = Điểm thực hiện * Hệ số độ khó (tối đa Điểm chuẩn * HSĐK)
 // -------------------------------------------------------------
 function calculateProgressPct(deadlineStr, finishDateStr) {
   if (!finishDateStr) return 0.0;
@@ -477,15 +488,16 @@ function calculateProgressPct(deadlineStr, finishDateStr) {
 }
 
 function calculateScores(standardScore, difficultyWeight, progressPct, qualityPct, isBonus = false) {
-  // Chuẩn theo Hướng dẫn 06-HD/BTCTU:
-  // Điểm thực hiện công việc = Điểm chuẩn * (30% Tiến độ + 70% Chất lượng)
-  const executionScore = standardScore * (0.30 * progressPct + 0.70 * qualityPct);
+  const std = standardScore ? parseFloat(standardScore) : 10;
+  const diff = difficultyWeight ? parseFloat(difficultyWeight) : 1.0;
+  // Điểm thực hiện công việc = Điểm chuẩn * (30% Tiến độ + 70% Chất lượng kết quả)
+  const executionScore = std * (0.30 * progressPct + 0.70 * qualityPct);
   // Điểm quy đổi thực tế = Điểm thực hiện * Hệ số độ khó
-  let convertedScore = Number((executionScore * difficultyWeight).toFixed(2));
-  const maxConverted = Number((standardScore * difficultyWeight).toFixed(2));
+  let convertedScore = Number((executionScore * diff).toFixed(2));
+  const maxConverted = Number((std * diff).toFixed(2));
   if (convertedScore > maxConverted) convertedScore = maxConverted;
 
-  // Điểm thưởng (nếu có): 5% điểm KPI đạt được của công việc
+  // Điểm thưởng (nếu có): 5% điểm KPI đạt được của công việc cụ thể
   let bonusScore = 0;
   if (isBonus) {
     bonusScore = Number((convertedScore * 0.05).toFixed(2));
@@ -2078,12 +2090,20 @@ app.post('/api/admin/periods', requireAdmin, (req, res) => {
   res.json({ success: true, id, message: 'Đã tạo kỳ đánh giá thành công' });
 });
 
-// Admin: Update evaluation period
-app.put('/api/admin/periods/:id', requireAdmin, (req, res) => {
+// Manager / Admin: Update open evaluation period
+app.put('/api/admin/periods/:id', requireManagerOrAdmin, (req, res) => {
   const { id } = req.params;
   const { code, name, start_date, end_date, grading_lock_date, is_active } = req.body;
   const period = db.prepare('SELECT * FROM periods WHERE id = ?').get(id);
   if (!period) return res.status(404).json({ success: false, message: 'Không tìm thấy kỳ đánh giá' });
+
+  // Kiểm tra nếu kỳ đã chốt và khóa sổ thì chặn sửa
+  if (period.is_locked === 1) {
+    return res.status(400).json({ 
+      success: false, 
+      message: `Kỳ đánh giá "${period.name}" đã được Chốt & Khóa Sổ KPI toàn đơn vị. Không thể chỉnh sửa khi kỳ đang khóa. Vui lòng mở khóa trước nếu muốn điều chỉnh!` 
+    });
+  }
 
   db.prepare(`
     UPDATE periods 
@@ -2104,7 +2124,15 @@ app.put('/api/admin/periods/:id', requireAdmin, (req, res) => {
     id
   );
 
-  res.json({ success: true, message: 'Đã cập nhật kỳ đánh giá thành công' });
+  logSystemActivity(req, {
+    action: 'PERIOD_UPDATE',
+    entity_type: 'periods',
+    entity_id: id,
+    description: `Cập nhật thông tin kỳ đánh giá đang mở "${name || period.name}"`,
+    details: req.body
+  });
+
+  res.json({ success: true, message: `Đã cập nhật kỳ đánh giá "${name || period.name}" thành công!` });
 });
 
 // Leader / Admin: Finalize (Chốt KPI) toàn cơ quan/đơn vị
@@ -2245,7 +2273,8 @@ app.post('/api/standard-tasks/propose', (req, res) => {
   }
 
   const id = uuidv4();
-  const stdScore = parseFloat(standard_score) || (task_type === 'Đột xuất' ? 12 : 10);
+  const stdScore = 10;
+  const effectiveTaskType = 'Thường xuyên';
   const diffWeight = parseFloat(difficulty_weight) || 1.0;
   const maxConv = Number((stdScore * diffWeight).toFixed(2));
 
@@ -2258,7 +2287,7 @@ app.post('/api/standard-tasks/propose', (req, res) => {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_approval', ?, ?, ?, ?, ?)
   `).run(
     id, period_id || null, dept_code || null, task_name.trim(), output_result || null, deadline || null,
-    task_type || 'Thường xuyên', stdScore, diffWeight, maxConv,
+    effectiveTaskType, stdScore, diffWeight, maxConv,
     expected_evidence || '', note || '', axis_code || null,
     viewerId, proposerName, proposal_type || 'add', proposal_note || '', original_task_id || null
   );
@@ -2406,17 +2435,14 @@ app.put('/api/standard-tasks/:id/reject-proposal', requireManagerOrAdmin, (req, 
   res.json({ success: true, message: 'Đã từ chối đề xuất và không thêm vào danh mục công việc chuẩn.' });
 });
 
-// Download template for standard tasks import
-app.get('/api/standard-tasks/template', (req, res) => {
+// Download template for standard tasks import (sinh file động bằng exceljs trong bộ nhớ)
+app.get('/api/standard-tasks/template', async (req, res) => {
   try {
-    const templatePath = path.join(__dirname, '..', 'mau-import-new-san-pham-cong-viec-chuan.xlsx');
-    if (!fs.existsSync(templatePath)) {
-      return res.status(404).json({ message: 'Không tìm thấy file mẫu trên máy chủ' });
-    }
+    const workbook = await generateStandardTaskTemplate();
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename="Mau_nhap_danh_muc_cong_viec_chuan.xlsx"');
-    const fileStream = fs.createReadStream(templatePath);
-    fileStream.pipe(res);
+    await workbook.xlsx.write(res);
+    res.end();
   } catch (err) {
     console.error('Error serving standard tasks template:', err);
     res.status(500).json({ message: 'Lỗi tải file mẫu: ' + err.message });
@@ -2428,19 +2454,10 @@ app.post('/api/standard-tasks/import', upload.single('file'), requireManagerOrAd
   if (req.setTimeout) req.setTimeout(300000);
   if (res.setTimeout) res.setTimeout(300000);
   try {
-    let fileSource;
-    if (req.file) {
-      fileSource = req.file.buffer || req.file.path;
-    } else {
-      // Use existing demo file if no file uploaded
-      const candidates = [
-        path.join(__dirname, 'mau-import-new-san-pham-cong-viec-chuan.xlsx'),
-        path.join(__dirname, '..', 'mau-import-new-san-pham-cong-viec-chuan.xlsx'),
-        path.join(process.cwd(), 'mau-import-new-san-pham-cong-viec-chuan.xlsx'),
-        path.join(process.cwd(), 'backend', 'mau-import-new-san-pham-cong-viec-chuan.xlsx')
-      ];
-      fileSource = candidates.find(p => fs.existsSync(p)) || candidates[0];
+    if (!req.file) {
+      return res.status(400).json({ message: 'Vui lòng đính kèm tệp Excel (.xlsx) để tải lên hệ thống' });
     }
+    const fileSource = req.file.buffer || req.file.path;
 
     const { period_id } = req.body || {};
     const updateExisting = req.body?.update_existing !== undefined
@@ -2541,7 +2558,8 @@ app.post('/api/standard-tasks', requireManagerOrAdmin, (req, res) => {
   } = req.body;
 
   const id = uuidv4();
-  const stdScore = parseFloat(standard_score) || (task_type === 'Đột xuất' ? 12 : 10);
+  const stdScore = 10;
+  const effectiveTaskType = 'Thường xuyên';
   const diffWeight = parseFloat(difficulty_weight) || 1.0;
   const maxConv = Number((stdScore * diffWeight).toFixed(2));
 
@@ -2551,7 +2569,7 @@ app.post('/api/standard-tasks', requireManagerOrAdmin, (req, res) => {
       task_type, standard_score, difficulty_weight, max_converted_score,
       expected_evidence, note, axis_code, status
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Hoạt động')
-  `).run(id, period_id, dept_code, task_name, output_result, deadline, task_type, stdScore, diffWeight, maxConv, expected_evidence || '', note || '', axis_code);
+  `).run(id, period_id, dept_code, task_name, output_result, deadline, effectiveTaskType, stdScore, diffWeight, maxConv, expected_evidence || '', note || '', axis_code);
 
   res.json({ success: true, id, message: 'Đã thêm công việc chuẩn thành công' });
 });
@@ -3026,7 +3044,8 @@ app.post('/api/assigned-tasks/assign', requireManagerOrAdmin, (req, res) => {
     }
   }
 
-  const stdScore = parseFloat(standard_score) || (task_type === 'Đột xuất' ? 12 : 10);
+  const stdScore = 10;
+  const effectiveTaskType = 'Thường xuyên';
   const diffWeight = parseFloat(difficulty_weight) || 1.0;
   const maxConv = Number((stdScore * diffWeight).toFixed(2));
   const groupId = targetUserIds.length > 1 ? uuidv4() : null;
@@ -3048,7 +3067,7 @@ app.post('/api/assigned-tasks/assign', requireManagerOrAdmin, (req, res) => {
       const initialStatus = (uid === (assigned_by || viewerId)) ? 'in_progress' : 'pending_acceptance';
       insertStmt.run(
         id, period_id, uid, standard_task_id || null, task_name, output_result,
-        deadline, task_type, stdScore, diffWeight, maxConv, axis_code, initialStatus, assigned_by, groupId,
+        deadline, effectiveTaskType, stdScore, diffWeight, maxConv, axis_code, initialStatus, assigned_by, groupId,
         skipLevelFlag, target_position_id || null, skip_level_notes || ''
       );
       createdTasks.push({ id, user_id: uid });
@@ -3257,7 +3276,8 @@ app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) =>
     for (const item of validAssignments) {
       const t = item.task;
       const uid = item.user_id;
-      const stdScore = parseFloat(t.standard_score) || (t.task_type === 'Đột xuất' ? 12 : 10);
+      const stdScore = 10;
+      const effectiveTaskType = 'Thường xuyên';
       const diffWeight = parseFloat(t.difficulty_weight) || 1.0;
       const maxConv = Number((stdScore * diffWeight).toFixed(2));
       const taskDeadline = deadline || t.deadline || '2026-09-30';
@@ -3273,7 +3293,7 @@ app.post('/api/assigned-tasks/bulk-assign', requireManagerOrAdmin, (req, res) =>
         t.task_name,
         t.output_result || 'Văn bản/ Tài liệu',
         taskDeadline,
-        t.task_type || 'Thường xuyên',
+        effectiveTaskType,
         stdScore,
         diffWeight,
         maxConv,
@@ -3374,7 +3394,8 @@ app.post('/api/assigned-tasks/register', (req, res) => {
   }
 
   const id = uuidv4();
-  const stdScore = parseFloat(standard_score) || (task_type === 'Đột xuất' ? 12 : 10);
+  const stdScore = 10;
+  const effectiveTaskType = 'Thường xuyên';
   const diffWeight = parseFloat(difficulty_weight) || 1.0;
   const maxConv = Number((stdScore * diffWeight).toFixed(2));
 
@@ -3384,7 +3405,7 @@ app.post('/api/assigned-tasks/register', (req, res) => {
       deadline, task_type, standard_score, difficulty_weight, max_converted_score,
       axis_code, origin, status
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'registered', 'pending_approval')
-  `).run(id, period_id, user_id, standard_task_id || null, task_name, output_result, deadline, task_type, stdScore, diffWeight, maxConv, axis_code);
+  `).run(id, period_id, user_id, standard_task_id || null, task_name, output_result, deadline, effectiveTaskType, stdScore, diffWeight, maxConv, axis_code);
 
   triggerBackgroundSupabaseSync();
 
@@ -3429,8 +3450,8 @@ app.put('/api/assigned-tasks/:id/approve', requireManagerOrAdmin, (req, res) => 
   // Nếu phê duyệt và cho phép ghi vào danh mục chung
   if (isApproved && add_to_standard_tasks) {
     const stdId = uuidv4();
-    const taskType = task.task_type || 'Thường xuyên';
-    const stdScore = parseFloat(task.standard_score) || (taskType === 'Đột xuất' ? 12 : 10);
+    const taskType = 'Thường xuyên';
+    const stdScore = 10;
     const maxStdConv = Number((stdScore * diffWeight).toFixed(2));
 
     db.prepare(`
@@ -3941,6 +3962,451 @@ app.post('/api/assigned-tasks/:id/revoke-delegation', requireManagerOrAdmin, (re
   } catch (err) {
     console.error('[Revoke Delegation] Error:', err);
     res.status(500).json({ success: false, message: 'Lỗi thu hồi quyền: ' + err.message });
+  }
+});
+
+// Cán bộ / CBQL giao tiếp nhiệm vụ cho cấp dưới từ màn hình Nộp sản phẩm công việc (ExecutionTab)
+app.post('/api/assigned-tasks/:id/delegate-to-subordinate', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { subordinate_id, deadline, notes, difficulty_weight } = req.body;
+    const viewerId = getViewerId(req);
+    const viewer = getViewer(req);
+
+    if (!subordinate_id) {
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn cán bộ cấp dưới tiếp nhận nhiệm vụ' });
+    }
+
+    const currentTask = db.prepare('SELECT * FROM assigned_tasks WHERE id = ?').get(id);
+    if (!currentTask) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy nhiệm vụ' });
+    }
+
+    const subordinate = db.prepare('SELECT * FROM users WHERE id = ?').get(subordinate_id);
+    if (!subordinate) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy thông tin cán bộ cấp dưới' });
+    }
+
+    if (subordinate.id === currentTask.user_id) {
+      return res.status(400).json({ success: false, message: 'Không thể giao lại nhiệm vụ cho chính cán bộ đang thực hiện nhiệm vụ này!' });
+    }
+
+    const newTaskId = uuidv4();
+    const subDeadline = deadline || currentTask.deadline;
+    const diffWeight = difficulty_weight ? Number(difficulty_weight) : (currentTask.difficulty_weight || 1.0);
+    const stdScore = currentTask.standard_score || 10;
+    const maxScore = Number((stdScore * diffWeight).toFixed(2));
+    const nowTimestamp = getVietnamTimestamp();
+
+    const insertSubTask = db.transaction(() => {
+      // 1. Tạo nhiệm vụ con cho cấp dưới
+      db.prepare(`
+        INSERT INTO assigned_tasks (
+          id, period_id, user_id, standard_task_id, task_name, output_result,
+          deadline, task_type, standard_score, difficulty_weight, max_converted_score,
+          axis_code, origin, status, assigned_by,
+          inherited_from_task_id, inherited_from_user_name,
+          delegated_by, delegated_at, delegation_note
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?,
+          ?, 'assigned', 'in_progress', ?,
+          ?, ?,
+          ?, ?, ?
+        )
+      `).run(
+        newTaskId, currentTask.period_id, subordinate.id, currentTask.standard_task_id || null,
+        currentTask.task_name, currentTask.output_result || null,
+        subDeadline, currentTask.task_type || 'Thường xuyên', stdScore, diffWeight, maxScore,
+        currentTask.axis_code || 'TRUC_1', viewerId,
+        currentTask.id, viewer?.full_name || 'Cán bộ giao việc',
+        viewerId, nowTimestamp, notes || ''
+      );
+
+      // 2. Cập nhật thông tin giao việc trên nhiệm vụ gốc
+      db.prepare(`
+        UPDATE assigned_tasks
+        SET delegated_to_user_id = ?,
+            delegated_to_user_name = ?,
+            subordinate_task_id = ?,
+            delegation_note = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `).run(subordinate.id, subordinate.full_name, newTaskId, notes || '', id);
+
+      // 3. Tạo thông báo cho cấp dưới
+      createNotification({
+        userId: subordinate.id,
+        title: 'Nhiệm vụ mới được giao từ cấp trên',
+        message: `${viewer?.full_name || 'Cấp trên'} đã giao nhiệm vụ "${currentTask.task_name}" cho bạn. Hạn hoàn thành: ${formatDate(subDeadline)}.${notes ? ` Chỉ đạo: ${notes}` : ''}`,
+        type: 'task_assigned',
+        taskId: newTaskId,
+        tab: 'execution'
+      });
+    });
+
+    insertSubTask();
+    triggerBackgroundSupabaseSync(300);
+
+    logSystemActivity(req, {
+      action: 'TASK_DELEGATE_SUBORDINATE',
+      entity_type: 'assigned_tasks',
+      entity_id: id,
+      description: `Giao nhiệm vụ "${currentTask.task_name}" cho cấp dưới ${subordinate.full_name}`,
+      details: { parent_task_id: id, subordinate_task_id: newTaskId, subordinate_id, subDeadline }
+    });
+
+    res.json({
+      success: true,
+      subordinate_task_id: newTaskId,
+      delegated_to_user_name: subordinate.full_name,
+      message: `Đã giao nhiệm vụ "${currentTask.task_name}" cho cán bộ ${subordinate.full_name} thành công!`
+    });
+  } catch (err) {
+    console.error('Error delegating task to subordinate:', err);
+    res.status(500).json({ success: false, message: 'Lỗi giao nhiệm vụ cho cấp dưới: ' + err.message });
+  }
+});
+
+// Tuyến chuyển trạng thái hoạt động / Tạm ngưng đơn vị
+app.put('/api/departments/:id/status', requireCanManageUsers, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_active } = req.body;
+    const dept = db.prepare('SELECT * FROM departments WHERE id = ?').get(id);
+    if (!dept) return res.status(404).json({ success: false, message: 'Không tìm thấy đơn vị' });
+
+    const newStatus = is_active !== undefined ? (is_active ? 1 : 0) : (dept.is_active === 1 ? 0 : 1);
+    db.prepare('UPDATE departments SET is_active = ? WHERE id = ?').run(newStatus, id);
+
+    const statusText = newStatus === 1 ? 'Đang hoạt động' : 'Tạm ngưng hoạt động';
+    logSystemActivity(req, {
+      action: 'DEPT_STATUS_TOGGLE',
+      entity_type: 'departments',
+      entity_id: id,
+      description: `Chuyển trạng thái đơn vị "${dept.name}" sang ${statusText}`,
+      details: { id, is_active: newStatus }
+    });
+
+    triggerBackgroundSupabaseSync(300);
+    res.json({
+      success: true,
+      is_active: newStatus,
+      message: `Đã chuyển trạng thái đơn vị "${dept.name}" sang "${statusText}" thành công!`
+    });
+  } catch (err) {
+    console.error('Lỗi chuyển trạng thái đơn vị:', err);
+    res.status(500).json({ success: false, message: 'Lỗi cập nhật trạng thái đơn vị: ' + err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// Phân hệ Nội nghiệp: Dashboard Hồ sơ Đảng viên
+// -------------------------------------------------------------
+app.get('/api/party-members/dashboard', (req, res) => {
+  try {
+    const { dept_id, cell, search } = req.query;
+
+    let query = `
+      SELECT u.id, u.full_name, u.username, u.party_title, u.gov_title, u.union_title,
+             u.dept_id, d.name as dept_name, u.birth_date, u.gender, u.phone, u.email,
+             u.party_join_date, u.party_official_date, u.party_card_number,
+             COALESCE(u.party_cell, 'Chi bộ Trường Mầm non Hoàng Yến') as party_cell,
+             COALESCE(u.party_status, 'Chính thức') as party_status,
+             COALESCE(u.party_badge, 'Không') as party_badge,
+             u.is_party_member
+      FROM users u
+      LEFT JOIN departments d ON u.dept_id = d.id
+      WHERE u.is_party_member = 1 AND (u.is_active IS NULL OR u.is_active = 1)
+    `;
+    const params = [];
+
+    if (dept_id && dept_id !== 'all') {
+      query += ` AND u.dept_id = ?`;
+      params.push(dept_id);
+    }
+    if (cell && cell !== 'all') {
+      query += ` AND u.party_cell = ?`;
+      params.push(cell);
+    }
+    if (search && search.trim()) {
+      const term = `%${search.trim().toLowerCase()}%`;
+      query += ` AND (LOWER(u.full_name) LIKE ? OR LOWER(u.party_card_number) LIKE ? OR LOWER(u.party_title) LIKE ?)`;
+      params.push(term, term, term);
+    }
+
+    query += ` ORDER BY u.party_title DESC, u.full_name ASC`;
+    const members = db.prepare(query).all(...params);
+
+    // Tính toán số liệu thống kê
+    const allPartyMembers = db.prepare(`
+      SELECT u.*, d.name as dept_name 
+      FROM users u 
+      LEFT JOIN departments d ON u.dept_id = d.id 
+      WHERE u.is_party_member = 1 AND (u.is_active IS NULL OR u.is_active = 1)
+    `).all();
+
+    const total = allPartyMembers.length;
+    let officialCount = 0;
+    let probationaryCount = 0;
+    let badgeCount = 0;
+    let maleCount = 0;
+    let femaleCount = 0;
+
+    const cellMap = {};
+    const ageMap = { under30: 0, from30to45: 0, from46to60: 0, over60: 0 };
+    const currentYear = new Date().getFullYear();
+
+    for (const m of allPartyMembers) {
+      if ((m.party_status || '').toLowerCase().includes('dự bị') || (m.party_status || '').toLowerCase().includes('du bi')) {
+        probationaryCount++;
+      } else {
+        officialCount++;
+      }
+
+      if (m.party_badge && m.party_badge !== 'Không') {
+        badgeCount++;
+      }
+
+      if ((m.gender || '').toLowerCase() === 'nữ' || (m.gender || '').toLowerCase() === 'nu') {
+        femaleCount++;
+      } else {
+        maleCount++;
+      }
+
+      const cellName = m.party_cell || 'Chi bộ Trường Mầm non Hoàng Yến';
+      cellMap[cellName] = (cellMap[cellName] || 0) + 1;
+
+      if (m.birth_date) {
+        const birthYear = parseInt(m.birth_date.slice(0, 4), 10);
+        if (!isNaN(birthYear)) {
+          const age = currentYear - birthYear;
+          if (age < 30) ageMap.under30++;
+          else if (age <= 45) ageMap.from30to45++;
+          else if (age <= 60) ageMap.from46to60++;
+          else ageMap.over60++;
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      metrics: {
+        total,
+        officialCount,
+        probationaryCount,
+        badgeCount,
+        maleCount,
+        femaleCount,
+        cellStats: Object.entries(cellMap).map(([name, count]) => ({ name, count })),
+        ageStats: [
+          { group: 'Dưới 30 tuổi', count: ageMap.under30 },
+          { group: 'Từ 30 - 45 tuổi', count: ageMap.from30to45 },
+          { group: 'Từ 46 - 60 tuổi', count: ageMap.from46to60 },
+          { group: 'Trên 60 tuổi', count: ageMap.over60 }
+        ]
+      },
+      members
+    });
+  } catch (err) {
+    console.error('Error getting party members dashboard:', err);
+    res.status(500).json({ success: false, message: 'Lỗi tải dashboard hồ sơ Đảng viên: ' + err.message });
+  }
+});
+
+app.put('/api/party-members/:id', requireCanManageUsers, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { party_card_number, party_title, party_join_date, party_official_date, party_cell, party_status, party_badge } = req.body;
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+    if (!user) return res.status(404).json({ success: false, message: 'Không tìm thấy cán bộ' });
+
+    db.prepare(`
+      UPDATE users
+      SET party_card_number = ?,
+          party_title = ?,
+          party_join_date = ?,
+          party_official_date = ?,
+          party_cell = ?,
+          party_status = ?,
+          party_badge = ?,
+          is_party_member = 1
+      WHERE id = ?
+    `).run(
+      party_card_number || user.party_card_number,
+      party_title !== undefined ? party_title : user.party_title,
+      party_join_date || user.party_join_date,
+      party_official_date || user.party_official_date,
+      party_cell || user.party_cell,
+      party_status || user.party_status || 'Chính thức',
+      party_badge || user.party_badge || 'Không',
+      id
+    );
+
+    res.json({ success: true, message: `Đã cập nhật hồ sơ Đảng viên cho đồng chí "${user.full_name}" thành công!` });
+  } catch (err) {
+    console.error('Error updating party member:', err);
+    res.status(500).json({ success: false, message: 'Lỗi cập nhật hồ sơ Đảng viên: ' + err.message });
+  }
+});
+
+// -------------------------------------------------------------
+// Phân hệ Nội nghiệp: Dashboard Chỉnh lý số hóa tài liệu
+// -------------------------------------------------------------
+app.get('/api/digitization/dashboard', (req, res) => {
+  try {
+    const { category, status, search, year } = req.query;
+
+    let query = `SELECT * FROM digitized_records WHERE 1=1`;
+    const params = [];
+
+    if (category && category !== 'all') {
+      query += ` AND category = ?`;
+      params.push(category);
+    }
+    if (status && status !== 'all') {
+      query += ` AND digital_status = ?`;
+      params.push(status);
+    }
+    if (year && year !== 'all') {
+      query += ` AND year = ?`;
+      params.push(Number(year));
+    }
+    if (search && search.trim()) {
+      const term = `%${search.trim().toLowerCase()}%`;
+      query += ` AND (LOWER(record_code) LIKE ? OR LOWER(title) LIKE ? OR LOWER(storage_location) LIKE ?)`;
+      params.push(term, term, term);
+    }
+
+    query += ` ORDER BY year DESC, record_code ASC`;
+    const records = db.prepare(query).all(...params);
+
+    // Tính toán số liệu thống kê toàn bộ
+    const allRecs = db.prepare('SELECT * FROM digitized_records').all();
+    const totalRecords = allRecs.length;
+    let totalPages = 0;
+    let digitizedCount = 0;
+    let inProgressCount = 0;
+    let pendingCount = 0;
+
+    const catMap = {};
+    const retentionMap = {};
+
+    for (const r of allRecs) {
+      totalPages += (r.total_pages || 0);
+      if (r.digital_status === 'digitized') digitizedCount++;
+      else if (r.digital_status === 'in_progress') inProgressCount++;
+      else pendingCount++;
+
+      catMap[r.category] = (catMap[r.category] || 0) + 1;
+      retentionMap[r.retention_period] = (retentionMap[r.retention_period] || 0) + 1;
+    }
+
+    const completionRate = totalRecords > 0 ? Number(((digitizedCount / totalRecords) * 100).toFixed(1)) : 0;
+
+    res.json({
+      success: true,
+      metrics: {
+        totalRecords,
+        totalPages,
+        digitizedCount,
+        inProgressCount,
+        pendingCount,
+        completionRate,
+        categoryStats: Object.entries(catMap).map(([name, count]) => ({ name, count })),
+        retentionStats: Object.entries(retentionMap).map(([name, count]) => ({ name, count }))
+      },
+      records
+    });
+  } catch (err) {
+    console.error('Error getting digitization dashboard:', err);
+    res.status(500).json({ success: false, message: 'Lỗi tải dashboard số hóa tài liệu: ' + err.message });
+  }
+});
+
+app.post('/api/digitization/records', (req, res) => {
+  try {
+    const { record_code, title, category, retention_period, year, start_date, end_date, total_pages, digital_status, storage_location, notes } = req.body;
+    if (!title) {
+      return res.status(400).json({ success: false, message: 'Vui lòng nhập tiêu đề hồ sơ tài liệu' });
+    }
+
+    const id = uuidv4();
+    const code = record_code && record_code.trim() ? record_code.trim() : `HS-${year || 2026}-${String(Date.now()).slice(-4)}`;
+    
+    db.prepare(`
+      INSERT INTO digitized_records (
+        id, record_code, title, category, retention_period, year, start_date, end_date,
+        total_pages, digital_status, storage_location, notes
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id, code, title, category || 'Hành chính - Quản trị', retention_period || 'Vĩnh viễn',
+      Number(year) || new Date().getFullYear(), start_date || null, end_date || null,
+      Number(total_pages) || 0, digital_status || 'digitized', storage_location || 'Kho lưu trữ', notes || ''
+    );
+
+    res.json({ success: true, id, message: `Đã thêm mới hồ sơ tài liệu số hóa "${title}" thành công!` });
+  } catch (err) {
+    console.error('Error adding digitized record:', err);
+    res.status(500).json({ success: false, message: 'Lỗi thêm mới hồ sơ số hóa: ' + err.message });
+  }
+});
+
+app.put('/api/digitization/records/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { record_code, title, category, retention_period, year, start_date, end_date, total_pages, digital_status, storage_location, notes } = req.body;
+    const rec = db.prepare('SELECT * FROM digitized_records WHERE id = ?').get(id);
+    if (!rec) return res.status(404).json({ success: false, message: 'Không tìm thấy hồ sơ tài liệu' });
+
+    db.prepare(`
+      UPDATE digitized_records
+      SET record_code = ?,
+          title = ?,
+          category = ?,
+          retention_period = ?,
+          year = ?,
+          start_date = ?,
+          end_date = ?,
+          total_pages = ?,
+          digital_status = ?,
+          storage_location = ?,
+          notes = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(
+      record_code || rec.record_code,
+      title || rec.title,
+      category || rec.category,
+      retention_period || rec.retention_period,
+      year ? Number(year) : rec.year,
+      start_date !== undefined ? start_date : rec.start_date,
+      end_date !== undefined ? end_date : rec.end_date,
+      total_pages !== undefined ? Number(total_pages) : rec.total_pages,
+      digital_status || rec.digital_status,
+      storage_location !== undefined ? storage_location : rec.storage_location,
+      notes !== undefined ? notes : rec.notes,
+      id
+    );
+
+    res.json({ success: true, message: `Đã cập nhật hồ sơ tài liệu số hóa "${title || rec.title}" thành công!` });
+  } catch (err) {
+    console.error('Error updating digitized record:', err);
+    res.status(500).json({ success: false, message: 'Lỗi cập nhật hồ sơ số hóa: ' + err.message });
+  }
+});
+
+app.delete('/api/digitization/records/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const rec = db.prepare('SELECT * FROM digitized_records WHERE id = ?').get(id);
+    if (!rec) return res.status(404).json({ success: false, message: 'Không tìm thấy hồ sơ tài liệu' });
+
+    db.prepare('DELETE FROM digitized_records WHERE id = ?').run(id);
+    res.json({ success: true, message: `Đã xóa hồ sơ tài liệu "${rec.title}" khỏi danh mục số hóa!` });
+  } catch (err) {
+    console.error('Error deleting digitized record:', err);
+    res.status(500).json({ success: false, message: 'Lỗi xóa hồ sơ số hóa: ' + err.message });
   }
 });
 
@@ -5089,15 +5555,16 @@ app.get('/api/evaluations', (req, res) => {
       totalBonusScore += (t.bonus_score || ((t.converted_score || 0) * 0.05));
     }
     const isAhead = t.actual_finish_date && t.deadline && t.actual_finish_date < t.deadline;
+    const isMaxQuality = (t.quality_pct || 0) >= 1.0;
     const isOver = t.progress_pct > 1.0 || t.quality_pct > 1.0;
-    if (isAhead || isOver) {
+    if ((isAhead && isMaxQuality) || t.is_bonus_approved || isOver) {
       aheadOrOverCount++;
     }
   });
   executedTotalConvScore = Number(executedTotalConvScore.toFixed(2));
   totalBonusScore = Number(totalBonusScore.toFixed(2));
 
-  // KPI Phần B (tối đa 70 điểm theo công thức HD.06: KPI = 70 * B / A)
+  // KPI Phần B (tối đa 70 điểm theo công thức: KPI = 70 * B / A)
   let part2Score = 0;
   if (planTotalMaxScore > 0) {
     part2Score = Number(Math.min(70, (executedTotalConvScore / planTotalMaxScore) * 70).toFixed(2));
@@ -5122,7 +5589,11 @@ app.get('/api/evaluations', (req, res) => {
   const aheadSchedulePct = totalTasksCount > 0 ? (aheadOrOverCount / totalTasksCount) : 0;
   const allTasksCompleted = totalTasksCount > 0 && approvedTasks.length === totalTasksCount;
 
-  // Auto Rank (4 mức theo Hướng dẫn số 06-HD/BTCTU)
+  // Số nhiệm vụ chưa bảo đảm tiến độ (tiến độ 0% theo điểm c khoản 7.2 Công văn 3818)
+  const zeroProgressTasks = approvedTasks.filter(t => (t.progress_pct || 0) === 0);
+  const zeroProgressPct = totalTasksCount > 0 ? (zeroProgressTasks.length / totalTasksCount) : 0;
+
+  // Auto Rank (4 mức theo Công văn số 3818-CV/BTCTU ngày 10/10/2026)
   let autoRank = 'Chưa xếp loại';
   if (totalTasksCount === 0 || approvedTasks.length === 0) {
     autoRank = evaluation.rank_proposed && evaluation.rank_proposed !== 'Hoàn thành tốt nhiệm vụ' 
@@ -5130,9 +5601,9 @@ app.get('/api/evaluations', (req, res) => {
       : 'Chưa tự đánh giá';
   } else if (grandTotal >= 90 && allTasksCompleted && aheadSchedulePct >= 0.30) {
     autoRank = 'Hoàn thành xuất sắc nhiệm vụ';
-  } else if (grandTotal >= 70) {
+  } else if (grandTotal >= 70 && allTasksCompleted) {
     autoRank = 'Hoàn thành tốt nhiệm vụ';
-  } else if (grandTotal >= 50) {
+  } else if (grandTotal >= 50 && zeroProgressPct <= 0.20) {
     autoRank = 'Hoàn thành nhiệm vụ';
   } else {
     autoRank = 'Không hoàn thành nhiệm vụ';
@@ -6111,9 +6582,9 @@ app.get('/api/stats/charts', (req, res) => {
   // 3. Score ranges (chỉ tính cán bộ đã nộp tự đánh giá hoặc đã được thẩm định chấm điểm)
   const evals = db.prepare(`SELECT total_score, superior_rank, rank_proposed, status FROM evaluations WHERE period_id = ? AND status IN ('submitted', 'approved') ${userFilterClause}`).all(...paramsEvals);
   const scoreDist = [
-    { range: 'Dưới 70 điểm (Không HT)', count: evals.filter(e => e.total_score < 70).length },
-    { range: '70 - 79 điểm (Hoàn thành)', count: evals.filter(e => e.total_score >= 70 && e.total_score < 80).length },
-    { range: '80 - 89 điểm (Hoàn thành tốt)', count: evals.filter(e => e.total_score >= 80 && e.total_score < 90).length },
+    { range: 'Dưới 50 điểm (Không HT)', count: evals.filter(e => e.total_score < 50).length },
+    { range: '50 - 69 điểm (Hoàn thành)', count: evals.filter(e => e.total_score >= 50 && e.total_score < 70).length },
+    { range: '70 - 89 điểm (Hoàn thành tốt)', count: evals.filter(e => e.total_score >= 70 && e.total_score < 90).length },
     { range: '90 - 100 điểm (Xuất sắc)', count: evals.filter(e => e.total_score >= 90).length },
   ];
 
@@ -7227,7 +7698,7 @@ app.post('/api/documents/:id/dispatch', (req, res) => {
                 id, period_id, user_id, task_name, output_result,
                 deadline, task_type, standard_score, difficulty_weight, max_converted_score,
                 axis_code, origin, status, assigned_by, document_id, group_id
-              ) VALUES (?, ?, ?, ?, ?, ?, 'Đột xuất', ?, ?, ?, ?, 'assigned', 'in_progress', ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, 'Thường xuyên', ?, ?, ?, ?, 'assigned', 'in_progress', ?, ?, ?)
             `).run(
               taskId,
               period_id,

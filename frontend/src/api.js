@@ -62,6 +62,16 @@ export const api = {
 
   // Periods, Users, Depts, Roles, Axes
   getPeriods: () => fetchApi('/periods'),
+  createPeriod: (data) => fetchApi('/admin/periods', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
+  updatePeriod: (id, data) => fetchApi(`/admin/periods/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }),
   getDepartments: (params = {}) => {
     const query = new URLSearchParams(params).toString();
     return fetchApi(`/departments${query ? `?${query}` : ''}`);
@@ -75,6 +85,11 @@ export const api = {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
+  }),
+  toggleDepartmentStatus: (id, isActive) => fetchApi(`/departments/${id}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_active: isActive }),
   }),
   deleteDepartment: (id) => fetchApi(`/departments/${id}`, {
     method: 'DELETE',
@@ -316,6 +331,51 @@ export const api = {
   },
   getSubordinateEvidences: (id) => {
     return fetchApi(`/assigned-tasks/${id}/subordinate-evidences`);
+  },
+  delegateTaskToSubordinate: (id, data) => {
+    return fetchApi(`/assigned-tasks/${id}/delegate-to-subordinate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Phân hệ Nội nghiệp: Hồ sơ Đảng viên
+  getPartyMembersDashboard: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return fetchApi(`/party-members/dashboard${query ? `?${query}` : ''}`);
+  },
+  updatePartyMember: (id, data) => {
+    return fetchApi(`/party-members/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Phân hệ Nội nghiệp: Chỉnh lý số hóa tài liệu
+  getDigitizationDashboard: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return fetchApi(`/digitization/dashboard${query ? `?${query}` : ''}`);
+  },
+  createDigitizedRecord: (data) => {
+    return fetchApi('/digitization/records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  updateDigitizedRecord: (id, data) => {
+    return fetchApi(`/digitization/records/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  deleteDigitizedRecord: (id) => {
+    return fetchApi(`/digitization/records/${id}`, {
+      method: 'DELETE',
+    });
   },
   gradeTask: (id, data) => {
     return fetchApi(`/assigned-tasks/${id}/grade`, {

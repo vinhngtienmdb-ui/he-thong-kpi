@@ -968,7 +968,7 @@ export default function ReportTab({
             (Theo 04 mức: 1- Hoàn thành xuất sắc nhiệm vụ, 2- Hoàn thành tốt nhiệm vụ, 3- Hoàn thành nhiệm vụ và 4- Không hoàn thành nhiệm vụ)
           </p>
           <p className="italic text-slate-800 text-[14pt] leading-relaxed">
-            Tiêu chí đánh giá, xếp loại chất lượng thực hiện theo mục 2.3, khoản 2, phần IV của Kế hoạch số 13-KH/TU của Ban Thường vụ Thành ủy; trong đó, trường hợp cá nhân “Hoàn thành xuất sắc nhiệm vụ” ngoài kết quả tổng điểm đạt từ 90 điểm trở lên, các địa phương, lĩnh vực, cơ quan, đơn vị, bộ phận do cá nhân trực tiếp lãnh đạo, quản lý hoàn thành 100% nhiệm vụ được giao; trong đó có ít nhất 30% số nhiệm vụ hoàn thành vượt mức yêu cầu.
+            Tiêu chí đánh giá, xếp loại chất lượng thực hiện theo Công văn số 3818-CV/BTCTU ngày 10/10/2026 và Hướng dẫn số 06-HD/BTCTU của Ban Tổ chức Thành ủy; trong đó: Xuất sắc (≥ 90 điểm + 100% đúng hạn + ≥ 30% việc vượt mức tiến độ và chất lượng); Tốt (70 đến dưới 90 điểm + 100% đúng hạn); Hoàn thành (50 đến dưới 70 điểm + chậm tiến độ không quá 20%); Không hoàn thành (dưới 50 điểm hoặc chậm tiến độ quá 20%).
           </p>
         </div>
 
